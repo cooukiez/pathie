@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<project version="2">
+	<pipeline>
+		<pass name="Compute" type="compute" active="true">
+			<shader type="cs" path="shader\compute.glsl" entry="main" />
+			<groupsize x="1920" y="1080" z="1" />
+			<macros />
+		</pass>
+		<pass name="Render" type="shader" active="true" patchverts="1">
+			<shader type="vs" path="shader\vertex.glsl" entry="main" />
+			<shader type="ps" path="shader\fragment.glsl" entry="main" />
+			<inputlayout>
+				<item value="Position" semantic="POSITION" />
+				<item value="Texcoord" semantic="TEXCOORD0" />
+			</inputlayout>
+			<rendertexture />
+			<items>
+				<item name="Quad" type="geometry">
+					<type>ScreenQuadNDC</type>
+					<width>1</width>
+					<height>1</height>
+					<depth>1</depth>
+					<topology>TriangleList</topology>
+				</item>
+			</items>
+			<itemvalues />
+			<macros />
+		</pass>
+	</pipeline>
+	<objects>
+		<object type="image" name="ComputeOutput" width="1920" height="1080" format="R32G32B32A32_FLOAT">
+			<bind slot="0" name="Compute" uav="1" />
+			<bind slot="0" name="Render" uav="0" />
+		</object>
+	</objects>
+	<cameras />
+	<settings>
+		<entry type="property" name="Compute" item="pipe" />
+		<entry type="file" name="Compute" shader="cs" />
+		<entry type="camera" fp="false">
+			<distance>4</distance>
+			<pitch>28</pitch>
+			<yaw>317</yaw>
+			<roll>360</roll>
+		</entry>
+		<entry type="clearcolor" r="0" g="0" b="0" a="0" />
+		<entry type="usealpha" val="false" />
+	</settings>
+	<plugindata />
+</project>

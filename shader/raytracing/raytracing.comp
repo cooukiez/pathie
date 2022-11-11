@@ -1,0 +1,27 @@
+# version 450
+# extension GL_ARB_separate_shader_objects : enable
+# extension GL_ARB_shading_language_420pack : enable
+
+
+layout (local_size_x = 5, local_size_y = 5) in;
+layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
+
+struct BasicVoxel {
+	vec3 pos;
+};
+
+layout (set = 1, binding = 0) buffer BasicVoxelList {
+	BasicVoxel basicVoxelList[];
+};
+
+layout (set = 2, binding = 0) buffer UniformBuffer {
+	vec3 headRotation;
+	vec3 PlayerPos;
+} uniformBuffer;
+
+BasicVoxel[16][16][16] voxelMatrix;
+
+void main () {
+	voxelMatrix[0][0][0] = BasicVoxel(vec3(0.0, 0.0, 0.0));
+	imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), vec4(gl_WorkGroupID, 1));
+}
