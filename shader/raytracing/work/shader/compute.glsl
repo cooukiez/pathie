@@ -8,10 +8,13 @@ layout(local_size_x = 16, local_size_y = 16) in;
 writeonly uniform image2D outImage;
 
 struct BasicVoxel {
+	bool valid;
 	ivec3 position;
+	vec4 color;
 };
 
 BasicVoxel[16][16][16] voxelMatrix;
+vec4 color;
 
 float getDistanceNext(float input_float) { return floor(input_float + 1) - input_float; }
 
@@ -20,7 +23,9 @@ BasicVoxel castRay(ivec2 dir, vec3 origin) {
 	bool hit = false;
 	float len = 0;
 	vec3 cur_pos = origin;
-	while (hit) {
+	BasicVoxel voxel = BasicVoxel(false, ivec3(0, 0, 0), vec4(100, 0, 0, 0));
+	color = vec4(0.0, 50.0, 0.0, 0.0);
+	while (!hit) {
 		vec3 timeMax = vec3(getDistanceNext(cur_pos[0]), getDistanceNext(cur_pos[1]), 0.0);
 		vec3 timeMaxLength = vec3(timeMax[0] / unit[0], timeMax[1] / unit[1], 0.0);
 		if (timeMaxLength[0] > timeMaxLength[1]) {
@@ -31,15 +36,16 @@ BasicVoxel castRay(ivec2 dir, vec3 origin) {
 			cur_pos = vec3(unit[0] * timeMaxLength[1], unit[1] * timeMaxLength[1], 0.0);
 			len += timeMaxLength[1];
 		}
-		if (len > 100) { return BasicVoxel(ivec3(0, 0, 0)); }
+		if (len > 100) { hit = true; }
 		BasicVoxel voxel_at_pos = voxelMatrix[int(cur_pos[0])][int(cur_pos[1])][int(cur_pos[2])];
-		if (voxel_at_pos != 0) { return voxel_at_pos; }
+		if (voxel_at_pos.valid == true) { hit = true; voxel = voxel_at_pos; }
 	}
-	return voxelMatrix[0][0][0];
+	return voxel;
 }
 
 void main() {
-	voxelMatrix[0][0][0] = BasicVoxel(ivec3(0, 0, 0));
-	imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(gl_WorkGroupID, 1));
-	BasicVoxel test = castRay(ivec2(57, 0), vec3(0.0, 0.0, 0.0));
+	voxelMatrix[0][0][0] = BasicVoxel(true, ivec3(0, 0, 0), vec4(0, 0, 0, 0));
+	
+	BasicVoxel hit = castRay(ivec2(0, 0), vec3(0.0, 0.0, 0.0));
+	imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), color);
 }
