@@ -2,6 +2,8 @@
 # include <stdbool.h>
 # include <math.h>
 
+# define MAX 100
+
 typedef struct vec3 {
     float x, y, z;
 } vec3;
@@ -17,12 +19,17 @@ typedef struct ivec2 {
 
 typedef struct BasicVoxel {
 	bool valid;
-	ivec3 position;
 	vec4 color;
 } BasicVoxel;
 
 BasicVoxel voxelMatrix[16][16][16];
 vec4 color;
+
+void printFloat(float value) {
+	char buf[MAX];
+    gcvt(value, 6, buf);
+    printf("Value is -> %s\n", buf);
+}
 
 float getDistanceNext(float input_float) { return floor(input_float + 1) - input_float; }
 
@@ -31,7 +38,7 @@ BasicVoxel castRay(ivec2 dir, vec3 origin) {
 	bool hit = false;
 	float len = 0;
 	vec3 cur_pos = origin;
-	BasicVoxel voxel = { false, (ivec3) { 0, 0, 0 }, (vec4) { 100, 0, 0, 0 } };
+	BasicVoxel voxel = { false, (vec4) { 0, 0, 0, 0 } };
 	color = (vec4) { 0.0, 50.0, 0.0, 0.0 };
 	while (!hit) {
 		vec3 timeMax = { getDistanceNext(cur_pos.x), getDistanceNext(cur_pos.y), 0.0 };
@@ -51,9 +58,10 @@ BasicVoxel castRay(ivec2 dir, vec3 origin) {
 	return voxel;
 }
 
-int main()
-{
+int main() {
     printf("Starting ... \n");
-
+	voxelMatrix[0][5][0] = (BasicVoxel) { true, (vec4) { 100, 0, 0, 0 } };
+	BasicVoxel test = castRay((ivec2) { 0, 0 }, (vec3) { 0.0, 0.0, 0.0 });
+	printFloat(test.color.x);
     return 0;
 }
