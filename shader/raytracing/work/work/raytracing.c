@@ -40,6 +40,7 @@ BasicVoxel castRay(ivec2 dir, vec3 origin) {
 	vec3 cur_pos = origin;
 	BasicVoxel voxel = { false, (vec4) { 0, 0, 0, 0 } };
 	color = (vec4) { 0.0, 50.0, 0.0, 0.0 };
+	// Add Print Here to { Debug }
 	while (!hit) {
 		vec3 timeMax = { getDistanceNext(cur_pos.x), getDistanceNext(cur_pos.y), 0.0 };
 		vec3 timeMaxLength = { timeMax.x / unit.x, timeMax.y / unit.y, 0.0 };
