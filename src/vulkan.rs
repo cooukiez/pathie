@@ -7,7 +7,7 @@ use ash::{
     vk::{self, DebugUtilsMessengerEXT, SurfaceFormatKHR}, Entry, Instance, Device, util::Align,
 };
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
-use winit::{window::{Window, WindowBuilder, Theme}, event_loop::EventLoop, dpi::PhysicalSize, platform::windows::WindowBuilderExtWindows, monitor::MonitorHandle};
+use winit::{window::{Window, WindowBuilder, Theme}, event_loop::EventLoop, dpi::PhysicalSize, monitor::MonitorHandle};
 use crate::data::{BasicVoxel, Uniform};
 
 pub struct EngineStatus {
@@ -62,7 +62,7 @@ impl Vulkan {
     pub fn init_instance(event_loop: &EventLoop<()>, entry: &Entry) -> (Window, Vec<MonitorHandle>, MonitorHandle, Instance, DebugUtils, DebugUtilsMessengerEXT, Surface, vk::SurfaceKHR) {
         log::info!("Creating Window and EventLoop ...");
         
-        let window = WindowBuilder::new().with_title(crate::NAME).with_inner_size(PhysicalSize::new(crate::WIDTH, crate::HEIGHT, )).with_resizable(true).with_theme(Some(Theme::Dark)).build(event_loop).unwrap();
+        let window = WindowBuilder::new().with_title(crate::NAME).with_inner_size(PhysicalSize::new(crate::WIDTH, crate::HEIGHT, )).with_resizable(true).build(event_loop).unwrap();
 
         let monitor_list: Vec<MonitorHandle> = event_loop.available_monitors().collect();
         let monitor = monitor_list.first().expect("ERR_NO_MONITOR").clone();
