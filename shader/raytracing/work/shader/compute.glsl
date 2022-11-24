@@ -47,5 +47,5 @@ void main() {
 	voxelMatrix[0][0][0] = BasicVoxel(true, ivec3(0, 0, 0), vec4(0, 0, 0, 0));
 	
 	BasicVoxel hit = castRay(ivec2(0, 0), vec3(0.0, 0.0, 0.0));
-	imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), color);
+	imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(1, 0, 0, 0));
 }
