@@ -31,7 +31,7 @@ BasicVoxel castRay(ivec2 dir, vec3 origin, int step_limit) {
 
 	float len = 0;
 	vec3 cur_pos = origin;
-	BasicVoxel voxel = BasicVoxel(false, vec4(0.0, 1.0, 1.0, 0.0));
+	BasicVoxel voxel = BasicVoxel(false, vec4(0.0, 1.0, 0.0, 0.0));
 	
 	for(int iteration = 0; iteration < step_limit; iteration += 1) {
 		vec3 distNextVox = vec3(getDistanceNext(cur_pos.x), getDistanceNext(cur_pos.y), getDistanceNext(cur_pos.z));
@@ -67,7 +67,7 @@ BasicVoxel castRay(ivec2 dir, vec3 origin, int step_limit) {
 
 
 void main() {
-	voxelMatrix[15][15][15] = BasicVoxel(true, vec4(0, 100, 0, 0));
+	voxelMatrix[15][15][15] = BasicVoxel(true, vec4(0, 0, 1, 0));
 	BasicVoxel test = castRay(ivec2(45, 35), vec3(14, 14, 14), STEP_LIMIT);
 	vec4 colTest = vec4(0,0,1,0);
 	imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), test.color);
