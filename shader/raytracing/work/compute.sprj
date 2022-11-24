@@ -35,7 +35,7 @@
 	</objects>
 	<cameras />
 	<settings>
-		<entry type="property" name="Quad" item="pipe" />
+		<entry type="property" name="Compute" item="pipe" />
 		<entry type="file" name="Compute" shader="cs" />
 		<entry type="camera" fp="false">
 			<distance>4</distance>
@@ -45,7 +45,10 @@
 		</entry>
 		<entry type="clearcolor" r="0" g="0" b="0" a="0" />
 		<entry type="usealpha" val="false" />
-		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="60" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="337" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="336" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="335" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="334" use_cond="false" cond="" enabled="true" />
 	</settings>
 	<plugindata />
 </project>

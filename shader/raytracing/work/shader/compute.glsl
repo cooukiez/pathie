@@ -3,49 +3,73 @@
 # extension GL_ARB_separate_shader_objects : enable
 # extension GL_ARB_shading_language_420pack : enable
 
+# define MAX 100
+# define PI 3.141592654
+
 layout(local_size_x = 16, local_size_y = 16) in;
 
 writeonly uniform image2D outImage;
 
 struct BasicVoxel {
 	bool valid;
-	ivec3 position;
 	vec4 color;
 };
 
 BasicVoxel[16][16][16] voxelMatrix;
-vec4 color;
 
+float roundFloat(float val) { return round(val * 1000) / 1000; }
 float getDistanceNext(float input_float) { return floor(input_float + 1) - input_float; }
+vec3 getNewPos(vec3 unit, vec3 old_pos, float selected_length) { return vec3(unit.x * selected_length + old_pos.x, unit.y * selected_length + old_pos.y, unit.z * selected_length + old_pos.z); }
+
+float getTimeMaxLen(float timeMax, float unit) { if (unit != 0.0) { return timeMax / unit; } else { return 0.0; } }
 
 BasicVoxel castRay(ivec2 dir, vec3 origin) {
-	vec3 unit = vec3(cos(dir[0]), sin(dir[0]), 0.0);
+	vec2 dir_radiant = vec2(roundFloat(dir.x * PI / 180), roundFloat(dir.y * PI / 180));
+	vec3 unit = vec3(roundFloat(cos(dir_radiant.x) * cos(dir_radiant.y)), roundFloat(sin(dir_radiant.y)), roundFloat(sin(dir_radiant.x) * cos(dir_radiant.y)));
+	float unitLen = sqrt(roundFloat(unit.x * unit.x + unit.y * unit.y + unit.z * unit.z));
+
 	bool hit = false;
 	float len = 0;
 	vec3 cur_pos = origin;
-	BasicVoxel voxel = BasicVoxel(false, ivec3(0, 0, 0), vec4(100, 0, 0, 0));
-	color = vec4(0.0, 50.0, 0.0, 0.0);
-	while (!hit) {
-		vec3 timeMax = vec3(getDistanceNext(cur_pos[0]), getDistanceNext(cur_pos[1]), 0.0);
-		vec3 timeMaxLength = vec3(timeMax[0] / unit[0], timeMax[1] / unit[1], 0.0);
-		if (timeMaxLength[0] > timeMaxLength[1]) {
-			cur_pos = vec3(unit[0] * timeMaxLength[0], unit[1] * timeMaxLength[0], 0.0);
-			len += timeMaxLength[0];
+	BasicVoxel voxel = BasicVoxel(false, vec4(0.0, 1.0, 1.0, 0.0));
+	
+	while (false) {
+		vec3 distNextVox = vec3(getDistanceNext(cur_pos.x), getDistanceNext(cur_pos.y), getDistanceNext(cur_pos.z));
+		vec3 lengthCertainDir = vec3(getTimeMaxLen(distNextVox.x, unit.x), getTimeMaxLen(distNextVox.y, unit.y), getTimeMaxLen(distNextVox.z, unit.z));
+
+		if (lengthCertainDir.x < lengthCertainDir.y) {
+			if (lengthCertainDir.x < lengthCertainDir.z) {
+				cur_pos = getNewPos(unit, cur_pos, lengthCertainDir.z);
+				len += lengthCertainDir.z * unitLen;
+			}	
+			else {
+				cur_pos = getNewPos(unit, cur_pos, lengthCertainDir.y);
+				len += lengthCertainDir.y * unitLen;
+			} 
 		}
-		if (timeMaxLength[0] < timeMaxLength[1]) {
-			cur_pos = vec3(unit[0] * timeMaxLength[1], unit[1] * timeMaxLength[1], 0.0);
-			len += timeMaxLength[1];
+		else {
+			if (lengthCertainDir.y < lengthCertainDir.z) {
+				cur_pos = getNewPos(unit, cur_pos, lengthCertainDir.z);
+				len += lengthCertainDir.z * unitLen;
+			}
+			else {
+				cur_pos = getNewPos(unit, cur_pos, lengthCertainDir.x);
+				len += lengthCertainDir.x * unitLen;
+			}
 		}
-		if (len > 100) { hit = true; }
-		BasicVoxel voxel_at_pos = voxelMatrix[int(cur_pos[0])][int(cur_pos[1])][int(cur_pos[2])];
-		if (voxel_at_pos.valid == true) { hit = true; voxel = voxel_at_pos; }
+
+		BasicVoxel currentVoxel = voxelMatrix[int(cur_pos.x)][int(cur_pos.y)][int(cur_pos.z)];
+		if (currentVoxel.valid == true) { hit = true; voxel = currentVoxel; }
+		if (len >= 10) { hit = true; }
 	}
+	
 	return voxel;
 }
 
+
 void main() {
-	voxelMatrix[0][0][0] = BasicVoxel(true, ivec3(0, 0, 0), vec4(0, 0, 0, 0));
-	
-	BasicVoxel hit = castRay(ivec2(0, 0), vec3(0.0, 0.0, 0.0));
-	imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(1, 0, 0, 0));
+	voxelMatrix[15][15][15] = BasicVoxel(true, vec4(0, 100, 0, 0));
+	BasicVoxel test = castRay(ivec2(45, 35), vec3(14, 14, 14));
+	vec4 colTest = vec4(0,0,1,0);
+	imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), vec4(0,1,1,0));
 }
