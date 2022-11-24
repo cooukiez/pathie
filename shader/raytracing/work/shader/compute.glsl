@@ -58,17 +58,19 @@ BasicVoxel castRay(ivec2 dir, vec3 origin, int step_limit) {
 			}
 		}
 
-		BasicVoxel currentVoxel = voxelMatrix[int(cur_pos.x)][int(cur_pos.y)][int(cur_pos.z)];
-		if (currentVoxel.valid == true) { voxel = currentVoxel; }
+		// BasicVoxel currentVoxel = voxelMatrix[int(cur_pos.x)][int(cur_pos.y)][int(cur_pos.z)];
+		// if (currentVoxel.valid == true) { voxel = currentVoxel; }
+		
+		voxel = BasicVoxel(true, vec4(unit.x, unit.y, unit.z, 0));
 	}
 	
 	return voxel;
 }
 
-
+	
 void main() {
-	voxelMatrix[15][15][15] = BasicVoxel(true, vec4(0, 0, 1, 0));
-	BasicVoxel test = castRay(ivec2(45, 35), vec3(14, 14, 14), STEP_LIMIT);
+	voxelMatrix[15][15][0] = BasicVoxel(true, vec4(0, 100, 0, 0));
+	BasicVoxel test = castRay(ivec2(30, 90), vec3(0, 0, 0), STEP_LIMIT);
 	vec4 colTest = vec4(0,0,1,0);
 	imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), test.color);
 }
