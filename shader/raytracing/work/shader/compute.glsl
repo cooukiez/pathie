@@ -4,7 +4,7 @@
 
 # define MAX 100
 # define PI 3.141592654
-# define STEP_LIMIT 1000
+# define LIMIT 2
 # define ACCURACY 100
 
 layout(local_size_x = 16, local_size_y = 16) in;
@@ -22,16 +22,18 @@ float roundFloat(float val) { return round(val * ACCURACY) / ACCURACY; }
 float getDistanceNext(float input_float) { return floor(input_float + 1) - input_float; }
 float divide(float first, float sec) { if (sec != 0.0) { return first / sec; } else { return first; } }
 
-BasicVoxel castRay(ivec2 dir, vec3 origin, int step_limit) {
-	vec4 col = vec4(0, 0, 0, 0);
+BasicVoxel castRay(ivec2 dir, vec3 origin) {
 	float alpha = dir.x * PI / 180;
 	float beta = dir.y * PI / 180;
 	vec3 unit = vec3(cos(alpha) * cos(beta), sin(beta), sin(alpha) * cos(beta));
+	
+	vec4 col = vec4(0, 0, 0, 0);
+	
 	float len = 0;
 	vec3 curPos = origin;
 	BasicVoxel voxel = BasicVoxel(false, vec4(0.0, 0.0, 0.0, 0.0));
 	
-	for(int iteration = 0; iteration < step_limit; iteration += 1) {
+	for (int iter = 0; iter < LIMIT; iter += 1) {
 		vec3 distNextVox = vec3(getDistanceNext(curPos.x), getDistanceNext(curPos.y), getDistanceNext(curPos.z));
 		vec3 lengthCertainDir = vec3(divide(distNextVox.x, unit.x), divide(distNextVox.y, unit.y), divide(distNextVox.z, unit.z));
 
@@ -61,9 +63,12 @@ BasicVoxel castRay(ivec2 dir, vec3 origin, int step_limit) {
 		}
 		
 		
-		// BasicVoxel currentVoxel = voxelMatrix[int(floor(curPos.x))][int(floor(curPos.y))][int(floor(curPos.z))];
-		// BasicVoxel currentVoxel = voxelMatrix[1][1][1];
-		// if (currentVoxel.valid == true) { voxel = currentVoxel; }
+		int x = int(curPos.x);
+		int y = int(curPos.y);
+		int z = int(curPos.z);
+
+		// BasicVoxel currentVoxel = voxelMatrix[x][y][z];
+		// if (currentVoxel.valid == true) { voxel = currentVoxel; hit = true; }
 		
 		col = vec4(curPos.x / 10, curPos.y / 10, curPos.z / 10, 0);
 		
@@ -75,7 +80,7 @@ BasicVoxel castRay(ivec2 dir, vec3 origin, int step_limit) {
 
 	
 void main() {
-	voxelMatrix[1][1][1] = BasicVoxel(true, vec4(0, 1, 1, 0));
-	BasicVoxel test = castRay(ivec2(23, 0), vec3(0, 0, 0), STEP_LIMIT);
+	voxelMatrix[1][1][1] = BasicVoxel(true, vec4(1, 0, 1, 0));
+	BasicVoxel test = castRay(ivec2(45, 23), vec3(0, 0, 0));
 	imageStore(outImage, ivec2(gl_GlobalInvocationID.xy), test.color);
 }

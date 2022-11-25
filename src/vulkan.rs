@@ -7,7 +7,7 @@ use ash::{
     vk::{self, DebugUtilsMessengerEXT, SurfaceFormatKHR}, Entry, Instance, Device, util::Align,
 };
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
-use winit::{window::{Window, WindowBuilder, Theme}, event_loop::EventLoop, dpi::PhysicalSize, monitor::MonitorHandle};
+use winit::{window::{Window, WindowBuilder}, event_loop::EventLoop, dpi::PhysicalSize, monitor::MonitorHandle};
 use crate::data::{BasicVoxel, Uniform};
 
 pub struct EngineStatus {
