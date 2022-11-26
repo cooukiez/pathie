@@ -1,4 +1,3 @@
-
 use std::{io::Write, error::Error, thread};
 use ash::{Entry, vk};
 use data::{WorldData};
@@ -6,7 +5,7 @@ use env_logger::fmt::Color;
 
 use pipeline::{Render};
 use vulkan::{Vulkan, EngineStatus, PipelineData, BufferObj};
-use winit::{event_loop::{ControlFlow, EventLoop}, event::{Event, WindowEvent, KeyboardInput, ElementState, VirtualKeyCode}, window::{   Fullscreen}};
+use winit::{event_loop::{ControlFlow, EventLoop}, event::{Event, WindowEvent, KeyboardInput, ElementState, VirtualKeyCode}, window::{Fullscreen}};
 
 mod vulkan;
 mod pipeline;

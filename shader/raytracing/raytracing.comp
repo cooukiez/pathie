@@ -72,10 +72,6 @@ BasicVoxel castRay(vec2 dir, vec3 origin) {
 			}
 		}
 
-		// if (gl_GlobalInvocationID.xy.x == 1 && gl_GlobalInvocationID.xy.y == 1) {
-		// 	debugPrintfEXT("\n PosInt -> %v3d", ivec3(x, y, z));
-		// }
-
 		ivec3 curPosInt = ivec3(int(floor(curPos.x)), int(floor(curPos.y)), int(floor(curPos.z)));
 		BasicVoxel currentVoxel = voxelMatrix[curPosInt.x][curPosInt.y][curPosInt.z];
 		if (currentVoxel.valid == true) { voxel = currentVoxel; break; }
@@ -90,11 +86,12 @@ BasicVoxel castRay(vec2 dir, vec3 origin) {
 
 void main () {
 	voxelMatrix[3][3][3] = BasicVoxel(true, vec4(1, 0, 0, 0));
-	float degreeHorizontal = (float(FOV) / float(gl_NumWorkGroups.x)) * float(gl_GlobalInvocationID.xy.x) - FOV / 2;
+	float degreeHorizontal = (float(FOV) / float(gl_NumWorkGroups.x)) * float(gl_GlobalInvocationID.xy.x); // - FOV / 2
 
 	if (gl_GlobalInvocationID.xy.x == 1 && gl_GlobalInvocationID.xy.y == 1) { debugPrintfEXT("\n First -> %f", degreeHorizontal); }
+	if (gl_GlobalInvocationID.xy.x == gl_NumWorkGroups.x / 2 && gl_GlobalInvocationID.xy.y == 1) { debugPrintfEXT("\n Half -> %f", degreeHorizontal); }
 	if (gl_GlobalInvocationID.xy.x == gl_NumWorkGroups.x && gl_GlobalInvocationID.xy.y == 1) { debugPrintfEXT("\n Last -> %f", degreeHorizontal); }
 
-	BasicVoxel test = castRay(vec2(45, 35), vec3(0.1, 0.1, 0.1));
+	BasicVoxel test = castRay(vec2(0.023438, 35), vec3(0.1, 0.1, 0.1));
 	imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), test.color);
 }
