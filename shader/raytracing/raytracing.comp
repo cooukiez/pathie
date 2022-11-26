@@ -5,8 +5,9 @@
 
 # define MAX 100
 # define PI 3.141592654
-# define LIMIT 2
+# define LIMIT 100
 # define ACCURACY 100
+# define FOV 60
 
 layout (local_size_x = 5, local_size_y = 5) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
@@ -25,13 +26,13 @@ layout (set = 2, binding = 0) buffer UniformBuffer {
 	vec3 PlayerPos;
 } uniformBuffer;
 
-BasicVoxel[16][16][16] voxelMatrix;
+BasicVoxel[32][32][32] voxelMatrix;
 
 float roundFloat(float val) { return round(val * ACCURACY) / ACCURACY; }
-float getDistanceNext(float input_float) { return floor(input_float + 1) - input_float; }
+float getDistanceNext(float input_float) { return floor(input_float + sign(input_float)) - (input_float * sign(input_float)); }
 float divide(float first, float sec) { if (sec != 0.0) { return first / sec; } else { return first; } }
 
-BasicVoxel castRay(ivec2 dir, vec3 origin) {
+BasicVoxel castRay(vec2 dir, vec3 origin) {
 	float alpha = dir.x * PI / 180;
 	float beta = dir.y * PI / 180;
 	vec3 unit = vec3(cos(alpha) * cos(beta), sin(beta), sin(alpha) * cos(beta));
@@ -70,28 +71,30 @@ BasicVoxel castRay(ivec2 dir, vec3 origin) {
 				len += selectedLen;
 			}
 		}
-		
-		
-		int x = int(curPos.x);
-		int y = int(curPos.y);
-		int z = int(curPos.z);
 
-		// BasicVoxel currentVoxel = voxelMatrix[x][y][z];
-		// if (currentVoxel.valid == true) { voxel = currentVoxel; hit = true; }
+		// if (gl_GlobalInvocationID.xy.x == 1 && gl_GlobalInvocationID.xy.y == 1) {
+		// 	debugPrintfEXT("\n PosInt -> %v3d", ivec3(x, y, z));
+		// }
+
+		ivec3 curPosInt = ivec3(int(floor(curPos.x)), int(floor(curPos.y)), int(floor(curPos.z)));
+		BasicVoxel currentVoxel = voxelMatrix[curPosInt.x][curPosInt.y][curPosInt.z];
+		if (currentVoxel.valid == true) { voxel = currentVoxel; break; }
 		
-		col = vec4(curPos.x / 10, curPos.y / 10, curPos.z / 10, 0);
+		// col = vec4(curPos.x, curPos.y, curPos.z, unit.x);
 		
-		voxel = BasicVoxel(true, col);
+		// voxel = BasicVoxel(true, col);
 	}
 	
 	return voxel;
 }
 
 void main () {
-	float myfloat = 3.1415f;
-	debugPrintfEXT("My float is %f", myfloat);
+	voxelMatrix[3][3][3] = BasicVoxel(true, vec4(1, 0, 0, 0));
+	float degreeHorizontal = (float(FOV) / float(gl_NumWorkGroups.x)) * float(gl_GlobalInvocationID.xy.x) - FOV / 2;
 
-	voxelMatrix[1][1][1] = BasicVoxel(true, vec4(1, 0, 1, 0));
-	BasicVoxel test = castRay(ivec2(45, 23), vec3(0, 0, 0));
+	if (gl_GlobalInvocationID.xy.x == 1 && gl_GlobalInvocationID.xy.y == 1) { debugPrintfEXT("\n First -> %f", degreeHorizontal); }
+	if (gl_GlobalInvocationID.xy.x == gl_NumWorkGroups.x && gl_GlobalInvocationID.xy.y == 1) { debugPrintfEXT("\n Last -> %f", degreeHorizontal); }
+
+	BasicVoxel test = castRay(vec2(45, 35), vec3(0.1, 0.1, 0.1));
 	imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), test.color);
 }

@@ -44,16 +44,17 @@
 		</entry>
 		<entry type="clearcolor" r="0" g="0" b="0" a="0" />
 		<entry type="usealpha" val="false" />
-		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="408" use_cond="false" cond="" enabled="true" />
-		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="407" use_cond="false" cond="" enabled="true" />
-		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="406" use_cond="false" cond="" enabled="true" />
-		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="405" use_cond="false" cond="" enabled="true" />
-		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="404" use_cond="false" cond="" enabled="true" />
-		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="403" use_cond="false" cond="" enabled="true" />
-		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="402" use_cond="false" cond="" enabled="true" />
-		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="401" use_cond="false" cond="" enabled="true" />
-		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="400" use_cond="false" cond="" enabled="true" />
-		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="399" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="474" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="473" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="472" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="471" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="470" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="469" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="468" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="467" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="466" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="465" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="464" use_cond="false" cond="" enabled="true" />
 	</settings>
 	<plugindata />
 </project>
