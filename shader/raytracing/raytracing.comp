@@ -37,15 +37,13 @@ BasicVoxel castRay(vec2 dir, vec3 origin) {
 	float beta = dir.y * PI / 180;
 	vec3 unit = vec3(cos(alpha) * cos(beta), sin(beta), sin(alpha) * cos(beta));
 	
-	vec4 col = vec4(0, 0, 0, 0);
-	
 	float len = 0;
 	vec3 curPos = origin;
 	BasicVoxel voxel = BasicVoxel(false, vec4(0.0, 0.0, 0.0, 0.0));
 	
 	for (int iter = 0; iter < LIMIT; iter += 1) {
 		vec3 distNextVox = vec3(getDistanceNext(curPos.x), getDistanceNext(curPos.y), getDistanceNext(curPos.z));
-		vec3 lengthCertainDir = vec3(divide(distNextVox.x, unit.x), divide(distNextVox.y, unit.y), divide(distNextVox.z, unit.z));
+		vec3 lengthCertainDir = vec3(distNextVox.x / unit.x, distNextVox.y / unit.y, distNextVox.z / unit.z);
 
 		if (lengthCertainDir.x < lengthCertainDir.y) {
 			if (lengthCertainDir.x < lengthCertainDir.z) {
@@ -75,10 +73,6 @@ BasicVoxel castRay(vec2 dir, vec3 origin) {
 		ivec3 curPosInt = ivec3(int(floor(curPos.x)), int(floor(curPos.y)), int(floor(curPos.z)));
 		BasicVoxel currentVoxel = voxelMatrix[curPosInt.x][curPosInt.y][curPosInt.z];
 		if (currentVoxel.valid == true) { voxel = currentVoxel; break; }
-		
-		// col = vec4(curPos.x, curPos.y, curPos.z, unit.x);
-		
-		// voxel = BasicVoxel(true, col);
 	}
 	
 	return voxel;
@@ -86,12 +80,22 @@ BasicVoxel castRay(vec2 dir, vec3 origin) {
 
 void main () {
 	voxelMatrix[3][3][3] = BasicVoxel(true, vec4(1, 0, 0, 0));
-	float degreeHorizontal = (float(FOV) / float(gl_NumWorkGroups.x)) * float(gl_GlobalInvocationID.xy.x); // - FOV / 2
 
-	if (gl_GlobalInvocationID.xy.x == 1 && gl_GlobalInvocationID.xy.y == 1) { debugPrintfEXT("\n First -> %f", degreeHorizontal); }
-	if (gl_GlobalInvocationID.xy.x == gl_NumWorkGroups.x / 2 && gl_GlobalInvocationID.xy.y == 1) { debugPrintfEXT("\n Half -> %f", degreeHorizontal); }
-	if (gl_GlobalInvocationID.xy.x == gl_NumWorkGroups.x && gl_GlobalInvocationID.xy.y == 1) { debugPrintfEXT("\n Last -> %f", degreeHorizontal); }
+	ivec2 workPos = ivec2(gl_GlobalInvocationID.xy);
+	ivec2 groupCount = ivec2(gl_NumWorkGroups.xy);
 
-	BasicVoxel test = castRay(vec2(0.023438, 35), vec3(0.1, 0.1, 0.1));
-	imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), test.color);
+	vec2 workPosVec = vec2(workPos);
+	vec2 groupCountVec = vec2(groupCount);
+
+	if (workPos.x == 1 && workPos.y == 1) {
+		debugPrintfEXT("\n%v2f", groupCountVec);
+	}
+
+	float degree = (60.0 / 800.0); 
+	
+	BasicVoxel test = castRay(vec2(degree, 35), vec3(0.1, 0.1, 0.1));
+
+	// debugPrintfEXT("\n%f", gl_GlobalInvocationID.xy.x);
+	
+	imageStore(computeImage, workPos, test.color);
 }
