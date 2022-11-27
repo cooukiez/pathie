@@ -8,7 +8,7 @@
 # define ACCURACY 100
 # define FOV 60.0
 
-layout (local_size_x = 16, local_size_y = 16) in;
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 
 struct BasicVoxel {
@@ -34,8 +34,9 @@ float divide(float first, float sec) { if (sec != 0.0) { return first / sec; } e
 BasicVoxel castRay(vec2 dir, vec3 origin) {
 	BasicVoxel voxel = BasicVoxel(false, vec4(0.0, 0.0, 0.0, 0.0));
 
-	float alpha = dir.x * PI / 180;
-	float beta = dir.y * PI / 180;
+	float alpha = dir.x * float(PI) / float(180);
+	float beta = dir.y * float(PI) / float(180);
+	
 	vec3 unit = vec3(cos(alpha) * cos(beta), sin(beta), sin(alpha) * cos(beta));
 	
 	float len = 0;
@@ -73,12 +74,12 @@ BasicVoxel castRay(vec2 dir, vec3 origin) {
 
 		ivec3 posAsInt = ivec3(int(floor(curPos.x)), int(floor(curPos.y)), int(floor(curPos.z)));
 
-		if (gl_GlobalInvocationID.xy == uvec2(800, 400)) {
-			// debugPrintfEXT("\n%d %d %d", posAsInt.x, posAsInt.y, posAsInt.z);
+		if (gl_GlobalInvocationID.xy == uvec2(0, 0)) {
+			debugPrintfEXT("\n%d %d %d", posAsInt.x, posAsInt.y, posAsInt.z);
 		}
 
 		BasicVoxel currentVoxel = voxelMatrix[posAsInt.x][posAsInt.y][posAsInt.z];
-		if (currentVoxel.valid == true) { voxel = currentVoxel; break; }
+		// if (currentVoxel.valid == true) { voxel = currentVoxel; break; }
 	}
 
 	return voxel;
@@ -86,9 +87,12 @@ BasicVoxel castRay(vec2 dir, vec3 origin) {
 
 void main () {
 	voxelMatrix[3][3][3] = BasicVoxel(true, vec4(1, 0, 0, 0));
-	float degree = (FOV / gl_NumWorkGroups.x) * gl_GlobalInvocationID.x;\
-	debugPrintfEXT("\n%d", gl_LocalInvocationID.x);
-	BasicVoxel test = castRay(vec2(60.1, 35), vec3(0.1, 0.1, 0.1));
+	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
+	float degree = FOV / float(imageSize.x) * float(pixelCoord.x);
+	vec2 direction = vec2(degree, 35.0);
+
+	BasicVoxel test = castRay(direction, vec3(0.1, 0.1, 0.1));
 	
-	imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), test.color);
+	imageStore(computeImage, pixelCoord, vec4(0,1,0,0));
 }

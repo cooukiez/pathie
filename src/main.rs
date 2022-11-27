@@ -19,8 +19,8 @@ const ENGINE_NAME: &str = "VulkanEngine";
 const DEFAULT_STORAGE_BUFFER_SIZE: u64 = 10485760;
 const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 
-const WIDTH: u32 = 1;
-const HEIGHT: u32 = 1;
+const WIDTH: u32 = 100;
+const HEIGHT: u32 = 100;
 
 fn main() {
     env_logger::builder().format(|buf, record| { let mut bold = buf.style(); bold.set_color(Color::Yellow).set_bold(true); writeln!(buf, "[ {} {} ] {}", chrono::Local::now().format("%H:%M:%S"), bold.value(record.level(), ), record.args(), ) }).init();
