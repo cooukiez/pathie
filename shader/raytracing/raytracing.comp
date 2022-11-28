@@ -83,11 +83,10 @@ void main () {
 
 	data[1][1][1] = 1;
 	
-	float horizontalDegree = FOV / float(imageSize.x) * float(pixelCoord.x) - FOV / 2;
-	float verticalDegree = FOV / float(imageSize.y) * float(pixelCoord.y) - FOV / 2;
+	float horizontalDegree = FOV / float(imageSize.x) * float(pixelCoord.x) - 0;
+	float verticalDegree = FOV / float(imageSize.y) * float(pixelCoord.y) - 0;
 	
-	int test = castRay(vec2(horizontalDegree, verticalDegree), vec3(0.1, 0.1, 0.1));
-	// int test = data[0][pixelCoord.x][2];
+	int test = castRay(vec2(horizontalDegree, verticalDegree), vec3(0.01, 0.01, 0.01));
 	// debugPrintfEXT("\n%d", test);
 	imageStore(computeImage, pixelCoord, vec4(test / 2, 0, 0, 0));
 }
