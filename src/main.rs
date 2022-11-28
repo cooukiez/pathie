@@ -19,8 +19,8 @@ const ENGINE_NAME: &str = "VulkanEngine";
 const DEFAULT_STORAGE_BUFFER_SIZE: u64 = 10485760;
 const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 
-const WIDTH: u32 = 100;
-const HEIGHT: u32 = 100;
+const WIDTH: u32 = 10;
+const HEIGHT: u32 = 600;
 
 fn main() {
     env_logger::builder().format(|buf, record| { let mut bold = buf.style(); bold.set_color(Color::Yellow).set_bold(true); writeln!(buf, "[ {} {} ] {}", chrono::Local::now().format("%H:%M:%S"), bold.value(record.level(), ), record.args(), ) }).init();
@@ -83,7 +83,7 @@ pub fn handle_input(keycode: &VirtualKeyCode, state: &ElementState, vulkan: &Vul
 }
 
 pub fn draw(vulkan: &mut Vulkan, render: &mut Render, ) -> Result<bool, Box<dyn Error>> {
-    if vulkan.status.recreate_swapchain { let dim = vulkan.window.inner_size(); if dim.width > 0 && dim.height > 0 { recreate_swapchain(vulkan, render, vk::PresentModeKHR::FIFO, ); } }
+    if vulkan.status.recreate_swapchain { let dim = vulkan.window.inner_size(); if dim.width > 0 && dim.height > 0 { recreate_swapchain(vulkan, render, vk::PresentModeKHR::FIFO, ); return Ok(false); } }
 
     let fence = vulkan.fence;
     unsafe { vulkan.device.wait_for_fences(&[fence], true, std::u64::MAX, ).unwrap() };
