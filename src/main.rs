@@ -52,7 +52,7 @@ fn run_graphic_related() {
     let buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_STORAGE_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
 
     PipelineData::update_uniform_buffer(&vulkan.device, uniform_list[0].buffer_mem, &world_data.uniform_buffer, );
-    PipelineData::update_voxel_buffer(&vulkan.device, buffer_list[0].buffer_mem, &world_data.basic_voxel_data, );
+    PipelineData::update_voxel_buffer(&vulkan.device, buffer_list[0].buffer_mem, &world_data.basic_data, );
 
     let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&buffer_list, &uniform_list, &vulkan.device, &image, );
     let descriptor_set_list = Render::update_descriptor_pool(descriptor_pool, &descriptor_set_layout_list, &vulkan.device, vk::ImageLayout::GENERAL, &image, &buffer_list, &uniform_list, );

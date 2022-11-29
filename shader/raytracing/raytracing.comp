@@ -11,13 +11,12 @@
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 
-struct BasicVoxel {
-	int type;
-	vec4 color;
+struct VoxelChunk {
+	uint[256] voxelData;
 };
 
-layout (set = 1, binding = 0) buffer BasicVoxelList {
-	BasicVoxel basicVoxelList[];
+layout (set = 1, binding = 0) buffer VoxelChunkList {
+	VoxelChunk voxelChunkList[];
 };
 
 layout (set = 2, binding = 0) buffer UniformBuffer {
