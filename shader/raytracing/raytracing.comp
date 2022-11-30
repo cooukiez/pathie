@@ -4,9 +4,7 @@
 # extension GL_EXT_debug_printf : enable
 
 # define PI 3.141592654
-# define LIMIT 1
 # define ACCURACY 100
-# define FOV 60.0
 
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
@@ -20,8 +18,11 @@ layout (set = 1, binding = 0) buffer VoxelChunkList {
 };
 
 layout (set = 2, binding = 0) uniform UniformBuffer {
-	vec3 headRotation;
-	vec3 PlayerPos;
+	float fieldOfView;
+	uint maxRayLen;
+
+	uvec2 headRotation;
+	uvec3 PlayerPos;
 } uniformBuffer;
 
 int[8][8][8] data;
@@ -82,8 +83,8 @@ void main () {
 
 	data[1][1][1] = 1;
 	
-	float horizontalDegree = FOV / float(imageSize.x) * float(pixelCoord.x);
-	float verticalDegree = FOV / float(imageSize.y) * float(pixelCoord.y);
+	float horizontalDegree = uniformBuffer.fieldOfView / float(imageSize.x) * float(pixelCoord.x);
+	float verticalDegree = uniformBuffer.fieldOfView / float(imageSize.y) * float(pixelCoord.y);
 	
 	int test = castRay(vec2(horizontalDegree, verticalDegree), vec3(0.1, 0.1, 0.1));
 	// debugPrintfEXT("\n%d", test);
