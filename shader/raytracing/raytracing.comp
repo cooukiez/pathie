@@ -25,11 +25,10 @@ layout (set = 2, binding = 0) uniform UniformBuffer {
 	uvec3 PlayerPos;
 } uniformBuffer;
 
-int[8][8][8] data;
-
 float roundFloat(float val) { return round(val * ACCURACY) / ACCURACY; }
 float getDistanceNext(float input_float) { return floor(input_float + sign(input_float)) - (input_float * sign(input_float)); }
 float divide(float first, float sec) { if (sec != 0.0) { return first / sec; } else { return first; } }
+float posToListIndex(vec3 pos)
 
 int castRay(vec2 dir, vec3 origin) {
 	float alpha = dir.x * float(PI) / float(180);
@@ -80,13 +79,11 @@ int castRay(vec2 dir, vec3 origin) {
 void main () {
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
-
-	data[1][1][1] = 1;
 	
 	float horizontalDegree = uniformBuffer.fieldOfView / float(imageSize.x) * float(pixelCoord.x);
 	float verticalDegree = uniformBuffer.fieldOfView / float(imageSize.y) * float(pixelCoord.y);
 	
-	int test = castRay(vec2(horizontalDegree, verticalDegree), vec3(0.1, 0.1, 0.1));
+	// int test = castRay(vec2(horizontalDegree, verticalDegree), vec3(0.1, 0.1, 0.1));
 	// debugPrintfEXT("\n%d", test);
-	imageStore(computeImage, pixelCoord, vec4(test, 0, 0, 0));
+	imageStore(computeImage, pixelCoord, vec4(0, 0, 0, 0));
 }
