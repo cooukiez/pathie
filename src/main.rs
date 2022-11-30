@@ -18,7 +18,7 @@ const ENGINE_NAME: &str = "VulkanEngine";
 
 const DEFAULT_STORAGE_BUFFER_SIZE: u64 = 10485760;
 const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
-
+  
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
@@ -48,11 +48,11 @@ fn run_graphic_related() {
 
     let world_data = WorldData::collect();
 
-    let uniform_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::UNIFORM_BUFFER, DEFAULT_UNIFORM_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
     let buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_STORAGE_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
-
-    PipelineData::update_uniform_buffer(&vulkan.device, uniform_list[0].buffer_mem, &world_data.uniform_buffer, );
+    let uniform_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::UNIFORM_BUFFER, DEFAULT_UNIFORM_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
+    
     PipelineData::update_voxel_buffer(&vulkan.device, buffer_list[0].buffer_mem, &world_data.basic_data, );
+    PipelineData::update_uniform_buffer(&vulkan.device, uniform_list[0].buffer_mem, &world_data.uniform_buffer, );
 
     let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&buffer_list, &uniform_list, &vulkan.device, &image, );
     let descriptor_set_list = Render::update_descriptor_pool(descriptor_pool, &descriptor_set_layout_list, &vulkan.device, vk::ImageLayout::GENERAL, &image, &buffer_list, &uniform_list, );
