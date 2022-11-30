@@ -14,8 +14,7 @@ pub struct VoxelChunk {
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Uniform {
-    pub head_rot: Vector2<i32>,
-    pub player_pos: Vector3<i32>,
+    pub test: u32,
 }
 
 impl WorldData {
@@ -24,7 +23,8 @@ impl WorldData {
     }
 
     pub fn collect() -> WorldData {
-        let uniform_buffer = Uniform { head_rot: Vector2::new(0, 0, ), player_pos: Vector3::new(0, 0, 0, ) };
+        // let uniform_buffer = Uniform { head_rot: Vector2::new(0, 0, ), player_pos: Vector3::new(0, 0, 0, ) };
+        let uniform_buffer = Uniform { test: 1 };
         let mut basic_voxel_input: Vec<u32> = vec![];
         for index in 0 .. 256 { basic_voxel_input.push(index); }
         let voxel_chunk = VoxelChunk { voxel_data: WorldData::vec_to_array(basic_voxel_input) };
