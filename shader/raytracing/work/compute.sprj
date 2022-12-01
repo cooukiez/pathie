@@ -72,6 +72,9 @@
 		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="573" use_cond="false" cond="" enabled="true" />
 		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="572" use_cond="false" cond="" enabled="true" />
 		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="571" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="570" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="569" use_cond="false" cond="" enabled="true" />
+		<entry type="bkpt" file="F:/Code/Pathie/shader/raytracing/work/shader/compute.glsl" line="568" use_cond="false" cond="" enabled="true" />
 	</settings>
 	<plugindata />
 </project>

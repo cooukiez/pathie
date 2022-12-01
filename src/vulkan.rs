@@ -1,4 +1,4 @@
-use std::{ffi::{CString, c_void, CStr}, error::Error};
+use std::{ffi::{CString, c_void, CStr}, error::Error, time::Duration};
 use ash::{
     extensions::{
         ext::DebugUtils,
@@ -13,6 +13,8 @@ use crate::data::{Uniform, VoxelChunk};
 pub struct EngineStatus {
     pub recreate_swapchain: bool,
     pub idle: bool,
+
+    pub frame_time: Duration,
 }
 
 pub struct Vulkan {

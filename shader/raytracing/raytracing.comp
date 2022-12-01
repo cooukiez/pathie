@@ -6,7 +6,7 @@
 # define PI 3.141592654
 # define ACCURACY 100
 
-layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 
 struct VoxelChunk {
@@ -28,9 +28,9 @@ layout (set = 2, binding = 0) uniform UniformBuffer {
 float roundFloat(float val) { return round(val * ACCURACY) / ACCURACY; }
 float getDistanceNext(float input_float) { return floor(input_float + sign(input_float)) - (input_float * sign(input_float)); }
 float divide(float first, float sec) { if (sec != 0.0) { return first / sec; } else { return first; } }
-float posToListIndex(vec3 pos)
+// float posToListIndex(vec3 pos)
 
-int castRay(vec2 dir, vec3 origin) {
+int castRay(vec2 dir, vec3 origin, uint maxLen) {
 	float alpha = dir.x * float(PI) / float(180);
 	float beta = dir.y * float(PI) / float(180);
 	
@@ -39,7 +39,7 @@ int castRay(vec2 dir, vec3 origin) {
 	float len = 0;
 	vec3 curPos = origin;
 
-	for (int iter = 0; iter < 4; iter += 1) {
+	for (int iter = 0; iter < maxLen; iter += 1) {
 		vec3 distNextVox = vec3(getDistanceNext(curPos.x), getDistanceNext(curPos.y), getDistanceNext(curPos.z));
 		vec3 lengthCertainDir = vec3(distNextVox.x / unit.x, distNextVox.y / unit.y, distNextVox.z / unit.z);
 
@@ -69,8 +69,8 @@ int castRay(vec2 dir, vec3 origin) {
 		}
 
 		ivec3 posAsInt = ivec3(int(floor(curPos.x)), int(floor(curPos.y)), int(floor(curPos.z)));
-		int voxAtPos = data[posAsInt.x][posAsInt.y][posAsInt.z];
-		if (voxAtPos > 0) { return voxAtPos; }
+		// int voxAtPos = data[posAsInt.x][posAsInt.y][posAsInt.z];
+		// if (voxAtPos > 0) { return voxAtPos; }
 	}
 
 	return 0;
@@ -83,7 +83,7 @@ void main () {
 	float horizontalDegree = uniformBuffer.fieldOfView / float(imageSize.x) * float(pixelCoord.x);
 	float verticalDegree = uniformBuffer.fieldOfView / float(imageSize.y) * float(pixelCoord.y);
 	
-	// int test = castRay(vec2(horizontalDegree, verticalDegree), vec3(0.1, 0.1, 0.1));
+	int test = castRay(vec2(horizontalDegree, verticalDegree), vec3(0.1, 0.1, 0.1), uniformBuffer.maxRayLen);
 	// debugPrintfEXT("\n%d", test);
-	imageStore(computeImage, pixelCoord, vec4(0, 0, 0, 0));
+	imageStore(computeImage, pixelCoord, vec4(horizontalDegree, 0, 0, 0));
 }

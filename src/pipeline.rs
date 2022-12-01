@@ -121,7 +121,7 @@ impl Render {
             unsafe { device.begin_command_buffer(command_buffer, &command_buffer_begin_info, ).unwrap(); }
             unsafe { device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::COMPUTE, compute_pipeline, ); }
             unsafe { device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::COMPUTE, pipeline_layout, 0, &descriptor_set_list[..], &[], ); }
-            unsafe { device.cmd_dispatch(command_buffer, extent.width, extent.height, 1, ); }
+            unsafe { device.cmd_dispatch(command_buffer, extent.width / 16, extent.height / 16, 1, ); }
 
             Render::set_first_img_mem_barrier(image.image, swapchain_image_list, image_index, &device, command_buffer, );
             Render::copy_image_mem(extent, &device, command_buffer, image.image, swapchain_image_list, image_index, );
