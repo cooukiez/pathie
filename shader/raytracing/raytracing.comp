@@ -6,6 +6,8 @@
 # define PI 3.141592654
 # define ACCURACY 100
 
+# define CHUNK_SIZE 16
+
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 
@@ -18,6 +20,8 @@ layout (set = 1, binding = 0) buffer VoxelChunkList {
 };
 
 layout (set = 2, binding = 0) uniform UniformBuffer {
+	uint time;
+
 	float fieldOfView;
 	uint maxRayLen;
 
@@ -26,13 +30,15 @@ layout (set = 2, binding = 0) uniform UniformBuffer {
 } uniformBuffer;
 
 float roundFloat(float val) { return round(val * ACCURACY) / ACCURACY; }
-float getDistanceNext(float input_float) { return floor(input_float + sign(input_float)) - (input_float * sign(input_float)); }
-float divide(float first, float sec) { if (sec != 0.0) { return first / sec; } else { return first; } }
-// float posToListIndex(vec3 pos)
+float getDistanceNext(float input_float) { 
+	return (floor(abs(input_float) + 1) - abs(input_float)) * sign(input_float); }
+uint posToListIndex(ivec3 pos) { return pos.z + pos.x * CHUNK_SIZE + pos.y * CHUNK_SIZE * CHUNK_SIZE; }
+int listIndexToPos(uint index) { return 0; }
+float applySign(float numberToApply, float numberWithSign) { return abs(numberToApply) * sign(numberWithSign); }
 
-int castRay(vec2 dir, vec3 origin, uint maxLen) {
-	float alpha = dir.x * float(PI) / float(180);
-	float beta = dir.y * float(PI) / float(180);
+uint castRay(vec2 dir, vec3 origin, uint maxLen) {
+	float alpha = dir.x * PI / 180.0;
+	float beta = dir.y * PI / 180.0;
 	
 	vec3 unit = vec3(cos(alpha) * cos(beta), sin(beta), sin(alpha) * cos(beta));
 	
@@ -43,34 +49,34 @@ int castRay(vec2 dir, vec3 origin, uint maxLen) {
 		vec3 distNextVox = vec3(getDistanceNext(curPos.x), getDistanceNext(curPos.y), getDistanceNext(curPos.z));
 		vec3 lengthCertainDir = vec3(distNextVox.x / unit.x, distNextVox.y / unit.y, distNextVox.z / unit.z);
 
-		if (lengthCertainDir.x < lengthCertainDir.y) {
-			if (lengthCertainDir.x < lengthCertainDir.z) {
-				float selectedLen = lengthCertainDir.x;
-				curPos += vec3(distNextVox.y, unit.y * selectedLen, unit.z * selectedLen);
+		if (abs(lengthCertainDir.x) < abs(lengthCertainDir.y)) {
+			if (abs(lengthCertainDir.x) < abs(lengthCertainDir.z)) {
+				float selectedLen = abs(lengthCertainDir.x);
+				curPos += vec3(applySign(distNextVox.x, unit.x), unit.y * selectedLen, unit.z * selectedLen);
 				len += selectedLen;
 			}	
 			else {
-				float selectedLen = lengthCertainDir.z;
-				curPos += vec3(unit.x * selectedLen, unit.y * selectedLen, distNextVox.z);
+				float selectedLen = abs(lengthCertainDir.z);
+				curPos += vec3(unit.x * selectedLen, unit.y * selectedLen, applySign(distNextVox.z, unit.z));
 				len += selectedLen;
 			} 
 		}
 		else {
-			if (lengthCertainDir.y < lengthCertainDir.z) {
-				float selectedLen = lengthCertainDir.y;
-				curPos += vec3(unit.x * selectedLen, distNextVox.y, unit.z * selectedLen);
+			if (abs(lengthCertainDir.y) < abs(lengthCertainDir.z)) {
+				float selectedLen = abs(lengthCertainDir.y);
+				curPos += vec3(unit.x * selectedLen, applySign(distNextVox.y, unit.y), unit.z * selectedLen);
 				len += selectedLen;
 			}
 			else {
-				float selectedLen = lengthCertainDir.z;
-				curPos += vec3(unit.x * selectedLen, unit.y * selectedLen, distNextVox.z);
+				float selectedLen = abs(lengthCertainDir.z);
+				curPos += vec3(unit.x * selectedLen, unit.y * selectedLen, applySign(distNextVox.z, unit.z));
 				len += selectedLen;
 			}
 		}
 
-		ivec3 posAsInt = ivec3(int(floor(curPos.x)), int(floor(curPos.y)), int(floor(curPos.z)));
-		// int voxAtPos = data[posAsInt.x][posAsInt.y][posAsInt.z];
-		// if (voxAtPos > 0) { return voxAtPos; }
+		uint index = posToListIndex(ivec3(int(floor(curPos.x)), int(floor(curPos.y)), int(floor(curPos.z))));
+		uint voxAtPos = voxelChunkList[0].voxelData[index];
+		if (voxAtPos > 0) { return voxAtPos; }
 	}
 
 	return 0;
@@ -80,10 +86,9 @@ void main () {
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
 	
-	float horizontalDegree = uniformBuffer.fieldOfView / float(imageSize.x) * float(pixelCoord.x);
-	float verticalDegree = uniformBuffer.fieldOfView / float(imageSize.y) * float(pixelCoord.y);
+	float horizontalDegree = uniformBuffer.fieldOfView / float(imageSize.x) * float(pixelCoord.x) - uniformBuffer.fieldOfView / 2;
+	float verticalDegree = uniformBuffer.fieldOfView / float(imageSize.y) * float(pixelCoord.y) - uniformBuffer.fieldOfView / 2;
 	
-	int test = castRay(vec2(horizontalDegree, verticalDegree), vec3(0.1, 0.1, 0.1), uniformBuffer.maxRayLen);
-	// debugPrintfEXT("\n%d", test);
-	imageStore(computeImage, pixelCoord, vec4(horizontalDegree, 0, 0, 0));
+	uint test = castRay(vec2(horizontalDegree, 0), vec3(0.1, 0.1, 0.1), uniformBuffer.maxRayLen);
+	imageStore(computeImage, pixelCoord, vec4(test, 0, 0, 0));
 }
