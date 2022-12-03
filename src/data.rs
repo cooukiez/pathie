@@ -9,7 +9,7 @@ pub struct WorldData {
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct VoxelChunk { 
-    pub voxel_data: [u32; 256],
+    pub voxel_data: [u32; 512],
 }
 
 #[repr(C)]
@@ -34,7 +34,7 @@ impl WorldData {
     pub fn collect() -> WorldData {
         // Remove Later
         let mut basic_voxel_input: Vec<u32> = vec![];
-        for index in 0 .. 256 { basic_voxel_input.push(index); }
+        for index in 0 .. 512 { basic_voxel_input.push(index); }
 
         let voxel_chunk = VoxelChunk { voxel_data: WorldData::vec_to_array(basic_voxel_input) };
         WorldData { basic_data: vec![voxel_chunk] }
