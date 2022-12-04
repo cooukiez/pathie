@@ -12,7 +12,7 @@ layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 
 struct VoxelChunk {
-	uint[256] voxelData;
+	uint[512] voxelData;
 };
 
 layout (set = 1, binding = 0) buffer VoxelChunkList {
