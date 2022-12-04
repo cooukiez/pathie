@@ -87,6 +87,6 @@ void main () {
 	
 	float degree = uniformBuffer.fieldOfView / float(imageSize.x) * float(pixelCoord.x) - uniformBuffer.fieldOfView / 2;
 
-	float test = castRay(vec2(degree, 0) + vec2(uniformBuffer.headRotation), vec3(0.1, 0.1, 0.1), uniformBuffer.maxRayLen);
+	float test = castRay(vec2(degree + float(uniformBuffer.headRotation.y), float(uniformBuffer.headRotation.x)), vec3(0.1, 0.1, 0.1), uniformBuffer.maxRayLen);
 	imageStore(computeImage, pixelCoord, vec4(test, 0, 0, 0));
 }
