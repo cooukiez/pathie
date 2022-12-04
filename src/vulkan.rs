@@ -281,14 +281,14 @@ impl PipelineData {
     }
 
     pub fn update_voxel_buffer(device: &Device, buffer_mem: vk::DeviceMemory, data: &[VoxelChunk], ) {
-        log::info!("AlignSize - {}", std::mem::align_of::<VoxelChunk>() as u64);
+        // log::info!("AlignSize - {}", std::mem::align_of::<VoxelChunk>() as u64);
         let ptr: * mut c_void = unsafe { device.map_memory(buffer_mem, 0, std::mem::size_of::<VoxelChunk>() as u64, vk::MemoryMapFlags::empty(), ).unwrap() };
         let mut slice = unsafe { Align::new(ptr, std::mem::align_of::<VoxelChunk>() as u64, std::mem::size_of::<VoxelChunk>() as u64, ) };
         slice.copy_from_slice(&data); unsafe { device.unmap_memory(buffer_mem); }
     }
 
     pub fn update_uniform_buffer(device: &Device, buffer_mem: vk::DeviceMemory, data: &[Uniform], ) {
-        log::info!("AlignSize - {}", std::mem::align_of::<Uniform>() as u64);
+        // log::info!("AlignSize - {}", std::mem::align_of::<Uniform>() as u64);
         let ptr: * mut c_void = unsafe { device.map_memory(buffer_mem, 0, std::mem::size_of::<Uniform>() as u64, vk::MemoryMapFlags::empty(), ).unwrap() };
         let mut slice = unsafe { Align::new(ptr, std::mem::align_of::<Uniform>() as u64, std::mem::size_of::<Uniform>() as u64, ) };
         slice.copy_from_slice(&data); unsafe { device.unmap_memory(buffer_mem); }

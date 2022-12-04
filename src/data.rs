@@ -19,12 +19,8 @@ pub struct Uniform {
     pub field_of_view: f32,
     pub max_ray_length: u32,
 
-    pub head_rot: Vector2<u32>,
-    pub player_pos: Vector3<u32>,
-}
-
-impl Uniform { 
-    pub fn get_uniform_data(time: u32, field_of_view: f32, max_ray_length: u32, ) -> Uniform { Uniform { time, field_of_view, max_ray_length, head_rot: Vector2::new(0, 0, ), player_pos: Vector3::new(0, 0, 0, ) } }
+    pub head_rot: Vector2<i32>,
+    pub player_pos: Vector3<i32>,
 }
 
 impl WorldData {

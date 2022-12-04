@@ -1,6 +1,7 @@
 
-use std::{io::Write, error::Error, thread, time::{Instant, Duration}};
+use std::{io::Write, error::Error, thread, time::{Instant, Duration}, ptr::null_mut};
 use ash::{Entry, vk};
+use cgmath::{Vector3, Vector2};
 use data::{WorldData, Uniform};
 use env_logger::fmt::Color;
 
@@ -23,8 +24,10 @@ const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
 const CHUNK_SIZE: usize = 512;
+const DEFAULT_FOV: f32 = 60.0;
+const DEFAULT_MAX_RAY_LEN: u32 = 100;
 
-static TIME: u32 = 0;
+static mut UNIFORM: Uniform = Uniform { time: 0, field_of_view: DEFAULT_FOV, max_ray_length: DEFAULT_MAX_RAY_LEN, head_rot: Vector2::new(0, 0), player_pos: Vector3::new(0, 0, 0) };
 
 // Jannes war hier ...
 pub struct Pref {
@@ -34,18 +37,22 @@ pub struct Pref {
 
     // Tracer
     pub max_ray_len: u32,
+
+    // Movement
+    pub key_rot_control_inc: i32,
 }
 
 fn main() {
     env_logger::builder().format(|buf, record| { let mut bold = buf.style(); bold.set_color(Color::Yellow).set_bold(true); writeln!(buf, "[ {} {} ] {}", chrono::Local::now().format("%H:%M:%S"), bold.value(record.level(), ), record.args(), ) }).init();
+    let app_start = Instant::now();
 
     thread::spawn(|| { loop { } });
 
-    run_graphic_related();
+    run_graphic_related(app_start);
 }
 
-fn run_graphic_related() {
-    let pref = Pref { pref_present_mode: vk::PresentModeKHR::IMMEDIATE, field_of_view: 60.0, max_ray_len: 100 };
+fn run_graphic_related(app_start: Instant) {
+    let pref = Pref { pref_present_mode: vk::PresentModeKHR::IMMEDIATE, field_of_view: DEFAULT_FOV, max_ray_len: DEFAULT_MAX_RAY_LEN, key_rot_control_inc: 5 };
 
     let event_loop = EventLoop::new();
     let entry = unsafe { Entry::load().unwrap() };
@@ -65,13 +72,11 @@ fn run_graphic_related() {
     let image = PipelineData::init_image(vk::ImageLayout::UNDEFINED, vulkan.surface_format.format, &vulkan.extent, &vulkan.device, &vulkan.physical_device_memory_prop, );
 
     let world_data = WorldData::collect();
-    let uniform_data = Uniform::get_uniform_data(unsafe { TIME }, pref.field_of_view, pref.max_ray_len, );
-
     let buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_STORAGE_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
     let uniform_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::UNIFORM_BUFFER, DEFAULT_UNIFORM_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
 
     PipelineData::update_voxel_buffer(&vulkan.device, buffer_list[0].buffer_mem, &world_data.basic_data, );
-    PipelineData::update_uniform_buffer(&vulkan.device, uniform_list[0].buffer_mem, &[uniform_data], );
+    PipelineData::update_uniform_buffer(&vulkan.device, uniform_list[0].buffer_mem, unsafe { &[UNIFORM] }, );
 
     let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&buffer_list, &uniform_list, &vulkan.device, &image, );
     let descriptor_set_list = Render::update_descriptor_pool(descriptor_pool, &descriptor_set_layout_list, &vulkan.device, vk::ImageLayout::GENERAL, &image, &buffer_list, &uniform_list, );
@@ -81,27 +86,31 @@ fn run_graphic_related() {
 
     let mut render = Render { image, buffer_list, uniform_list, descriptor_pool, descriptor_set_layout_list, pipeline_layout, descriptor_set_list, compute_pipeline };
 
-    event_loop.run(move | event, _, control_flow | { * control_flow = ControlFlow::Poll; handle_event(&event, &mut vulkan, &mut render, &pref, control_flow, ); });
+    event_loop.run(move | event, _, control_flow | { * control_flow = ControlFlow::Poll; handle_event(&event, &mut vulkan, &mut render, &pref, &app_start, control_flow, ); });
 }
 
-pub fn handle_event(event: &Event<()>, vulkan: &mut Vulkan, render: &mut Render, pref: &Pref, control_flow: &mut ControlFlow, ) {
+pub fn handle_event(event: &Event<()>, vulkan: &mut Vulkan, render: &mut Render, pref: &Pref, app_start: &Instant, control_flow: &mut ControlFlow, ) {
     match event {
         Event::WindowEvent { event: WindowEvent::Resized(..), .. } => { log::info!("Window -> Resize ..."); vulkan.status.recreate_swapchain = true; }
-        Event::MainEventsCleared => { vulkan.status.recreate_swapchain = draw(vulkan, render, pref, ).expect("TICK_FAILED"); }
-        Event::WindowEvent { event: WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(keycode), state, .. }, .. }, .. } => handle_input(keycode, state, &vulkan),
+        Event::MainEventsCleared => { vulkan.status.recreate_swapchain = draw(vulkan, render, pref, app_start, ).expect("TICK_FAILED"); }
+        Event::WindowEvent { event: WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(keycode), state, .. }, .. }, .. } => handle_input(keycode, state, &vulkan, &pref, ),
         Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => * control_flow = ControlFlow::Exit,
         Event::LoopDestroyed => Vulkan::wait_for_gpu(&vulkan.device).expect("FAILED_WORK"), _ => (),
     }
 }
 
-pub fn handle_input(keycode: &VirtualKeyCode, state: &ElementState, vulkan: &Vulkan, ) {
+pub fn handle_input(keycode: &VirtualKeyCode, state: &ElementState, vulkan: &Vulkan, pref: &Pref, ) {
     match keycode {
         &VirtualKeyCode::F if state == &ElementState::Pressed => { vulkan.window.set_fullscreen(Some(Fullscreen::Exclusive(vulkan.monitor.video_modes().next().expect("ERR_NO_MONITOR_MODE").clone()))); },
+        &VirtualKeyCode::W if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.y += pref.key_rot_control_inc }; },
+        &VirtualKeyCode::S if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.y -= pref.key_rot_control_inc }; },
+        &VirtualKeyCode::A if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.x += pref.key_rot_control_inc }; },
+        &VirtualKeyCode::D if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.x -= pref.key_rot_control_inc }; },
         &VirtualKeyCode::Escape if state == &ElementState::Pressed => { vulkan.window.set_fullscreen(None); }, _ => (),
     }
 }
 
-pub fn draw(vulkan: &mut Vulkan, render: &mut Render, pref: &Pref, ) -> Result<bool, Box<dyn Error>> {
+pub fn draw(vulkan: &mut Vulkan, render: &mut Render, pref: &Pref, app_start: &Instant, ) -> Result<bool, Box<dyn Error>> {
     if vulkan.status.recreate_swapchain { let dim = vulkan.window.inner_size(); if dim.width > 0 && dim.height > 0 { recreate_swapchain(vulkan, render, pref.pref_present_mode, ); return Ok(false); } }
 
     let fence = vulkan.fence;
@@ -132,8 +141,8 @@ pub fn draw(vulkan: &mut Vulkan, render: &mut Render, pref: &Pref, ) -> Result<b
 
     vulkan.status.frame_time = start.elapsed();
 
-    // let uniform_data = Uniform::get_uniform_data(unsafe { TIME }, pref.field_of_view, pref.max_ray_len, );
-    // PipelineData::update_uniform_buffer(&vulkan.device, render.uniform_list[0].buffer_mem, &[uniform_data], );
+    unsafe { UNIFORM.time = app_start.elapsed().as_millis() as u32 };
+    PipelineData::update_uniform_buffer(&vulkan.device, render.uniform_list[0].buffer_mem, unsafe { &[UNIFORM] }, );
 
     match present_result { Ok(is_suboptimal) if is_suboptimal => { return Ok(true); } Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => { return Ok(true); } Err(error) => panic!("ERROR_PRESENT_SWAP -> {}", error, ), _ => { } } Ok(false)
 }
