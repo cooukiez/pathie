@@ -22,9 +22,9 @@ const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
-static mut TIME: u32 = 0;
+const CHUNK_SIZE: u32 = 512;
 
-// Jannes war hier ... 
+// Jannes war hier ...
 pub struct Pref {
     // Render
     pub pref_present_mode: vk::PresentModeKHR,
