@@ -22,6 +22,8 @@ const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
+static mut TIME: u32 = 0;
+
 // Jannes war hier ... 
 pub struct Pref {
     // Render
@@ -61,7 +63,7 @@ fn run_graphic_related() {
     let image = PipelineData::init_image(vk::ImageLayout::UNDEFINED, vulkan.surface_format.format, &vulkan.extent, &vulkan.device, &vulkan.physical_device_memory_prop, );
 
     let world_data = WorldData::collect();
-    let uniform_data = Uniform::get_uniform_data(pref.field_of_view, pref.max_ray_len, );
+    let uniform_data = Uniform::get_uniform_data(unsafe { TIME }, pref.field_of_view, pref.max_ray_len, );
 
     let buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_STORAGE_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
     let uniform_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::UNIFORM_BUFFER, DEFAULT_UNIFORM_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
@@ -127,6 +129,9 @@ pub fn draw(vulkan: &mut Vulkan, render: &mut Render, pref: &Pref, ) -> Result<b
     let present_result = unsafe { vulkan.swapchain_loader.queue_present(vulkan.present_queue, &present_info, ) };
 
     vulkan.status.frame_time = start.elapsed();
+
+    // let uniform_data = Uniform::get_uniform_data(unsafe { TIME }, pref.field_of_view, pref.max_ray_len, );
+    // PipelineData::update_uniform_buffer(&vulkan.device, render.uniform_list[0].buffer_mem, &[uniform_data], );
 
     match present_result { Ok(is_suboptimal) if is_suboptimal => { return Ok(true); } Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => { return Ok(true); } Err(error) => panic!("ERROR_PRESENT_SWAP -> {}", error, ), _ => { } } Ok(false)
 }

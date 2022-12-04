@@ -15,6 +15,7 @@ pub struct VoxelChunk {
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Uniform {
+    pub time: u32,
     pub field_of_view: f32,
     pub max_ray_length: u32,
 
@@ -23,7 +24,7 @@ pub struct Uniform {
 }
 
 impl Uniform { 
-    pub fn get_uniform_data(field_of_view: f32, max_ray_length: u32, ) -> Uniform { Uniform { field_of_view, max_ray_length, head_rot: Vector2::new(0, 0, ), player_pos: Vector3::new(0, 0, 0, ) } }
+    pub fn get_uniform_data(time: u32, field_of_view: f32, max_ray_length: u32, ) -> Uniform { Uniform { time, field_of_view, max_ray_length, head_rot: Vector2::new(0, 0, ), player_pos: Vector3::new(0, 0, 0, ) } }
 }
 
 impl WorldData {
