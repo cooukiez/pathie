@@ -22,7 +22,9 @@ const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
-const CHUNK_SIZE: u32 = 512;
+const CHUNK_SIZE: usize = 512;
+
+static TIME: u32 = 0;
 
 // Jannes war hier ...
 pub struct Pref {
