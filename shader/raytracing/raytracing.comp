@@ -26,7 +26,7 @@ layout (set = 2, binding = 0) uniform UniformBuffer {
 	uint maxRayLen;
 
 	ivec2 headRotation;
-	ivec3 PlayerPos;
+	ivec3 playerPos;
 } uniformBuffer;
 
 float roundFloat(float val) { return round(val * ACCURACY) / ACCURACY; }
@@ -78,15 +78,15 @@ float castRay(vec2 dir, vec3 origin, uint maxLen) {
 		if (voxAtPos > 0) { return len * 0.2; }
 	}
 
-	return 0.0;
+	return 100.0;
 }
 
 void main () {
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
 	
-	float degree = uniformBuffer.fieldOfView / float(imageSize.x) * float(pixelCoord.x) - uniformBuffer.fieldOfView / 2;
-
-	float test = castRay(vec2(degree + float(uniformBuffer.headRotation.y), float(uniformBuffer.headRotation.x)), vec3(0.1, 0.1, 0.1), uniformBuffer.maxRayLen);
-	imageStore(computeImage, pixelCoord, vec4(test, 0, 0, 0));
+	float degree = ((uniformBuffer.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (uniformBuffer.fieldOfView / 2);
+	// debugPrintfEXT("\n%d", imageSize.x);
+	float test = castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), vec3(uniformBuffer.playerPos), uniformBuffer.maxRayLen);
+	imageStore(computeImage, pixelCoord, vec4(1 / test * 10, 0, 0, 0));
 }

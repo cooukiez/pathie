@@ -25,9 +25,9 @@ const HEIGHT: u32 = 600;
 
 const CHUNK_SIZE: usize = 512;
 const DEFAULT_FOV: f32 = 60.0;
-const DEFAULT_MAX_RAY_LEN: u32 = 100;
+const DEFAULT_MAX_RAY_LEN: u32 = 200;
 
-static mut UNIFORM: Uniform = Uniform { time: 0, field_of_view: DEFAULT_FOV, max_ray_length: DEFAULT_MAX_RAY_LEN, head_rot: Vector2::new(0, 0), player_pos: Vector3::new(0, 0, 0) };
+static mut UNIFORM: Uniform = Uniform { time: 0, field_of_view: DEFAULT_FOV, max_ray_length: DEFAULT_MAX_RAY_LEN, head_rot: Vector2::new(0, 0), player_pos: Vector3::new(1, 1, -50) };
 
 // Jannes war hier ...
 pub struct Pref {
