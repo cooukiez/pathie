@@ -84,7 +84,7 @@ float castRay(vec2 dir, vec3 origin) {
 		curPos += vec3(unit.x * selectedLen, unit.y * selectedLen, unit.z * selectedLen);
 		len += selectedLen;
 
-		// int voxAtPos = getVoxelAtPos(curPos);
+		int voxAtPos = 1;
 		if (voxAtPos > 0) { return len; }
 	}
 
