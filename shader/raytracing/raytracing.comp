@@ -18,11 +18,11 @@ struct VoxelChunk {
 	int[512] voxelData;
 };
 
-layout (set = 1, binding = 0) buffer VoxelChunkList {
+layout (set = 1, binding = 0) readonly buffer VoxelChunkList {
 	VoxelChunk voxelChunkList[];
 };
 
-layout (set = 2, binding = 0) uniform UniformBuffer {
+layout (set = 2, binding = 0) readonly uniform UniformBuffer {
 	uint time;
 
 	float fieldOfView;
@@ -84,7 +84,7 @@ float castRay(vec2 dir, vec3 origin) {
 		curPos += vec3(unit.x * selectedLen, unit.y * selectedLen, unit.z * selectedLen);
 		len += selectedLen;
 
-		int voxAtPos = 1;
+		int voxAtPos = getVoxelAtPos(curPos);
 		if (voxAtPos > 0) { return len; }
 	}
 
@@ -99,5 +99,5 @@ void main () {
 	
 	float test = castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), vec3(0.1, 0.1, 0.1));
 	// debugPrintfEXT("\n%d", );
-	imageStore(computeImage, pixelCoord, vec4(test / 2, 0, 0, 0));	
+	imageStore(computeImage, pixelCoord, vec4(0.2, float(pixelCoord.x) / float(imageSize.x), 0, 0));	
 }

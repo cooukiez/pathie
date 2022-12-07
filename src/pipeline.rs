@@ -96,11 +96,11 @@ impl Render {
         unsafe { device.cmd_pipeline_barrier(command_buffer, vk::PipelineStageFlags::COMPUTE_SHADER, vk::PipelineStageFlags::ALL_COMMANDS, vk::DependencyFlags::empty(), &[], &[], &barrier_list, ); }
     }
 
-    pub fn copy_image_mem(extent: &vk::Extent2D, device: &Device, command_buffer: vk::CommandBuffer, image: vk::Image, swapchain_image_list: &Vec<vk::Image>, image_index: usize, ) {
+    pub fn copy_image_mem(extent: &vk::Extent2D, scaled_extent: &vk::Extent2D, device: &Device, command_buffer: vk::CommandBuffer, image: vk::Image, swapchain_image_list: &Vec<vk::Image>, image_index: usize, ) {
         let src = vk::ImageSubresourceLayers { aspect_mask: ImageAspectFlags::COLOR, mip_level: 0, base_array_layer: 0, layer_count: 1 };
         let dst = vk::ImageSubresourceLayers { aspect_mask: ImageAspectFlags::COLOR, mip_level: 0, base_array_layer: 0, layer_count: 1 };
-        let copy = vk::ImageCopy { src_subresource: src, src_offset: vk::Offset3D { x: 0, y: 0, z: 0 }, dst_subresource: dst, dst_offset: vk::Offset3D { x: 0, y: 0, z: 0 }, extent: vk::Extent3D { width: extent.width, height: extent.height, depth: 1 } };
-        unsafe { device.cmd_copy_image(command_buffer, image, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, swapchain_image_list[image_index], vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[copy], ); }
+        let blit = vk::ImageBlit { src_subresource: src, src_offsets: [vk::Offset3D { x: 0, y: 0, z: 0 }, vk::Offset3D { x: scaled_extent.width as i32, y: scaled_extent.height as i32, z: 0 }], dst_subresource: dst, dst_offsets: [vk::Offset3D { x: 0, y: 0, z: 0 }, vk::Offset3D { x: extent.width as i32, y: extent.height as i32, z: 0 }] };
+        unsafe { device.cmd_blit_image(command_buffer, image, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, swapchain_image_list[image_index], vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[blit], vk::Filter::LINEAR, ); }
     }
 
     pub fn set_second_img_mem_barrier(swapchain_image_list: &Vec<vk::Image>, image_index: usize, device: &Device, command_buffer: vk::CommandBuffer, ) {
@@ -113,7 +113,7 @@ impl Render {
         unsafe { device.cmd_pipeline_barrier(command_buffer, vk::PipelineStageFlags::ALL_COMMANDS, vk::PipelineStageFlags::TOP_OF_PIPE, vk::DependencyFlags::empty(), &[], &[], &[swap_pres], ); }
     }
 
-    pub fn record_command_pool(command_buffer_list: &Vec<vk::CommandBuffer>, device: &Device, compute_pipeline: vk::Pipeline, pipeline_layout: vk::PipelineLayout, descriptor_set_list: &Vec<vk::DescriptorSet>, extent: &vk::Extent2D, image: &ImageObj, swapchain_image_list: &Vec<vk::Image>, image_index: usize, ) {
+    pub fn record_command_pool(command_buffer_list: &Vec<vk::CommandBuffer>, device: &Device, compute_pipeline: vk::Pipeline, pipeline_layout: vk::PipelineLayout, descriptor_set_list: &Vec<vk::DescriptorSet>, extent: &vk::Extent2D, scaled_extent: &vk::Extent2D, image: &ImageObj, swapchain_image_list: &Vec<vk::Image>, image_index: usize, ) {
         for command_buffer in command_buffer_list {
             let command_buffer = * command_buffer;
             let command_buffer_begin_info = vk::CommandBufferBeginInfo { flags: vk::CommandBufferUsageFlags::SIMULTANEOUS_USE, ..Default::default() };
@@ -121,10 +121,10 @@ impl Render {
             unsafe { device.begin_command_buffer(command_buffer, &command_buffer_begin_info, ).unwrap(); }
             unsafe { device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::COMPUTE, compute_pipeline, ); }
             unsafe { device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::COMPUTE, pipeline_layout, 0, &descriptor_set_list[..], &[], ); }
-            unsafe { device.cmd_dispatch(command_buffer, extent.width / 16, extent.height / 16, 1, ); }
+            unsafe { device.cmd_dispatch(command_buffer, scaled_extent.width / 16, scaled_extent.height / 16, 1, ); }
 
             Render::set_first_img_mem_barrier(image.image, swapchain_image_list, image_index, &device, command_buffer, );
-            Render::copy_image_mem(extent, &device, command_buffer, image.image, swapchain_image_list, image_index, );
+            Render::copy_image_mem(extent, scaled_extent, &device, command_buffer, image.image, swapchain_image_list, image_index, );
             Render::set_second_img_mem_barrier(swapchain_image_list, image_index, &device, command_buffer, );
 
             unsafe { device.end_command_buffer(command_buffer).unwrap(); }

@@ -51,6 +51,7 @@ pub struct Vulkan {
     pub swapchain_image_view_list: Vec<vk::ImageView>, 
 
     pub extent: vk::Extent2D,
+    pub scaled_extent: vk::Extent2D,
     pub surface_format: SurfaceFormatKHR,
     pub present_mode: vk::PresentModeKHR,
     pub surface_capability: vk::SurfaceCapabilitiesKHR,
@@ -166,7 +167,7 @@ impl Vulkan {
         (device, graphics_queue, present_queue, swapchain_loader, )
     }
 
-    pub fn init_swapchain(surface: &Surface, physical_device: vk::PhysicalDevice, surface_khr: vk::SurfaceKHR, pref_present_mode: vk::PresentModeKHR, window: &Window, loader: &Swapchain, graphics_queue_index: u32, present_queue_index: u32, device: &Device, ) -> (SurfaceFormatKHR, vk::PresentModeKHR, vk::SurfaceCapabilitiesKHR, vk::Extent2D, vk::SwapchainKHR, Vec<vk::Image>, Vec<vk::ImageView>, ) {
+    pub fn init_swapchain(surface: &Surface, physical_device: vk::PhysicalDevice, surface_khr: vk::SurfaceKHR, pref_present_mode: vk::PresentModeKHR, window: &Window, img_scale: &u32, loader: &Swapchain, graphics_queue_index: u32, present_queue_index: u32, device: &Device, ) -> (SurfaceFormatKHR, vk::PresentModeKHR, vk::SurfaceCapabilitiesKHR, vk::Extent2D, vk::Extent2D, vk::SwapchainKHR, Vec<vk::Image>, Vec<vk::ImageView>, ) {
         log::info!("Init Swapchain ...");
 
         let format = { let format_list = unsafe { surface.get_physical_device_surface_formats(physical_device, surface_khr, ).unwrap() }; if format_list.len() == 1 && format_list[0].format == vk::Format::UNDEFINED { vk::SurfaceFormatKHR { format: vk::Format::B8G8R8A8_UNORM, color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR, } }  else { * format_list.iter().find(| format | { format.format == vk::Format::B8G8R8A8_UNORM && format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR }).unwrap_or(&format_list[0]) }};
@@ -179,6 +180,8 @@ impl Vulkan {
 
         let extent = { if capability.current_extent.width != std::u32::MAX { capability.current_extent } else { let min = capability.min_image_extent; let max = capability.max_image_extent; let width = window.inner_size().width.min(max.width).max(min.width); let height = window.inner_size().height.min(max.height).max(min.height); vk::Extent2D { width, height } } };
         log::info!("Swapchain Extent is [ {:?} ] ...", extent);
+        let scaled_extent = vk::Extent2D { width: extent.width / img_scale, height: extent.height / img_scale };
+        log::info!("Scaled Extent is [ {:?} ] ...", scaled_extent);
 
         let image_count = capability.min_image_count;
         log::info!("Swapchain ImageCount is [ {:?} ] ...", image_count);
@@ -190,7 +193,7 @@ impl Vulkan {
         let image_list = unsafe { loader.get_swapchain_images(swapchain_khr).unwrap() };
         let image_view_list = image_list.iter().map(| image | { let view_info = vk::ImageViewCreateInfo::builder().image(* image).view_type(vk::ImageViewType::TYPE_2D).format(format.format).subresource_range(vk::ImageSubresourceRange { aspect_mask: vk::ImageAspectFlags::COLOR, base_mip_level: 0, level_count: 1, base_array_layer: 0, layer_count: 1, }); unsafe { device.create_image_view(&view_info, None, ) } }).collect::<Result<Vec<_>, _>>().unwrap();
 
-        (format, present_mode, capability, extent, swapchain_khr, image_list, image_view_list, )
+        (format, present_mode, capability, extent, scaled_extent, swapchain_khr, image_list, image_view_list, )
     }
 
     pub fn init_command_pool(graphics_queue_index: u32, device: &Device, swapchain_image_list: &Vec<vk::Image>, ) -> (vk::CommandPool, Vec<vk::CommandBuffer>, ) {
