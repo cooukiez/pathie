@@ -25,9 +25,9 @@ const HEIGHT: u32 = 600;
 
 const CHUNK_SIZE: usize = 512;
 const DEFAULT_FOV: f32 = 60.0;
-const DEFAULT_MAX_RAY_LEN: u32 = 200;
+const DEFAULT_MAX_RAY_LEN: u32 = 100;
 
-static mut UNIFORM: Uniform = Uniform { time: 0, field_of_view: DEFAULT_FOV, max_ray_length: DEFAULT_MAX_RAY_LEN, head_rot: Vector2::new(0, 0), player_pos: Vector3::new(1, 1, -50) };
+static mut UNIFORM: Uniform = Uniform { time: 0, field_of_view: DEFAULT_FOV, max_ray_length: DEFAULT_MAX_RAY_LEN, head_rot: Vector2::new(0, 0), player_pos: Vector3::new(1, 1, 1) };
 
 // Jannes war hier ...
 pub struct Pref {
@@ -75,7 +75,7 @@ fn run_graphic_related(app_start: Instant) {
     let buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_STORAGE_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
     let uniform_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::UNIFORM_BUFFER, DEFAULT_UNIFORM_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
 
-    PipelineData::update_voxel_buffer(&vulkan.device, buffer_list[0].buffer_mem, &world_data.basic_data, );
+    PipelineData::update_voxel_buffer(&vulkan.device, buffer_list[0].buffer_mem, &world_data.voxel_data, );
     PipelineData::update_uniform_buffer(&vulkan.device, uniform_list[0].buffer_mem, unsafe { &[UNIFORM] }, );
 
     let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&buffer_list, &uniform_list, &vulkan.device, &image, );

@@ -6,13 +6,16 @@
 # define PI 3.141592654
 # define ACCURACY 100
 
-# define CHUNK_SIZE 16
+# define CHUNK_SIDE_LEN 8
+# define CHUNK_SIZE 512
+# define CHUNK_GROUP_SIDE_LEN 3
+# define CHUNK_GROUP_SIZE 27
 
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 
 struct VoxelChunk {
-	uint[512] voxelData;
+	int[512] voxelData;
 };
 
 layout (set = 1, binding = 0) buffer VoxelChunkList {
@@ -31,11 +34,20 @@ layout (set = 2, binding = 0) uniform UniformBuffer {
 
 float roundFloat(float val) { return round(val * ACCURACY) / ACCURACY; }
 float getDistanceNext(float input_float) { return (floor(abs(input_float) + 1) - abs(input_float)) * sign(input_float); }
-uint posToListIndex(ivec3 pos) { return pos.z + pos.x * CHUNK_SIZE + pos.y * CHUNK_SIZE * CHUNK_SIZE; }
+int posToIndex(ivec3 pos, int sideLength, int chunkSize) { return pos.x * sideLength + pos.y * sideLength * sideLength + pos.z + int(chunkSize / 2); }
 int listIndexToPos(uint index) { return 0; }
-float applySign(float numberToApply, float numberWithSign) { return abs(numberToApply) * sign(numberWithSign); }
 
-float castRay(vec2 dir, vec3 origin, uint maxLen) {
+int getVoxelAtPos(vec3 pos) {
+	ivec3 posAsInt = ivec3(pos);
+
+	int index = posToIndex(posAsInt, CHUNK_SIDE_LEN * CHUNK_GROUP_SIDE_LEN, CHUNK_SIZE * CHUNK_GROUP_SIZE);
+	int chunkGroupLevIndex = index / CHUNK_SIZE;
+	int chunkLevIndex = index / CHUNK_GROUP_SIZE;
+
+	return voxelChunkList[chunkGroupLevIndex].voxelData[chunkLevIndex];
+}
+
+float castRay(vec2 dir, vec3 origin) {
 	float alpha = dir.x * PI / 180.0;
 	float beta = dir.y * PI / 180.0;
 	
@@ -43,42 +55,40 @@ float castRay(vec2 dir, vec3 origin, uint maxLen) {
 	
 	float len = 0;
 	vec3 curPos = origin;
+	
+	float selectedLen = 0;
+	vec3 distNextVox = vec3(0, 0, 0);
+	vec3 lengthCertainDir = vec3(0, 0, 0);
 
-	for (int iter = 0; iter < maxLen; iter += 1) {
-		vec3 distNextVox = vec3(getDistanceNext(curPos.x), getDistanceNext(curPos.y), getDistanceNext(curPos.z));
-		vec3 lengthCertainDir = vec3(distNextVox.x / unit.x, distNextVox.y / unit.y, distNextVox.z / unit.z);
+	for (int iter = 0; iter < uniformBuffer.maxRayLen; iter += 1) {
+		distNextVox = vec3(getDistanceNext(curPos.x), getDistanceNext(curPos.y), getDistanceNext(curPos.z));
+		lengthCertainDir = vec3(abs(distNextVox.x / unit.x), abs(distNextVox.y / unit.y), abs(distNextVox.z / unit.z));
 
-		if (abs(lengthCertainDir.x) < abs(lengthCertainDir.y)) {
-			if (abs(lengthCertainDir.x) < abs(lengthCertainDir.z)) {
-				float selectedLen = abs(lengthCertainDir.x);
-				curPos += vec3(applySign(distNextVox.x, unit.x), unit.y * selectedLen, unit.z * selectedLen);
-				len += selectedLen;
-			}	
+		if (lengthCertainDir.x < lengthCertainDir.y) {
+			if (lengthCertainDir.x < lengthCertainDir.z) {
+				selectedLen = lengthCertainDir.x;
+			}
 			else {
-				float selectedLen = abs(lengthCertainDir.z);
-				curPos += vec3(unit.x * selectedLen, unit.y * selectedLen, applySign(distNextVox.z, unit.z));
-				len += selectedLen;
+				selectedLen = lengthCertainDir.z;
 			} 
 		}
 		else {
-			if (abs(lengthCertainDir.y) < abs(lengthCertainDir.z)) {
-				float selectedLen = abs(lengthCertainDir.y);
-				curPos += vec3(unit.x * selectedLen, applySign(distNextVox.y, unit.y), unit.z * selectedLen);
-				len += selectedLen;
+			if (lengthCertainDir.y < lengthCertainDir.z) {
+				selectedLen = lengthCertainDir.y;
 			}
 			else {
-				float selectedLen = abs(lengthCertainDir.z);
-				curPos += vec3(unit.x * selectedLen, unit.y * selectedLen, applySign(distNextVox.z, unit.z));
-				len += selectedLen;
+				selectedLen = lengthCertainDir.z;
 			}
 		}
 
-		uint index = posToListIndex(ivec3(int(floor(curPos.x)), int(floor(curPos.y)), int(floor(curPos.z))));
-		uint voxAtPos = voxelChunkList[0].voxelData[index];
-		if (voxAtPos > 0) { return len * 0.2; }
+		curPos += vec3(unit.x * selectedLen, unit.y * selectedLen, unit.z * selectedLen);
+		len += selectedLen;
+
+		// int voxAtPos = getVoxelAtPos(curPos);
+		if (voxAtPos > 0) { return len; }
 	}
 
-	return 100.0;
+	return 0.0;
 }
 
 void main () {
@@ -86,7 +96,8 @@ void main () {
 	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
 	
 	float degree = ((uniformBuffer.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (uniformBuffer.fieldOfView / 2);
-	// debugPrintfEXT("\n%d", imageSize.x);
-	float test = castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), vec3(uniformBuffer.playerPos), uniformBuffer.maxRayLen);
-	imageStore(computeImage, pixelCoord, vec4(1 / test * 10, 0, 0, 0));
+	
+	float test = castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), vec3(0.1, 0.1, 0.1));
+	// debugPrintfEXT("\n%d", );
+	imageStore(computeImage, pixelCoord, vec4(test / 2, 0, 0, 0));	
 }
