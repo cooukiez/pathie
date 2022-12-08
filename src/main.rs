@@ -55,7 +55,7 @@ fn main() {
 fn run_graphic_related(app_start: Instant) {
     let pref = Pref { 
         pref_present_mode: vk::PresentModeKHR::IMMEDIATE, 
-        img_scale: 8, 
+        img_scale: 3, 
         field_of_view: DEFAULT_FOV, 
         max_ray_len: DEFAULT_MAX_RAY_LEN, 
         key_rot_control_inc: 5 
