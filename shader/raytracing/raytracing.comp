@@ -24,7 +24,7 @@ layout (set = 2, binding = 0) buffer VoxelChunkList {
 	VoxelChunk voxelChunkList[];
 };
 
-layout (set = 3, binding = 0) uniform GraphicPref {
+layout (set = 3, binding = 0) buffer GraphicPref {
 	float fieldOfView;
 	uint maxRayLen;
 
@@ -72,7 +72,7 @@ float castRay(vec2 dir, vec3 origin) {
 	vec3 distNextVox = vec3(0, 0, 0);
 	vec3 lengthCertainDir = vec3(0, 0, 0);
 
-	for (int iter = 0; iter < uniformBuffer.maxRayLen; iter += 1) {
+	for (int iter = 0; iter < graphicPref.maxRayLen; iter += 1) {
 		distNextVox = vec3(getDistanceNext(curPos.x), getDistanceNext(curPos.y), getDistanceNext(curPos.z));
 		lengthCertainDir = vec3(abs(distNextVox.x / unit.x), abs(distNextVox.y / unit.y), abs(distNextVox.z / unit.z));
 
@@ -112,6 +112,6 @@ void main () {
 	// float test = castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), vec3(0.1, 0.1, 0.1));
 	// int test = getVoxelAtPos(vec3(16, 16, 16));
 	// debugPrintfEXT("\nt %d  f %d m %d   h %d p %d", uniformBuffer.time, uniformBuffer.fieldOfView, uniformBuffer.maxRayLen, uniformBuffer.headRotation, uniformBuffer.playerPos); // , uniformBuffer.chunkSideLen, uniformBuffer.chunkSize, uniformBuffer.chunkGroupSideLen, uniformBuffer.chunkGroupSize);
-	debugPrintfEXT("\ncl %d cs %d  cgl %d cgs %d", uniformBuffer.chunkSideLen, uniformBuffer.chunkSize, uniformBuffer.chunkGroupSideLen, uniformBuffer.chunkGroupSize);
+	debugPrintfEXT("\n%d %d", graphicPref.chunkGroupSize, uniformBuffer.time);
 	// imageStore(computeImage, pixelCoord, vec4(test, 0, 0, 0));	
 }

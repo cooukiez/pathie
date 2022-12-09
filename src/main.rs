@@ -95,18 +95,21 @@ fn run_graphic_related(app_start: Instant) {
     let uniform_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::UNIFORM_BUFFER, DEFAULT_UNIFORM_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
 
     let world_data = WorldData::collect();
-    let buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_STORAGE_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
+    let buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_STORAGE_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, ), ];
     
+    let std_buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_UNIFORM_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
+
     PipelineData::update_uniform_buffer(&vulkan.device, uniform_list[0].buffer_mem, unsafe { &[UNIFORM] }, );
     PipelineData::update_voxel_buffer(&vulkan.device, buffer_list[0].buffer_mem, &world_data.voxel_data, );
-    
-    let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&uniform_list, &buffer_list, &vulkan.device, &image, );
-    let descriptor_set_list = Render::update_descriptor_pool(descriptor_pool, &descriptor_set_layout_list, &vulkan.device, vk::ImageLayout::GENERAL, &image, &uniform_list, &buffer_list, );
+    PipelineData::update_graphic_pref_buffer(&vulkan.device, std_buffer_list[0].buffer_mem, unsafe { &[GRAPHIC_PREF] }, );
+
+    let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&uniform_list, &buffer_list, &std_buffer_list, &vulkan.device, &image, );
+    let descriptor_set_list = Render::update_descriptor_pool(descriptor_pool, &descriptor_set_layout_list, &vulkan.device, vk::ImageLayout::GENERAL, &image, &uniform_list, &buffer_list, &std_buffer_list, );
     let (compute_pipeline, pipeline_layout, ) = Render::init_compute_pipeline(&vulkan.device, &descriptor_set_layout_list, );
 
     Render::record_command_pool(&vulkan.command_buffer_list, &vulkan.device, compute_pipeline, pipeline_layout, &descriptor_set_list, &vulkan.extent, &vulkan.scaled_extent, &image, &vulkan.swapchain_image_list, 0, );
 
-    let mut render = Render { image, uniform_list, buffer_list, descriptor_pool, descriptor_set_layout_list, pipeline_layout, descriptor_set_list, compute_pipeline };
+    let mut render = Render { image, uniform_list, buffer_list, std_buffer_list, descriptor_pool, descriptor_set_layout_list, pipeline_layout, descriptor_set_list, compute_pipeline };
 
     event_loop.run(move | event, _, control_flow | { * control_flow = ControlFlow::Poll; handle_event(&event, &mut vulkan, &mut render, &app_start, control_flow, ); });
 }
@@ -124,16 +127,16 @@ pub fn handle_event(event: &Event<()>, vulkan: &mut Vulkan, render: &mut Render,
 pub fn handle_input(keycode: &VirtualKeyCode, state: &ElementState, vulkan: &Vulkan, ) {
     match keycode {
         &VirtualKeyCode::F if state == &ElementState::Pressed => { vulkan.window.set_fullscreen(Some(Fullscreen::Exclusive(vulkan.monitor.video_modes().next().expect("ERR_NO_MONITOR_MODE").clone()))); },
-        &VirtualKeyCode::W if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.y += unsafe { PREF.key_rot_control_inc }; }; },
-        &VirtualKeyCode::S if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.y -= unsafe { PREF.key_rot_control_inc }; }; },
-        &VirtualKeyCode::A if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.x += unsafe { PREF.key_rot_control_inc }; }; },
-        &VirtualKeyCode::D if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.x -= unsafe { PREF.key_rot_control_inc }; }; },
+        &VirtualKeyCode::W if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.y += PREF.key_rot_control_inc; }; },
+        &VirtualKeyCode::S if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.y -= PREF.key_rot_control_inc; }; },
+        &VirtualKeyCode::A if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.x += PREF.key_rot_control_inc; }; },
+        &VirtualKeyCode::D if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.x -= PREF.key_rot_control_inc; }; },
         &VirtualKeyCode::Escape if state == &ElementState::Pressed => { vulkan.window.set_fullscreen(None); }, _ => (),
     }
 }
 
 pub fn draw(vulkan: &mut Vulkan, render: &mut Render, app_start: &Instant, ) -> Result<bool, Box<dyn Error>> {
-    if vulkan.status.recreate_swapchain { let dim = vulkan.window.inner_size(); if dim.width > 0 && dim.height > 0 { recreate_swapchain(vulkan, render, pref.pref_present_mode, &pref, ); return Ok(false); } }
+    if vulkan.status.recreate_swapchain { let dim = vulkan.window.inner_size(); if dim.width > 0 && dim.height > 0 { recreate_swapchain(vulkan, render, ); return Ok(false); } }
 
     let fence = vulkan.fence;
     unsafe { vulkan.device.wait_for_fences(&[fence], true, std::u64::MAX, ).unwrap() };
@@ -169,19 +172,19 @@ pub fn draw(vulkan: &mut Vulkan, render: &mut Render, app_start: &Instant, ) -> 
     match present_result { Ok(is_suboptimal) if is_suboptimal => { return Ok(true); } Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => { return Ok(true); } Err(error) => panic!("ERROR_PRESENT_SWAP -> {}", error, ), _ => { } } Ok(false)
 }
 
-pub fn recreate_swapchain(vulkan: &mut Vulkan, render: &mut Render, pref_present_mode: vk::PresentModeKHR, pref: &Pref, ) {
+pub fn recreate_swapchain(vulkan: &mut Vulkan, render: &mut Render, ) {
     Vulkan::wait_for_gpu(&vulkan.device).unwrap();
 
     Vulkan::clean_up_swap_recreate(&vulkan.device, vulkan.command_pool, &vulkan.command_buffer_list, &vulkan.swapchain_image_view_list, &vulkan.swapchain_loader, vulkan.swapchain_khr);
     Render::clean_up_swap_recreate(&vulkan.device, render.compute_pipeline, render.pipeline_layout, &render.descriptor_set_layout_list, render.descriptor_pool, &render.image, );
 
-    let (surface_format, present_mode, surface_capability, extent, scaled_extent, swapchain_khr, swapchain_image_list, swapchain_image_view_list, ) = Vulkan::init_swapchain(&vulkan.surface, vulkan.physical_device, vulkan.surface_khr, pref_present_mode, &vulkan.window, &pref.img_scale, &vulkan.swapchain_loader, vulkan.graphics_queue_index, vulkan.present_queue_index, &vulkan.device, ); vulkan.surface_format = surface_format; vulkan.present_mode = present_mode; vulkan.surface_capability = surface_capability; vulkan.extent = extent; vulkan.scaled_extent = scaled_extent; vulkan.swapchain_khr = swapchain_khr; vulkan.swapchain_image_list = swapchain_image_list; vulkan.swapchain_image_view_list = swapchain_image_view_list;
+    let (surface_format, present_mode, surface_capability, extent, scaled_extent, swapchain_khr, swapchain_image_list, swapchain_image_view_list, ) = Vulkan::init_swapchain(&vulkan.surface, vulkan.physical_device, vulkan.surface_khr, unsafe { PREF.pref_present_mode }, &vulkan.window, unsafe { &PREF.img_scale }, &vulkan.swapchain_loader, vulkan.graphics_queue_index, vulkan.present_queue_index, &vulkan.device, ); vulkan.surface_format = surface_format; vulkan.present_mode = present_mode; vulkan.surface_capability = surface_capability; vulkan.extent = extent; vulkan.scaled_extent = scaled_extent; vulkan.swapchain_khr = swapchain_khr; vulkan.swapchain_image_list = swapchain_image_list; vulkan.swapchain_image_view_list = swapchain_image_view_list;
     let (command_pool, command_buffer_list, ) = Vulkan::init_command_pool(vulkan.graphics_queue_index, &vulkan.device, &vulkan.swapchain_image_list); vulkan.command_pool = command_pool; vulkan.command_buffer_list = command_buffer_list;
 
     let image = PipelineData::init_image(vk::ImageLayout::UNDEFINED, vulkan.surface_format.format, &vulkan.scaled_extent, &vulkan.device, &vulkan.physical_device_memory_prop, ); render.image = image;
 
-    let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&render.uniform_list, &render.buffer_list, &vulkan.device, &render.image, ); render.descriptor_pool = descriptor_pool; render.descriptor_set_layout_list = descriptor_set_layout_list;
-    let descriptor_set_list = Render::update_descriptor_pool(render.descriptor_pool, &render.descriptor_set_layout_list, &vulkan.device, vk::ImageLayout::GENERAL, &render.image, &render.uniform_list, &render.buffer_list, ); render.descriptor_set_list = descriptor_set_list;
+    let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&render.uniform_list, &render.buffer_list, &render.std_buffer_list, &vulkan.device, &render.image, ); render.descriptor_pool = descriptor_pool; render.descriptor_set_layout_list = descriptor_set_layout_list;
+    let descriptor_set_list = Render::update_descriptor_pool(render.descriptor_pool, &render.descriptor_set_layout_list, &vulkan.device, vk::ImageLayout::GENERAL, &render.image, &render.uniform_list, &render.buffer_list, &render.std_buffer_list, ); render.descriptor_set_list = descriptor_set_list;
 
     let (compute_pipeline, pipeline_layout, ) = Render::init_compute_pipeline(&vulkan.device, &render.descriptor_set_layout_list, ); render.compute_pipeline = compute_pipeline; render.pipeline_layout = pipeline_layout;
 }

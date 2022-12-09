@@ -9,6 +9,7 @@ pub struct Render {
 
     pub uniform_list: Vec<BufferObj>,
     pub buffer_list: Vec<BufferObj>,
+    pub std_buffer_list: Vec<BufferObj>,
 
     pub descriptor_pool: vk::DescriptorPool,
     pub descriptor_set_layout_list: Vec<vk::DescriptorSetLayout>,
@@ -19,27 +20,29 @@ pub struct Render {
 }
 
 impl Render {
-    pub fn init_descriptor_pool(uniform_list: &Vec<BufferObj>, buffer_list: &Vec<BufferObj>, device: &Device, image: &ImageObj, ) -> (vk::DescriptorPool, Vec<vk::DescriptorSetLayout>, ) {
+    pub fn init_descriptor_pool(uniform_list: &Vec<BufferObj>, buffer_list: &Vec<BufferObj>, std_buffer_list: &Vec<BufferObj>, device: &Device, image: &ImageObj, ) -> (vk::DescriptorPool, Vec<vk::DescriptorSetLayout>, ) {
         log::info!("Init DescriptorPool ...");
 
         let image_pool_size = vk::DescriptorPoolSize::builder().ty(vk::DescriptorType::STORAGE_IMAGE).descriptor_count(1).build();
         let uniform_pool_size = vk::DescriptorPoolSize::builder().ty(vk::DescriptorType::UNIFORM_BUFFER).descriptor_count(uniform_list.len() as u32).build();
         let buffer_pool_size = vk::DescriptorPoolSize::builder().ty(vk::DescriptorType::STORAGE_BUFFER).descriptor_count(buffer_list.len() as u32).build();
-        
-        let pool_size_list = [image_pool_size, uniform_pool_size, buffer_pool_size];
+        let std_buffer_pool_size = vk::DescriptorPoolSize::builder().ty(vk::DescriptorType::STORAGE_BUFFER).descriptor_count(std_buffer_list.len() as u32).build();
+
+        let pool_size_list = [image_pool_size, uniform_pool_size, buffer_pool_size, std_buffer_pool_size];
         let descriptor_pool_info = vk::DescriptorPoolCreateInfo::builder().max_sets(pool_size_list.len() as u32).pool_sizes(&pool_size_list).build();
         let descriptor_pool = unsafe { device.create_descriptor_pool(&descriptor_pool_info, None, ).unwrap() };   
 
         let image_set_layout = PipelineData::create_desc_layout(&vec![image], vk::DescriptorType::STORAGE_IMAGE, &device, );
         let uniform_set_layout = PipelineData::create_desc_layout(&uniform_list, vk::DescriptorType::UNIFORM_BUFFER, &device, );
         let buffer_set_layout = PipelineData::create_desc_layout(&buffer_list, vk::DescriptorType::STORAGE_BUFFER, &device, );
+        let std_buffer_set_layout = PipelineData::create_desc_layout(&std_buffer_list, vk::DescriptorType::STORAGE_BUFFER, &device, );
 
-        let descriptor_set_layout_list: Vec<vk::DescriptorSetLayout> = vec![image_set_layout, uniform_set_layout, buffer_set_layout];
+        let descriptor_set_layout_list: Vec<vk::DescriptorSetLayout> = vec![image_set_layout, uniform_set_layout, buffer_set_layout, std_buffer_set_layout];
 
         (descriptor_pool, descriptor_set_layout_list, )
     }
 
-    pub fn update_descriptor_pool(descriptor_pool: vk::DescriptorPool, descriptor_set_layout_list: &Vec<vk::DescriptorSetLayout>, device: &Device, image_layout: vk::ImageLayout, image: &ImageObj, uniform_list: &Vec<BufferObj>, buffer_list: &Vec<BufferObj>, ) -> Vec<vk::DescriptorSet> {
+    pub fn update_descriptor_pool(descriptor_pool: vk::DescriptorPool, descriptor_set_layout_list: &Vec<vk::DescriptorSetLayout>, device: &Device, image_layout: vk::ImageLayout, image: &ImageObj, uniform_list: &Vec<BufferObj>, buffer_list: &Vec<BufferObj>, std_buffer_list: &Vec<BufferObj>, ) -> Vec<vk::DescriptorSet> {
         let descriptor_allocate_info = vk::DescriptorSetAllocateInfo::builder().descriptor_pool(descriptor_pool).set_layouts(&descriptor_set_layout_list).build();
         let descriptor_set_list = unsafe { device.allocate_descriptor_sets(&descriptor_allocate_info).unwrap() };
 
@@ -48,7 +51,8 @@ impl Render {
         
         for (index, _, ) in uniform_list.iter().enumerate() { let buffer_info = vk::DescriptorBufferInfo::builder().buffer(uniform_list[index].buffer).offset(0).range(std::mem::size_of::<Uniform>() as u64).build(); write_list.push(vk::WriteDescriptorSet::builder().dst_set(descriptor_set_list[1]).dst_binding(index as u32).descriptor_type(vk::DescriptorType::UNIFORM_BUFFER).buffer_info(&[buffer_info]).build()); }
         for (index, _, ) in buffer_list.iter().enumerate() { let buffer_info = vk::DescriptorBufferInfo::builder().buffer(buffer_list[index].buffer).offset(0).range(vk::WHOLE_SIZE).build(); write_list.push(vk::WriteDescriptorSet::builder().dst_set(descriptor_set_list[2]).dst_binding(index as u32).descriptor_type(vk::DescriptorType::STORAGE_BUFFER).buffer_info(&[buffer_info]).build()); }
-        
+        for (index, _, ) in std_buffer_list.iter().enumerate() { let buffer_info = vk::DescriptorBufferInfo::builder().buffer(std_buffer_list[index].buffer).offset(0).range(vk::WHOLE_SIZE).build(); write_list.push(vk::WriteDescriptorSet::builder().dst_set(descriptor_set_list[3]).dst_binding(index as u32).descriptor_type(vk::DescriptorType::STORAGE_BUFFER).buffer_info(&[buffer_info]).build()); }
+
         unsafe { device.update_descriptor_sets(&write_list, &[]); }
 
         descriptor_set_list
