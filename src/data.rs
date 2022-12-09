@@ -16,6 +16,7 @@ pub struct VoxelChunk {
 #[derive(Clone, Debug, Copy)]
 pub struct Uniform {
     pub time: u32,
+    
     pub field_of_view: f32,
     pub max_ray_length: u32,
 
