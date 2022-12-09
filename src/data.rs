@@ -16,18 +16,18 @@ pub struct VoxelChunk {
 #[derive(Clone, Debug, Copy)]
 pub struct Uniform {
     pub time: u32,
-    
+
     pub field_of_view: f32,
     pub max_ray_length: u32,
 
     pub head_rot: Vector2<i32>,
     pub player_pos: Vector3<i32>,
 
-    pub chunk_side_len: u32,
-    pub chunk_size: u32,
+    // pub chunk_side_len: u32,
+    // pub chunk_size: u32,
 
-    pub chunk_group_side_len: u32,
-    pub chunk_group_size: u32,
+    // pub chunk_group_side_len: u32,
+    // pub chunk_group_size: u32,
 }
 
 impl WorldData {

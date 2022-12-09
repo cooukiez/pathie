@@ -40,11 +40,11 @@ static mut UNIFORM: Uniform = Uniform {
     head_rot: Vector2::new(0, 0),
     player_pos: Vector3::new(1, 1, 1),
 
-    chunk_side_len: CHUNK_SIDE_LEN as u32,
-    chunk_size: CHUNK_SIZE as u32,
+    // chunk_side_len: CHUNK_SIDE_LEN as u32,
+    // chunk_size: CHUNK_SIZE as u32,
 
-    chunk_group_side_len: CHUNK_GROUP_SIDE_LEN as u32,
-    chunk_group_size: CHUNK_GROUP_SIZE as u32,
+    // chunk_group_side_len: CHUNK_GROUP_SIDE_LEN as u32,
+    // chunk_group_size: CHUNK_GROUP_SIZE as u32,
 };
 
 pub struct Pref {
