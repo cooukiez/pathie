@@ -47,7 +47,6 @@ static mut UNIFORM: Uniform = Uniform {
     chunk_group_size: CHUNK_GROUP_SIZE as u32,
 };
 
-// Jannes war hier ...
 pub struct Pref {
     // Render
     pub pref_present_mode: vk::PresentModeKHR,
