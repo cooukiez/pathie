@@ -23,11 +23,29 @@ const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
+const CHUNK_SIDE_LEN: usize = 8;
 const CHUNK_SIZE: usize = 512;
+const CHUNK_GROUP_SIDE_LEN: usize = 3;
+const CHUNK_GROUP_SIZE: usize = 27;
+
 const DEFAULT_FOV: f32 = 60.0;
 const DEFAULT_MAX_RAY_LEN: u32 = 750;
 
-static mut UNIFORM: Uniform = Uniform { time: 0, field_of_view: DEFAULT_FOV, max_ray_length: DEFAULT_MAX_RAY_LEN, head_rot: Vector2::new(0, 0), player_pos: Vector3::new(1, 1, 1) };
+static mut UNIFORM: Uniform = Uniform { 
+    time: 0,
+
+    field_of_view: DEFAULT_FOV,
+    max_ray_length: DEFAULT_MAX_RAY_LEN,
+
+    head_rot: Vector2::new(0, 0),
+    player_pos: Vector3::new(1, 1, 1),
+
+    chunk_side_len: CHUNK_SIDE_LEN as u32,
+    chunk_size: CHUNK_SIZE as u32,
+
+    chunk_group_side_len: CHUNK_GROUP_SIDE_LEN as u32,
+    chunk_group_size: CHUNK_GROUP_SIZE as u32,
+};
 
 // Jannes war hier ...
 pub struct Pref {

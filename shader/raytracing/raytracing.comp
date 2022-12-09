@@ -6,11 +6,6 @@
 # define PI 3.141592654
 # define ACCURACY 100
 
-# define CHUNK_SIDE_LEN 8
-# define CHUNK_SIZE 512
-# define CHUNK_GROUP_SIDE_LEN 3
-# define CHUNK_GROUP_SIZE 27
-
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 
@@ -30,6 +25,12 @@ layout (set = 2, binding = 0) readonly uniform UniformBuffer {
 
 	ivec2 headRotation;
 	ivec3 playerPos;
+
+	uint chunkSideLen;
+	uint chunkSize;
+
+	uint chunkGroupSideLen;
+	uint chunkGroupSize;
 } uniformBuffer;
 
 float roundFloat(float val) { return round(val * ACCURACY) / ACCURACY; }
@@ -40,9 +41,9 @@ int listIndexToPos(uint index) { return 0; }
 int getVoxelAtPos(vec3 pos) {
 	ivec3 posAsInt = ivec3(pos);
 
-	int index = posToIndex(posAsInt, CHUNK_SIDE_LEN * CHUNK_GROUP_SIDE_LEN, CHUNK_SIZE * CHUNK_GROUP_SIZE);
-	int chunkGroupLevIndex = index / CHUNK_SIZE;
-	int chunkLevIndex = index / CHUNK_GROUP_SIZE;
+	int index = posToIndex(posAsInt, int(uniformBuffer.chunkSideLen * uniformBuffer.chunkGroupSideLen), int(uniformBuffer.chunkSize * uniformBuffer.chunkGroupSize));
+	int chunkGroupLevIndex = int(index / uniformBuffer.chunkSize);
+	int chunkLevIndex = int(index / uniformBuffer.chunkGroupSize);
 
 	return voxelChunkList[chunkGroupLevIndex].voxelData[chunkLevIndex];
 }
@@ -88,7 +89,7 @@ float castRay(vec2 dir, vec3 origin) {
 		if (voxAtPos > 0) { return len; }
 	}
 
-	return 0.0;
+	return 1;
 }
 
 void main () {
@@ -97,7 +98,7 @@ void main () {
 	
 	float degree = ((uniformBuffer.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (uniformBuffer.fieldOfView / 2);
 	
-	float test = castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), vec3(0.1, 0.1, 0.1));
-	// debugPrintfEXT("\n%d", );
-	imageStore(computeImage, pixelCoord, vec4(0.2, float(pixelCoord.x) / float(imageSize.x), 0, 0));	
+	// float test = castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), vec3(0.1, 0.1, 0.1));
+	debugPrintfEXT("\n%d", getVoxelAtPos(vec3(16, 16, 16)));
+	// imageStore(computeImage, pixelCoord, vec4(test, 0, 0, 0));	
 }
