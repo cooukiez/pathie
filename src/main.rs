@@ -95,13 +95,14 @@ fn run_graphic_related(app_start: Instant) {
     // Init ComputeRenderPipeline
     let image = PipelineData::init_image(vk::ImageLayout::UNDEFINED, vulkan.surface_format.format, &vulkan.scaled_extent, &vulkan.device, &vulkan.physical_device_memory_prop, );
 
-    let world_data = WorldData::collect();
-    let buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_STORAGE_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
     let uniform_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::UNIFORM_BUFFER, DEFAULT_UNIFORM_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
 
-    PipelineData::update_voxel_buffer(&vulkan.device, buffer_list[0].buffer_mem, &world_data.voxel_data, );
+    let world_data = WorldData::collect();
+    let buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_STORAGE_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
+    
     PipelineData::update_uniform_buffer(&vulkan.device, uniform_list[0].buffer_mem, unsafe { &[UNIFORM] }, );
-
+    PipelineData::update_voxel_buffer(&vulkan.device, buffer_list[0].buffer_mem, &world_data.voxel_data, );
+    
     let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&buffer_list, &uniform_list, &vulkan.device, &image, );
     let descriptor_set_list = Render::update_descriptor_pool(descriptor_pool, &descriptor_set_layout_list, &vulkan.device, vk::ImageLayout::GENERAL, &image, &buffer_list, &uniform_list, );
     let (compute_pipeline, pipeline_layout, ) = Render::init_compute_pipeline(&vulkan.device, &descriptor_set_layout_list, );
