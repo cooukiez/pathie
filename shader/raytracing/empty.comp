@@ -9,25 +9,29 @@
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 
+layout (set = 1, binding = 0) uniform UniformBuffer {
+	uint time;
+
+	float fieldOfView;
+	uint maxRayLen;	
+
+	ivec2 headRotation;
+	ivec3 playerPos;
+} uniformBuffer;
+
 struct VoxelChunk {
 	uint[256] voxelData;
 };
 
-layout (set = 1, binding = 0) buffer VoxelChunkList {
+layout (set = 2, binding = 0) buffer VoxelChunkList {
 	VoxelChunk voxelChunkList[];
 };
-
-layout (set = 2, binding = 0) uniform UniformBuffer {
-	float fieldOfView;
-	uint maxRayLen;
-
-	uvec2 headRotation;
-	uvec3 PlayerPos;
-} uniformBuffer;
 
 void main () {
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
 	
+	debugPrintfEXT("\nt %d  f %f m %d", uniformBuffer.time, uniformBuffer.fieldOfView, uniformBuffer.maxRayLen);
+
 	imageStore(computeImage, pixelCoord, vec4(0, 0, 0, 0));
 }

@@ -7,8 +7,8 @@ use crate::{vulkan::{ImageObj, BufferObj, PipelineData}, data::{Uniform}};
 pub struct Render {
     pub image: ImageObj,
 
-    pub buffer_list: Vec<BufferObj>,
     pub uniform_list: Vec<BufferObj>,
+    pub buffer_list: Vec<BufferObj>,
 
     pub descriptor_pool: vk::DescriptorPool,
     pub descriptor_set_layout_list: Vec<vk::DescriptorSetLayout>,
@@ -19,7 +19,7 @@ pub struct Render {
 }
 
 impl Render {
-    pub fn init_descriptor_pool(buffer_list: &Vec<BufferObj>, uniform_list: &Vec<BufferObj>, device: &Device, image: &ImageObj, ) -> (vk::DescriptorPool, Vec<vk::DescriptorSetLayout>, ) {
+    pub fn init_descriptor_pool(uniform_list: &Vec<BufferObj>, buffer_list: &Vec<BufferObj>, device: &Device, image: &ImageObj, ) -> (vk::DescriptorPool, Vec<vk::DescriptorSetLayout>, ) {
         log::info!("Init DescriptorPool ...");
 
         let image_pool_size = vk::DescriptorPoolSize::builder().ty(vk::DescriptorType::STORAGE_IMAGE).descriptor_count(1).build();

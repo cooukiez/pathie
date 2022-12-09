@@ -2,7 +2,7 @@
 use std::{io::Write, error::Error, thread, time::{Instant, Duration}, ptr::null_mut};
 use ash::{Entry, vk};
 use cgmath::{Vector3, Vector2};
-use data::{WorldData, Uniform};
+use data::{WorldData, Uniform, GraphicPref};
 use env_logger::fmt::Color;
 
 use pipeline::{Render};
@@ -34,17 +34,19 @@ const DEFAULT_MAX_RAY_LEN: u32 = 750;
 static mut UNIFORM: Uniform = Uniform { 
     time: 0,
 
+    head_rot: Vector2::new(0, 0),
+    player_pos: Vector3::new(1, 1, 1),
+};
+
+static mut GRAPHIC_PREF: GraphicPref = GraphicPref {
     field_of_view: DEFAULT_FOV,
     max_ray_length: DEFAULT_MAX_RAY_LEN,
 
-    head_rot: Vector2::new(0, 0),
-    player_pos: Vector3::new(1, 1, 1),
+    chunk_side_len: CHUNK_SIDE_LEN as u32,
+    chunk_size: CHUNK_SIZE as u32,
 
-    // chunk_side_len: CHUNK_SIDE_LEN as u32,
-    // chunk_size: CHUNK_SIZE as u32,
-
-    // chunk_group_side_len: CHUNK_GROUP_SIDE_LEN as u32,
-    // chunk_group_size: CHUNK_GROUP_SIZE as u32,
+    chunk_group_side_len: CHUNK_GROUP_SIDE_LEN as u32,
+    chunk_group_size: CHUNK_GROUP_SIZE as u32,
 };
 
 pub struct Pref {
@@ -52,13 +54,16 @@ pub struct Pref {
     pub pref_present_mode: vk::PresentModeKHR,
     pub img_scale: u32,
 
-    // Tracer
-    pub field_of_view: f32,
-    pub max_ray_len: u32,
-
     // Movement
     pub key_rot_control_inc: i32,
 }
+
+static mut PREF: Pref = Pref {
+    pref_present_mode: vk::PresentModeKHR::IMMEDIATE, 
+    img_scale: 3,
+
+    key_rot_control_inc: 5,
+};
  
 fn main() {
     env_logger::builder().format(|buf, record| { let mut bold = buf.style(); bold.set_color(Color::Yellow).set_bold(true); writeln!(buf, "[ {} {} ] {}", chrono::Local::now().format("%H:%M:%S"), bold.value(record.level(), ), record.args(), ) }).init();
@@ -70,14 +75,6 @@ fn main() {
 }
 
 fn run_graphic_related(app_start: Instant) {
-    let pref = Pref { 
-        pref_present_mode: vk::PresentModeKHR::IMMEDIATE, 
-        img_scale: 3, 
-        field_of_view: DEFAULT_FOV, 
-        max_ray_len: DEFAULT_MAX_RAY_LEN, 
-        key_rot_control_inc: 5 
-    };
-
     let event_loop = EventLoop::new();
     let entry = unsafe { Entry::load().unwrap() };
     let status = EngineStatus { recreate_swapchain: false, idle: false, frame_time: Duration::ZERO };
@@ -86,7 +83,7 @@ fn run_graphic_related(app_start: Instant) {
     let (window, monitor_list, monitor, instance, debug_util, debug_util_messenger, surface, surface_khr, ) = Vulkan::init_instance(&event_loop, &entry);
     let (physical_device, graphics_queue_index, present_queue_index, physical_device_prop, physical_device_memory_prop) = Vulkan::init_physical_device(&instance, &surface, surface_khr, );
     let (device, graphics_queue, present_queue, swapchain_loader, ) = Vulkan::init_device_and_command_pool(graphics_queue_index, present_queue_index, &[1.0f32], &instance, physical_device, );
-    let (surface_format, present_mode, surface_capability, extent, scaled_extent, swapchain_khr, swapchain_image_list, swapchain_image_view_list, ) = Vulkan::init_swapchain(&surface, physical_device, surface_khr, vk::PresentModeKHR::FIFO, &window, &pref.img_scale, &swapchain_loader, graphics_queue_index, present_queue_index, &device, );
+    let (surface_format, present_mode, surface_capability, extent, scaled_extent, swapchain_khr, swapchain_image_list, swapchain_image_view_list, ) = Vulkan::init_swapchain(&surface, physical_device, surface_khr, vk::PresentModeKHR::FIFO, &window, unsafe { &PREF.img_scale }, &swapchain_loader, graphics_queue_index, present_queue_index, &device, );
     let (command_pool, command_buffer_list, ) = Vulkan::init_command_pool(graphics_queue_index, &device, &swapchain_image_list);
     let (available, render_finished, fence, ) = Vulkan::init_sync(&device);
     
@@ -103,39 +100,39 @@ fn run_graphic_related(app_start: Instant) {
     PipelineData::update_uniform_buffer(&vulkan.device, uniform_list[0].buffer_mem, unsafe { &[UNIFORM] }, );
     PipelineData::update_voxel_buffer(&vulkan.device, buffer_list[0].buffer_mem, &world_data.voxel_data, );
     
-    let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&buffer_list, &uniform_list, &vulkan.device, &image, );
-    let descriptor_set_list = Render::update_descriptor_pool(descriptor_pool, &descriptor_set_layout_list, &vulkan.device, vk::ImageLayout::GENERAL, &image, &buffer_list, &uniform_list, );
+    let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&uniform_list, &buffer_list, &vulkan.device, &image, );
+    let descriptor_set_list = Render::update_descriptor_pool(descriptor_pool, &descriptor_set_layout_list, &vulkan.device, vk::ImageLayout::GENERAL, &image, &uniform_list, &buffer_list, );
     let (compute_pipeline, pipeline_layout, ) = Render::init_compute_pipeline(&vulkan.device, &descriptor_set_layout_list, );
 
     Render::record_command_pool(&vulkan.command_buffer_list, &vulkan.device, compute_pipeline, pipeline_layout, &descriptor_set_list, &vulkan.extent, &vulkan.scaled_extent, &image, &vulkan.swapchain_image_list, 0, );
 
-    let mut render = Render { image, buffer_list, uniform_list, descriptor_pool, descriptor_set_layout_list, pipeline_layout, descriptor_set_list, compute_pipeline };
+    let mut render = Render { image, uniform_list, buffer_list, descriptor_pool, descriptor_set_layout_list, pipeline_layout, descriptor_set_list, compute_pipeline };
 
-    event_loop.run(move | event, _, control_flow | { * control_flow = ControlFlow::Poll; handle_event(&event, &mut vulkan, &mut render, &pref, &app_start, control_flow, ); });
+    event_loop.run(move | event, _, control_flow | { * control_flow = ControlFlow::Poll; handle_event(&event, &mut vulkan, &mut render, &app_start, control_flow, ); });
 }
 
-pub fn handle_event(event: &Event<()>, vulkan: &mut Vulkan, render: &mut Render, pref: &Pref, app_start: &Instant, control_flow: &mut ControlFlow, ) {
+pub fn handle_event(event: &Event<()>, vulkan: &mut Vulkan, render: &mut Render, app_start: &Instant, control_flow: &mut ControlFlow, ) {
     match event {
         Event::WindowEvent { event: WindowEvent::Resized(..), .. } => { log::info!("Window -> Resize ..."); vulkan.status.recreate_swapchain = true; }
-        Event::MainEventsCleared => { vulkan.status.recreate_swapchain = draw(vulkan, render, pref, app_start, ).expect("TICK_FAILED"); }
-        Event::WindowEvent { event: WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(keycode), state, .. }, .. }, .. } => handle_input(keycode, state, &vulkan, &pref, ),
+        Event::MainEventsCleared => { vulkan.status.recreate_swapchain = draw(vulkan, render, app_start, ).expect("TICK_FAILED"); }
+        Event::WindowEvent { event: WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(keycode), state, .. }, .. }, .. } => handle_input(keycode, state, &vulkan, ),
         Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => * control_flow = ControlFlow::Exit,
         Event::LoopDestroyed => Vulkan::wait_for_gpu(&vulkan.device).expect("FAILED_WORK"), _ => (),
     }
 }
 
-pub fn handle_input(keycode: &VirtualKeyCode, state: &ElementState, vulkan: &Vulkan, pref: &Pref, ) {
+pub fn handle_input(keycode: &VirtualKeyCode, state: &ElementState, vulkan: &Vulkan, ) {
     match keycode {
         &VirtualKeyCode::F if state == &ElementState::Pressed => { vulkan.window.set_fullscreen(Some(Fullscreen::Exclusive(vulkan.monitor.video_modes().next().expect("ERR_NO_MONITOR_MODE").clone()))); },
-        &VirtualKeyCode::W if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.y += pref.key_rot_control_inc }; },
-        &VirtualKeyCode::S if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.y -= pref.key_rot_control_inc }; },
-        &VirtualKeyCode::A if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.x += pref.key_rot_control_inc }; },
-        &VirtualKeyCode::D if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.x -= pref.key_rot_control_inc }; },
+        &VirtualKeyCode::W if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.y += unsafe { PREF.key_rot_control_inc }; }; },
+        &VirtualKeyCode::S if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.y -= unsafe { PREF.key_rot_control_inc }; }; },
+        &VirtualKeyCode::A if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.x += unsafe { PREF.key_rot_control_inc }; }; },
+        &VirtualKeyCode::D if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.x -= unsafe { PREF.key_rot_control_inc }; }; },
         &VirtualKeyCode::Escape if state == &ElementState::Pressed => { vulkan.window.set_fullscreen(None); }, _ => (),
     }
 }
 
-pub fn draw(vulkan: &mut Vulkan, render: &mut Render, pref: &Pref, app_start: &Instant, ) -> Result<bool, Box<dyn Error>> {
+pub fn draw(vulkan: &mut Vulkan, render: &mut Render, app_start: &Instant, ) -> Result<bool, Box<dyn Error>> {
     if vulkan.status.recreate_swapchain { let dim = vulkan.window.inner_size(); if dim.width > 0 && dim.height > 0 { recreate_swapchain(vulkan, render, pref.pref_present_mode, &pref, ); return Ok(false); } }
 
     let fence = vulkan.fence;
@@ -183,8 +180,8 @@ pub fn recreate_swapchain(vulkan: &mut Vulkan, render: &mut Render, pref_present
 
     let image = PipelineData::init_image(vk::ImageLayout::UNDEFINED, vulkan.surface_format.format, &vulkan.scaled_extent, &vulkan.device, &vulkan.physical_device_memory_prop, ); render.image = image;
 
-    let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&render.buffer_list, &render.uniform_list, &vulkan.device, &render.image, ); render.descriptor_pool = descriptor_pool; render.descriptor_set_layout_list = descriptor_set_layout_list;
-    let descriptor_set_list = Render::update_descriptor_pool(render.descriptor_pool, &render.descriptor_set_layout_list, &vulkan.device, vk::ImageLayout::GENERAL, &render.image, &render.buffer_list, &render.uniform_list, ); render.descriptor_set_list = descriptor_set_list;
+    let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&render.uniform_list, &render.buffer_list, &vulkan.device, &render.image, ); render.descriptor_pool = descriptor_pool; render.descriptor_set_layout_list = descriptor_set_layout_list;
+    let descriptor_set_list = Render::update_descriptor_pool(render.descriptor_pool, &render.descriptor_set_layout_list, &vulkan.device, vk::ImageLayout::GENERAL, &render.image, &render.uniform_list, &render.buffer_list, ); render.descriptor_set_list = descriptor_set_list;
 
     let (compute_pipeline, pipeline_layout, ) = Render::init_compute_pipeline(&vulkan.device, &render.descriptor_set_layout_list, ); render.compute_pipeline = compute_pipeline; render.pipeline_layout = pipeline_layout;
 }

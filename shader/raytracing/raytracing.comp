@@ -9,29 +9,31 @@
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 
-layout (set = 2, binding = 0) uniform UniformBuffer {
+layout (set = 1, binding = 0) uniform UniformBuffer {
 	uint time;
-
-	float fieldOfView;
-	uint maxRayLen;	
 
 	ivec2 headRotation;
 	ivec3 playerPos;
-
-	// uint chunkSideLen;
-	// uint chunkSize;
-
-	// uint chunkGroupSideLen;
-	// uint chunkGroupSize;
 } uniformBuffer;
 
 struct VoxelChunk {
 	int[512] voxelData;
 };
 
-layout (set = 1, binding = 0) buffer VoxelChunkList {
+layout (set = 2, binding = 0) buffer VoxelChunkList {
 	VoxelChunk voxelChunkList[];
 };
+
+layout (set = 3, binding = 0) uniform GraphicPref {
+	float fieldOfView;
+	uint maxRayLen;
+
+	uint chunkSideLen;
+	uint chunkSize;
+
+	uint chunkGroupSideLen;
+	uint chunkGroupSize;
+} graphicPref;
 
 float roundFloat(float val) { return round(val * ACCURACY) / ACCURACY; }
 float getDistanceNext(float input_float) { return (floor(abs(input_float) + 1) - abs(input_float)) * sign(input_float); }
@@ -109,7 +111,7 @@ void main () {
 	
 	// float test = castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), vec3(0.1, 0.1, 0.1));
 	// int test = getVoxelAtPos(vec3(16, 16, 16));
-	debugPrintfEXT("\nt %d  f %d m %d   h %d p %d", uniformBuffer.time, uniformBuffer.fieldOfView, uniformBuffer.maxRayLen, uniformBuffer.headRotation, uniformBuffer.playerPos); // , uniformBuffer.chunkSideLen, uniformBuffer.chunkSize, uniformBuffer.chunkGroupSideLen, uniformBuffer.chunkGroupSize);
-	// debugPrintfEXT("\ncl %d cs %d  cgl %d cgs %d", uniformBuffer.chunkSideLen, uniformBuffer.chunkSize, uniformBuffer.chunkGroupSideLen, uniformBuffer.chunkGroupSize);
+	// debugPrintfEXT("\nt %d  f %d m %d   h %d p %d", uniformBuffer.time, uniformBuffer.fieldOfView, uniformBuffer.maxRayLen, uniformBuffer.headRotation, uniformBuffer.playerPos); // , uniformBuffer.chunkSideLen, uniformBuffer.chunkSize, uniformBuffer.chunkGroupSideLen, uniformBuffer.chunkGroupSize);
+	debugPrintfEXT("\ncl %d cs %d  cgl %d cgs %d", uniformBuffer.chunkSideLen, uniformBuffer.chunkSize, uniformBuffer.chunkGroupSideLen, uniformBuffer.chunkGroupSize);
 	// imageStore(computeImage, pixelCoord, vec4(test, 0, 0, 0));	
 }
