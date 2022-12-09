@@ -105,10 +105,10 @@ void main () {
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
 	
-	float degree = ((uniformBuffer.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (uniformBuffer.fieldOfView / 2);
+	// float degree = ((uniformBuffer.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (uniformBuffer.fieldOfView / 2);
 	
 	// float test = castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), vec3(0.1, 0.1, 0.1));
-	int test = getVoxelAtPos(vec3(16, 16, 16));
+	// int test = getVoxelAtPos(vec3(16, 16, 16));
 	debugPrintfEXT("\nt %d  f %d m %d   h %d p %d   cl %d cs %d  cgl %d cgs %d", uniformBuffer.time, uniformBuffer.fieldOfView, uniformBuffer.maxRayLen, uniformBuffer.headRotation, uniformBuffer.playerPos, uniformBuffer.chunkSideLen, uniformBuffer.chunkSize, uniformBuffer.chunkGroupSideLen, uniformBuffer.chunkGroupSize);
 	// debugPrintfEXT("\ncl %d cs %d  cgl %d cgs %d", uniformBuffer.chunkSideLen, uniformBuffer.chunkSize, uniformBuffer.chunkGroupSideLen, uniformBuffer.chunkGroupSize);
 	// imageStore(computeImage, pixelCoord, vec4(test, 0, 0, 0));	
