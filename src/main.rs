@@ -29,13 +29,13 @@ const CHUNK_GROUP_SIDE_LEN: usize = 3;
 const CHUNK_GROUP_SIZE: usize = 27;
 
 const DEFAULT_FOV: f32 = 60.0;
-const DEFAULT_MAX_RAY_LEN: u32 = 750;
+const DEFAULT_MAX_RAY_LEN: u32 = 1000;
 
 static mut UNIFORM: Uniform = Uniform { 
     time: 0,
 
     head_rot: Vector2::new(0, 0),
-    player_pos: Vector3::new(1, 1, 200),
+    player_pos: Vector3::new(1, 1, 200 ),
 };
 
 static mut GRAPHIC_PREF: GraphicPref = GraphicPref {
@@ -64,7 +64,7 @@ static mut PREF: Pref = Pref {
 
     key_rot_control_inc: 5,
 };
- 
+
 fn main() {
     env_logger::builder().format(|buf, record| { let mut bold = buf.style(); bold.set_color(Color::Yellow).set_bold(true); writeln!(buf, "[ {} {} ] {}", chrono::Local::now().format("%H:%M:%S"), bold.value(record.level(), ), record.args(), ) }).init();
     let app_start = Instant::now();

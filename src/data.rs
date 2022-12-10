@@ -39,7 +39,7 @@ impl WorldData {
 
     pub fn collect() -> WorldData {
         WorldData { voxel_data: vec![
-            VoxelChunk { voxel_data: [1; CHUNK_SIZE] }, 
+            VoxelChunk { voxel_data: [-1; CHUNK_SIZE] }, 
             VoxelChunk { voxel_data: [-1; CHUNK_SIZE] }, 
             VoxelChunk { voxel_data: [-1; CHUNK_SIZE] }, 
             VoxelChunk { voxel_data: [1; CHUNK_SIZE] }, 

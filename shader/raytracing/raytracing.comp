@@ -4,12 +4,12 @@
 # extension GL_EXT_debug_printf : enable
 
 # define PI 3.141592654
-# define ACCURACY 100
+# define ACCURACY 1000
 
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 
-layout (set = 1, binding = 0) uniform UniformBuffer {
+layout (set = 1, binding = 0) readonly uniform UniformBuffer {
 	uint time;
 
 	ivec2 headRotation;
@@ -20,11 +20,11 @@ struct VoxelChunk {
 	int[512] voxelData;
 };
 
-layout (set = 2, binding = 0) buffer VoxelChunkList {
+layout (set = 2, binding = 0) readonly buffer VoxelChunkList {
 	VoxelChunk voxelChunkList[];
 };
 
-layout (set = 3, binding = 0) buffer GraphicPref {
+layout (set = 3, binding = 0) readonly buffer GraphicPref {
 	float fieldOfView;
 	uint maxRayLen;
 
@@ -36,7 +36,7 @@ layout (set = 3, binding = 0) buffer GraphicPref {
 } graphicPref;
 
 float roundFloat(float val) { return round(val * ACCURACY) / ACCURACY; }
-float getDistanceNext(float input_float) { return (floor(abs(input_float) + 1) - abs(input_float)) * sign(input_float); }
+float getDistanceNext(float input_float) { return floor(abs(input_float) + 1) - abs(input_float); }
 
 uint posToIndex(ivec3 pos, int sideLength, int chunkSize) {
 	int horizontal = pos.x * sideLength;
@@ -76,38 +76,54 @@ float castRay(vec2 dir, vec3 origin) {
 		if (lengthCertainDir.x < lengthCertainDir.y) {
 			if (lengthCertainDir.x < lengthCertainDir.z) {
 				selectedLen = lengthCertainDir.x;
+				curPos += vec3(distNextVox.x * sign(unit.x), roundFloat(unit.y * selectedLen), roundFloat(unit.z * selectedLen));
 			}
 			else {
 				selectedLen = lengthCertainDir.z;
+				curPos += vec3(roundFloat(unit.x * selectedLen), roundFloat(unit.y * selectedLen), distNextVox.z * sign(unit.z));
 			} 
 		}
 		else {
 			if (lengthCertainDir.y < lengthCertainDir.z) {
 				selectedLen = lengthCertainDir.y;
+				curPos += vec3(roundFloat(unit.x * selectedLen), distNextVox.y * sign(unit.y), roundFloat(unit.z * selectedLen));
 			}
 			else {
 				selectedLen = lengthCertainDir.z;
+				curPos += vec3(roundFloat(unit.x * selectedLen), roundFloat(unit.y * selectedLen), distNextVox.z * sign(unit.z));
 			}
 		}
 
-		curPos += vec3(unit.x * selectedLen, unit.y * selectedLen, unit.z * selectedLen);
+		if (gl_GlobalInvocationID.xy == uvec2(1,1)) {
+			debugPrintfEXT("\ncurPos %v3f  dir %v2f  unit %v3f", curPos, dir, unit);
+			debugPrintfEXT("\nlen %v3f  dist %v3f", lengthCertainDir, distNextVox);
+		}
+
 		len += selectedLen;
 
 		int voxAtPos = getVoxelAtPos(curPos);
-		if (voxAtPos > 0) { return len; }
+		if (voxAtPos > 0) { break; }
 	}
 
-	return 1;
+	return len;
 }
 
 void main () {
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
 	
-	float degree = ((graphicPref.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (graphicPref.fieldOfView / 2);
+	float degree = ((graphicPref.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x));
+	// debugPrintfEXT("\n%f", degree);
+	float test = castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), vec3(0.0, -512.0, -512.0));
 	
-	float test = castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), vec3(0.1, 0.1, 100.0));
 	// int test = getVoxelAtPos(vec3(16, 16, 16));
 	// debugPrintfEXT("");
-	imageStore(computeImage, pixelCoord, vec4(1 - (test / 2), 0, 0, 0));	
+
+	if (test > 300.0) {
+		// debugPrintfEXT("\ncurPos %v3f  dir %v2f  unit %v3f", curPos, dir, unit);
+		// debugPrintfEXT("\nlen %v3f  dist %v3f", lengthCertainDir, distNextVox);
+		// debugPrintfEXT("\n%v2d %d", pixelCoord, graphicPref.maxRayLen);
+	}
+
+	imageStore(computeImage, pixelCoord, vec4(1 - (test / 2), 0, 0, 0));
 }
