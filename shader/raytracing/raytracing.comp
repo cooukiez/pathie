@@ -112,9 +112,9 @@ void main () {
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
 	
-	float degree = ((graphicPref.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x));
+	float degree = ((graphicPref.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) + float(uniformBuffer.headRotation.x);
 	// debugPrintfEXT("\n%f", degree);
-	float test = castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), vec3(0.0, -512.0, -512.0));
+	float test = castRay(vec2(degree, float(uniformBuffer.headRotation.y)), vec3(0.0, -512.0, -512.0));
 	
 	// int test = getVoxelAtPos(vec3(16, 16, 16));
 	// debugPrintfEXT("");
