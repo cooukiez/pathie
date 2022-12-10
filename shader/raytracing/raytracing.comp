@@ -36,7 +36,10 @@ layout (set = 3, binding = 0) readonly buffer GraphicPref {
 } graphicPref;
 
 float roundFloat(float val) { return round(val * ACCURACY) / ACCURACY; }
-float getDistanceNext(float input_float) { return floor(abs(input_float) + 1) - abs(input_float); }
+float getDistanceNext(float input_float, float dir) { 
+	if (dir < 0.0) { return ceil(input_float - 1) - input_float; }
+	else { return floor(input_float + 1) - input_float; }
+}
 
 uint posToIndex(ivec3 pos, int sideLength, int chunkSize) {
 	int horizontal = pos.x * sideLength;
@@ -56,74 +59,46 @@ int getVoxelAtPos(vec3 pos) {
 	return voxelChunkList[chunkGroupLevIndex].voxelData[chunkLevIndex];
 }
 
-float castRay(vec2 dir, vec3 origin) {
+void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos) {
 	float alpha = dir.x * PI / 180.0;
 	float beta = dir.y * PI / 180.0;
 	
-	vec3 unit = vec3(cos(alpha) * cos(beta), sin(beta), sin(alpha) * cos(beta));
-	
-	float len = 0;
-	vec3 curPos = origin;
+	vec3 unit = vec3(abs(cos(alpha) * cos(beta)) * sign(sin(alpha)), sin(beta), abs(sin(alpha) * cos(beta)) * sign(cos(alpha)));
 	
 	float selectedLen = 0;
 	vec3 distNextVox = vec3(0, 0, 0);
 	vec3 lengthCertainDir = vec3(0, 0, 0);
 
 	for (int iter = 0; iter < graphicPref.maxRayLen; iter += 1) {
-		distNextVox = vec3(getDistanceNext(curPos.x), getDistanceNext(curPos.y), getDistanceNext(curPos.z));
+		distNextVox = vec3(getDistanceNext(curPos.x, unit.x), getDistanceNext(curPos.y, unit.y), getDistanceNext(curPos.z, unit.z));
 		lengthCertainDir = vec3(abs(distNextVox.x / unit.x), abs(distNextVox.y / unit.y), abs(distNextVox.z / unit.z));
 
-		if (lengthCertainDir.x < lengthCertainDir.y) {
-			if (lengthCertainDir.x < lengthCertainDir.z) {
-				selectedLen = lengthCertainDir.x;
-				curPos += vec3(distNextVox.x * sign(unit.x), roundFloat(unit.y * selectedLen), roundFloat(unit.z * selectedLen));
-			}
-			else {
-				selectedLen = lengthCertainDir.z;
-				curPos += vec3(roundFloat(unit.x * selectedLen), roundFloat(unit.y * selectedLen), distNextVox.z * sign(unit.z));
-			} 
-		}
-		else {
-			if (lengthCertainDir.y < lengthCertainDir.z) {
-				selectedLen = lengthCertainDir.y;
-				curPos += vec3(roundFloat(unit.x * selectedLen), distNextVox.y * sign(unit.y), roundFloat(unit.z * selectedLen));
-			}
-			else {
-				selectedLen = lengthCertainDir.z;
-				curPos += vec3(roundFloat(unit.x * selectedLen), roundFloat(unit.y * selectedLen), distNextVox.z * sign(unit.z));
-			}
-		}
-
-		if (gl_GlobalInvocationID.xy == uvec2(1,1)) {
-			debugPrintfEXT("\ncurPos %v3f  dir %v2f  unit %v3f", curPos, dir, unit);
-			debugPrintfEXT("\nlen %v3f  dist %v3f", lengthCertainDir, distNextVox);
-		}
-
+		selectedLen = min(lengthCertainDir.z, min(lengthCertainDir.x, lengthCertainDir.y));
+		curPos += vec3(distNextVox.x, roundFloat(unit.y * selectedLen), roundFloat(unit.z * selectedLen));
+		
 		len += selectedLen;
-
-		int voxAtPos = getVoxelAtPos(curPos);
-		if (voxAtPos > 0) { break; }
+		voxAtPos = getVoxelAtPos(curPos);
+		// if (voxAtPos > 0) { break; }
 	}
-
-	return len;
 }
 
 void main () {
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
 	
-	float degree = ((graphicPref.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) + float(uniformBuffer.headRotation.x);
-	// debugPrintfEXT("\n%f", degree);
-	float test = castRay(vec2(degree, float(uniformBuffer.headRotation.y)), vec3(0.0, -512.0, -512.0));
-	
-	// int test = getVoxelAtPos(vec3(16, 16, 16));
+	float degree = ((graphicPref.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (graphicPref.fieldOfView / 2);
+
+	vec3 curPos = vec3(0.1, 0.1, 0.1);
+	float len = 0;
+	int voxAtPos = 0;
+
+	castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), curPos, len, voxAtPos);
+
 	// debugPrintfEXT("");
 
-	if (test > 300.0) {
-		// debugPrintfEXT("\ncurPos %v3f  dir %v2f  unit %v3f", curPos, dir, unit);
-		// debugPrintfEXT("\nlen %v3f  dist %v3f", lengthCertainDir, distNextVox);
-		// debugPrintfEXT("\n%v2d %d", pixelCoord, graphicPref.maxRayLen);
+	if (gl_GlobalInvocationID.xy == uvec2(1,1)) {
+		// debugPrintfEXT("\np %v3f  l %f  v %d", curPos, len, voxAtPos);
 	}
 
-	imageStore(computeImage, pixelCoord, vec4(1 - (test / 2), 0, 0, 0));
+	imageStore(computeImage, pixelCoord, vec4(1 - (len / 4), 0, 0, 0));
 }
