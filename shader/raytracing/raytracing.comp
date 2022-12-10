@@ -4,7 +4,6 @@
 # extension GL_EXT_debug_printf : enable
 
 # define PI 3.141592654
-# define ACCURACY 10
 
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
@@ -35,6 +34,7 @@ layout (set = 3, binding = 0) readonly buffer GraphicPref {
 	uint chunkGroupSize;
 } graphicPref;
 
+// Replace with Math
 float getDistanceNext(float input_float, float dir) { 
 	if (dir < 0.0) { return ceil(input_float - 1) - input_float; }
 	else { return floor(input_float + 1) - input_float; }
@@ -56,7 +56,7 @@ int getVoxelAtPos(vec3 pos) {
 	return voxelChunkList[chunkGroupLevIndex].voxelData[chunkLevIndex];
 }
 
-void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos) {
+void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos, out int test) {
 	float alpha = dir.x * PI / 180.0;
 	float beta = dir.y * PI / 180.0;
 	
@@ -75,7 +75,7 @@ void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos) {
 
 		len += selectedLen;
 		voxAtPos = getVoxelAtPos(curPos);
-		// if (voxAtPos > 0) { break; }
+		if (voxAtPos > 0) { break; }
 	}
 }
 
@@ -88,13 +88,14 @@ void main () {
 	vec3 curPos = vec3(0.1, 0.1, 0.1);
 	float len = 0;
 	int voxAtPos = 0;
+	int test = 0;
 
-	castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), curPos, len, voxAtPos);
+	castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), curPos, len, voxAtPos, test);
 
 	// debugPrintfEXT("");
 
 	if (gl_GlobalInvocationID.xy == uvec2(1,1)) {
-		// debugPrintfEXT("\np %v3f  l %f  v %d", curPos, len, voxAtPos);
+		debugPrintfEXT("\np %v3f  l %f  v %d", curPos, len, voxAtPos);
 	}
 
 	imageStore(computeImage, pixelCoord, vec4(1 - (len / 4), 0, 0, 0));
