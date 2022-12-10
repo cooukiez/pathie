@@ -4,7 +4,7 @@
 # extension GL_EXT_debug_printf : enable
 
 # define PI 3.141592654
-# define ACCURACY 1000
+# define ACCURACY 10
 
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
@@ -35,7 +35,6 @@ layout (set = 3, binding = 0) readonly buffer GraphicPref {
 	uint chunkGroupSize;
 } graphicPref;
 
-float roundFloat(float val) { return round(val * ACCURACY) / ACCURACY; }
 float getDistanceNext(float input_float, float dir) { 
 	if (dir < 0.0) { return ceil(input_float - 1) - input_float; }
 	else { return floor(input_float + 1) - input_float; }
@@ -46,8 +45,6 @@ uint posToIndex(ivec3 pos, int sideLength, int chunkSize) {
 	int vertical = pos.y * sideLength * sideLength;
 	return uint(horizontal + horizontal + pos.z + chunkSize / 2); 
 }
-
-int listIndexToPos(uint index) { return 0; }
 
 int getVoxelAtPos(vec3 pos) {
 	ivec3 posAsInt = ivec3(pos);
@@ -74,8 +71,8 @@ void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos) {
 		lengthCertainDir = vec3(abs(distNextVox.x / unit.x), abs(distNextVox.y / unit.y), abs(distNextVox.z / unit.z));
 
 		selectedLen = min(lengthCertainDir.z, min(lengthCertainDir.x, lengthCertainDir.y));
-		curPos += vec3(distNextVox.x, roundFloat(unit.y * selectedLen), roundFloat(unit.z * selectedLen));
-		
+		curPos += vec3(unit.x * selectedLen, unit.y * selectedLen, unit.z * selectedLen);
+
 		len += selectedLen;
 		voxAtPos = getVoxelAtPos(curPos);
 		// if (voxAtPos > 0) { break; }
