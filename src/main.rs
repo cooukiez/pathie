@@ -35,7 +35,7 @@ static mut UNIFORM: Uniform = Uniform {
     time: 0,
 
     head_rot: Vector2::new(0, 0),
-    player_pos: Vector3::new(1, 1, 1),
+    player_pos: Vector3::new(1, 1, 200),
 };
 
 static mut GRAPHIC_PREF: GraphicPref = GraphicPref {
@@ -59,8 +59,8 @@ pub struct Pref {
 }
 
 static mut PREF: Pref = Pref {
-    pref_present_mode: vk::PresentModeKHR::IMMEDIATE, 
-    img_scale: 3,
+    pref_present_mode: vk::PresentModeKHR::MAILBOX, 
+    img_scale: 2,
 
     key_rot_control_inc: 5,
 };
