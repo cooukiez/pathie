@@ -5,14 +5,27 @@
 
 # define PI 3.141592654
 
+# define CHUNK_SIZE 512
+# define CHUNK_SIDE_LEN 8
+
+# define CHUNK_GROUP_SIZE 27
+# define CHUNK_GROUP_SIDE_LEN 3
+
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 
-layout (set = 1, binding = 0) readonly uniform UniformBuffer {
+layout (set = 1, binding = 0) uniform UniformBuffer {
 	uint time;
 
-	ivec2 headRotation;
-	ivec3 playerPos;
+	float fieldOfView;
+	uint maxRayLen;
+
+	float rotHorizontal;
+	float rotVertical;
+	
+	float X;
+	float Y;
+	float Z;
 } uniformBuffer;
 
 struct VoxelChunk {
@@ -24,14 +37,7 @@ layout (set = 2, binding = 0) readonly buffer VoxelChunkList {
 };
 
 layout (set = 3, binding = 0) readonly buffer GraphicPref {
-	float fieldOfView;
-	uint maxRayLen;
-
-	uint chunkSideLen;
-	uint chunkSize;
-
-	uint chunkGroupSideLen;
-	uint chunkGroupSize;
+	uint empty;
 } graphicPref;
 
 float getDistanceNext(float input_float, float dir) {
@@ -40,17 +46,15 @@ float getDistanceNext(float input_float, float dir) {
 }
 
 uint posToIndex(ivec3 pos, int sideLength, int chunkSize) {
-	int vertical = pos.y * sideLength * sideLength;
-	int depth = pos.z * sideLength;
-	return uint(pos.x + vertical + depth + chunkSize / 2); 
+	return uint(pos.x + (pos.y * sideLength * sideLength) + (pos.z * sideLength) + (chunkSize / 2)); 
 }
 
 int getVoxelAtPos(vec3 pos) {
 	ivec3 posAsInt = ivec3(pos);
-	uint index = posToIndex(posAsInt, int(graphicPref.chunkSideLen * graphicPref.chunkGroupSideLen), int(graphicPref.chunkSize * graphicPref.chunkGroupSize));	
+	uint global = posToIndex(posAsInt, int(CHUNK_SIDE_LEN * CHUNK_GROUP_SIDE_LEN), int(CHUNK_SIZE * CHUNK_GROUP_SIZE));	
 	
-	uint chunkGroupLevIndex = index / graphicPref.chunkSize - 1;
-	uint chunkLevIndex = index / graphicPref.chunkGroupSize - 1;
+	uint chunkGroupLevIndex = global / CHUNK_SIZE;
+	uint chunkLevIndex = global / CHUNK_GROUP_SIZE;
 	
 	return voxelChunkList[chunkGroupLevIndex].voxelData[chunkLevIndex];
 }
@@ -65,7 +69,7 @@ void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos, ou
 	vec3 distNextVox = vec3(0, 0, 0);
 	vec3 lengthCertainDir = vec3(0, 0, 0);
 
-	for (int iter = 0; iter < graphicPref.maxRayLen; iter += 1) {
+	for (int iter = 0; iter < uniformBuffer.maxRayLen; iter += 1) {
 		distNextVox = vec3(getDistanceNext(curPos.x, unit.x), getDistanceNext(curPos.y, unit.y), getDistanceNext(curPos.z, unit.z));
 		lengthCertainDir = vec3(abs(distNextVox.x / unit.x), abs(distNextVox.y / unit.y), abs(distNextVox.z / unit.z));
 
@@ -82,14 +86,14 @@ void main () {
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
 	
-	float degree = ((graphicPref.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (graphicPref.fieldOfView / 2);
+	float degree = ((uniformBuffer.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (uniformBuffer.fieldOfView / 2);
 
-	vec3 curPos = vec3(0.1, 0.1, 0.1);
+	vec3 curPos = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
 	float len = 0;
 	int voxAtPos = 0;
 	int test = 0;
 
-	castRay(vec2(degree, 0.0) + vec2(uniformBuffer.headRotation), curPos, len, voxAtPos, test);
+	castRay(vec2(degree + uniformBuffer.rotHorizontal, uniformBuffer.rotVertical), curPos, len, voxAtPos, test);
 
 	// debugPrintfEXT("");
 

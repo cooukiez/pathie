@@ -1,7 +1,6 @@
 
-use std::{io::Write, error::Error, thread, time::{Instant, Duration}, ptr::null_mut};
+use std::{io::Write, error::Error, thread, time::{Instant, Duration}};
 use ash::{Entry, vk};
-use cgmath::{Vector3, Vector2};
 use data::{WorldData, Uniform, GraphicPref};
 use env_logger::fmt::Color;
 
@@ -13,9 +12,11 @@ mod vulkan;
 mod pipeline;
 mod data;
 
-// const VERSION: &str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const NAME: &str = env!("CARGO_PKG_NAME");
 const ENGINE_NAME: &str = "VulkanEngine";
+
+const DEBUG: bool = false;
 
 const DEFAULT_STORAGE_BUFFER_SIZE: u64 = 10485760;
 const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
@@ -23,30 +24,28 @@ const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
-const CHUNK_SIDE_LEN: usize = 8;
 const CHUNK_SIZE: usize = 512;
-const CHUNK_GROUP_SIDE_LEN: usize = 3;
+const CHUNK_SIDE_LEN: usize = 8;
+
 const CHUNK_GROUP_SIZE: usize = 27;
+const CHUNK_GROUP_SIDE_LEN: usize = 3;
 
-const DEFAULT_FOV: f32 = 60.0;
-const DEFAULT_MAX_RAY_LEN: u32 = 2000;
-
-static mut UNIFORM: Uniform = Uniform { 
+static mut UNIFORM: Uniform = Uniform {
     time: 0,
 
-    head_rot: Vector2::new(0, 0),
-    player_pos: Vector3::new(1, 1, 200 ),
+    field_of_view: 60.0,
+    max_ray_length: 2000,
+
+    rot_horizontal: 124.0,
+    rot_vertical: 215.0,
+
+    X: 0.1,
+    Y: 237.0,
+    Z: 0.1,
 };
 
 static mut GRAPHIC_PREF: GraphicPref = GraphicPref {
-    field_of_view: DEFAULT_FOV,
-    max_ray_length: DEFAULT_MAX_RAY_LEN,
-
-    chunk_side_len: CHUNK_SIDE_LEN as u32,
-    chunk_size: CHUNK_SIZE as u32,
-
-    chunk_group_side_len: CHUNK_GROUP_SIDE_LEN as u32,
-    chunk_group_size: CHUNK_GROUP_SIZE as u32,
+    empty: 0,
 };
 
 pub struct Pref {
@@ -55,14 +54,14 @@ pub struct Pref {
     pub img_scale: u32,
 
     // Movement
-    pub key_rot_control_inc: i32,
+    pub key_rot_control_inc: f32,
 }
 
 static mut PREF: Pref = Pref {
     pref_present_mode: vk::PresentModeKHR::MAILBOX, 
     img_scale: 2,
 
-    key_rot_control_inc: 5,
+    key_rot_control_inc: 5.0,
 };
 
 fn main() {
@@ -127,10 +126,10 @@ pub fn handle_event(event: &Event<()>, vulkan: &mut Vulkan, render: &mut Render,
 pub fn handle_input(keycode: &VirtualKeyCode, state: &ElementState, vulkan: &Vulkan, ) {
     match keycode {
         &VirtualKeyCode::F if state == &ElementState::Pressed => { vulkan.window.set_fullscreen(Some(Fullscreen::Exclusive(vulkan.monitor.video_modes().next().expect("ERR_NO_MONITOR_MODE").clone()))); },
-        &VirtualKeyCode::W if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.y += PREF.key_rot_control_inc; }; },
-        &VirtualKeyCode::S if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.y -= PREF.key_rot_control_inc; }; },
-        &VirtualKeyCode::A if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.x += PREF.key_rot_control_inc; }; },
-        &VirtualKeyCode::D if state == &ElementState::Pressed => { unsafe { UNIFORM.head_rot.x -= PREF.key_rot_control_inc; }; },
+        &VirtualKeyCode::W if state == &ElementState::Pressed => { unsafe { UNIFORM.rot_vertical += PREF.key_rot_control_inc; }; },
+        &VirtualKeyCode::S if state == &ElementState::Pressed => { unsafe { UNIFORM.rot_vertical -= PREF.key_rot_control_inc; }; },
+        &VirtualKeyCode::A if state == &ElementState::Pressed => { unsafe { UNIFORM.rot_horizontal += PREF.key_rot_control_inc; }; },
+        &VirtualKeyCode::D if state == &ElementState::Pressed => { unsafe { UNIFORM.rot_horizontal -= PREF.key_rot_control_inc; }; },
         &VirtualKeyCode::Escape if state == &ElementState::Pressed => { vulkan.window.set_fullscreen(None); }, _ => (),
     }
 }

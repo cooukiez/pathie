@@ -8,7 +8,7 @@ use ash::{
 };
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::{window::{Window, WindowBuilder}, event_loop::EventLoop, dpi::PhysicalSize, monitor::MonitorHandle};
-use crate::data::{Uniform, VoxelChunk, GraphicPref};
+use crate::{data::{Uniform, VoxelChunk, GraphicPref}, DEBUG};
 
 pub struct EngineStatus {
     pub recreate_swapchain: bool,
@@ -25,8 +25,8 @@ pub struct Vulkan {
     pub monitor: MonitorHandle,
 
     pub instance: Instance,
-    pub debug_util: DebugUtils,
-    pub debug_util_messenger: DebugUtilsMessengerEXT,
+    pub debug_util: Option<DebugUtils>,
+    pub debug_util_messenger: Option<DebugUtilsMessengerEXT>,
 
     pub surface: Surface,
     pub surface_khr: vk::SurfaceKHR,
@@ -62,7 +62,7 @@ pub struct Vulkan {
 }
 
 impl Vulkan {
-    pub fn init_instance(event_loop: &EventLoop<()>, entry: &Entry) -> (Window, Vec<MonitorHandle>, MonitorHandle, Instance, DebugUtils, DebugUtilsMessengerEXT, Surface, vk::SurfaceKHR) {
+    pub fn init_instance(event_loop: &EventLoop<()>, entry: &Entry) -> (Window, Vec<MonitorHandle>, MonitorHandle, Instance, Option<DebugUtils>, Option<DebugUtilsMessengerEXT>, Surface, vk::SurfaceKHR) {
         log::info!("Creating Window and EventLoop ...");
         
         let window = WindowBuilder::new().with_title(crate::NAME).with_inner_size(PhysicalSize::new(crate::WIDTH, crate::HEIGHT, )).with_resizable(true).build(event_loop).unwrap();
@@ -84,15 +84,22 @@ impl Vulkan {
 
         let instance_create_info = vk::InstanceCreateInfo::builder().application_info(&app_info).enabled_extension_names(&extension_name_vec);
         let instance = unsafe { entry.create_instance(&instance_create_info, None, ).unwrap() };
-
+        
         let msg_severity = vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE | vk::DebugUtilsMessageSeverityFlagsEXT::INFO | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING | vk::DebugUtilsMessageSeverityFlagsEXT::ERROR;
         let msg_type = vk::DebugUtilsMessageTypeFlagsEXT::GENERAL | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION;
 
         let callback_info = vk::DebugUtilsMessengerCreateInfoEXT::builder().flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty()).message_severity(msg_severity).message_type(msg_type).pfn_user_callback(Some(Self::vulkan_debug_callback));
 
-        let debug_util = DebugUtils::new(entry, &instance, );
-        let debug_util_messenger = unsafe { debug_util.create_debug_utils_messenger(&callback_info, None, ).unwrap() };
+        let mut debug_util = None;
+        let mut debug_util_messenger = None;
 
+        if DEBUG {
+            let util = DebugUtils::new(entry, &instance, );
+            let util_messenger = unsafe { util.create_debug_utils_messenger(&callback_info, None, ).unwrap() };
+
+            debug_util = Some(util); debug_util_messenger = Some(util_messenger);
+        }
+        
         let surface = Surface::new(&entry, &instance);
         let surface_khr = unsafe { ash_window::create_surface(&entry, &instance, window.raw_display_handle(), window.raw_window_handle(), None, ).unwrap() };
 
