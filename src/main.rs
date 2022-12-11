@@ -29,7 +29,7 @@ const CHUNK_GROUP_SIDE_LEN: usize = 3;
 const CHUNK_GROUP_SIZE: usize = 27;
 
 const DEFAULT_FOV: f32 = 60.0;
-const DEFAULT_MAX_RAY_LEN: u32 = 8000;
+const DEFAULT_MAX_RAY_LEN: u32 = 2000;
 
 static mut UNIFORM: Uniform = Uniform { 
     time: 0,

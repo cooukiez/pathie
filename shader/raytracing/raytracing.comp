@@ -34,16 +34,15 @@ layout (set = 3, binding = 0) readonly buffer GraphicPref {
 	uint chunkGroupSize;
 } graphicPref;
 
-// Replace with Math
-float getDistanceNext(float input_float, float dir) { 
+float getDistanceNext(float input_float, float dir) {
 	if (dir < 0.0) { return ceil(input_float - 1) - input_float; }
 	else { return floor(input_float + 1) - input_float; }
 }
 
 uint posToIndex(ivec3 pos, int sideLength, int chunkSize) {
-	int horizontal = pos.x * sideLength;
 	int vertical = pos.y * sideLength * sideLength;
-	return uint(horizontal + horizontal + pos.z + chunkSize / 2); 
+	int depth = pos.z * sideLength;
+	return uint(pos.x + vertical + depth + chunkSize / 2); 
 }
 
 int getVoxelAtPos(vec3 pos) {
@@ -95,7 +94,7 @@ void main () {
 	// debugPrintfEXT("");
 
 	if (gl_GlobalInvocationID.xy == uvec2(1,1)) {
-		debugPrintfEXT("\np %v3f  l %f  v %d", curPos, len, voxAtPos);
+		// debugPrintfEXT("\np %v3f  l %f  v %d", curPos, len, voxAtPos);
 	}
 
 	imageStore(computeImage, pixelCoord, vec4(1 - (len / 4), 0, 0, 0));
