@@ -46,15 +46,18 @@ impl WorldData {
         let group_index = global_index / CHUNK_SIZE as i32;
         let chunk_index = global_index - (group_index * CHUNK_SIZE as i32);
 
+        log::info!("Index [ {} ] | Group [ {} ] | Chunk [ {} ]", global_index, group_index, chunk_index);
+
         voxel_data[group_index as usize].voxel_data[chunk_index as usize]
     }
 
     pub fn collect() -> WorldData {
         let mut voxel_data: Vec<VoxelChunk> = vec![];
         for _ in 0 .. 27 { voxel_data.push(VoxelChunk { voxel_data: [0; CHUNK_SIZE] }); }
-        voxel_data[14].voxel_data[256] = 1;
+        voxel_data[7].voxel_data[448] = 1;
+        voxel_data[6].voxel_data[384] = 1; 
         log::info!("Len [ {} ]", voxel_data.len());
-        log::info!("VoxAtPos [ {} ]", WorldData::get_voxel_at_pos(Vector3::new(-12.0, -12.0, 0.0), &voxel_data));
+        log::info!("VoxAtPos [ {} ]", WorldData::get_voxel_at_pos(Vector3::new(0.0, 0.0, -6.0), &voxel_data));
         WorldData { voxel_data }
     }
 
