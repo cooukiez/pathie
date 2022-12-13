@@ -36,18 +36,19 @@ pub struct GraphicPref {
 
 impl WorldData {
     pub fn vec_to_array<Type, const Length: usize>(vec: Vec<Type>) -> [Type; Length] { vec.try_into().unwrap_or_else(| vec: Vec<Type> | panic!("ERR_INVALI_LEN -> Expected {} | Got {}", Length, vec.len())) }
-    pub fn pos_to_index(pos: Vector3<u32>, side_length: u32, chunk_size: u32, ) -> usize { (pos.x + (pos.y * side_length * side_length) + (pos.z * side_length) + (chunk_size / 2)) as usize }
+    pub fn pos_to_index(pos: Vector3<i32>, side_length: i32, chunk_size: i32, ) -> i32 { pos.x + (pos.y * side_length) + (pos.z * side_length * side_length) + (chunk_size / 2) }
 
-    pub fn get_voxel_at_pos(pos: Vector3<f32>, voxel_data: &Vec<VoxelChunk>, ) -> i32 {
-        let pos_as_int = Vector3::new(pos.x as u32, pos.y as u32, pos.z as u32);
-        let global_index = WorldData::pos_to_index(pos_as_int, (CHUNK_SIDE_LEN * CHUNK_GROUP_SIDE_LEN) as u32, (CHUNK_SIZE * CHUNK_GROUP_SIZE) as u32);
+    pub fn get_voxel_at_pos(pos: Vector3<f32>, _voxel_data: &Vec<VoxelChunk>, ) -> i32 {
+        let pos_as_int = Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32);
+
+        let global_index = WorldData::pos_to_index(pos_as_int, (CHUNK_SIDE_LEN * CHUNK_GROUP_SIDE_LEN) as i32, (CHUNK_SIZE * CHUNK_GROUP_SIZE) as i32);
+        
+        let group_index = global_index / CHUNK_SIZE as i32;
+        let chunk_index = global_index - (group_index * CHUNK_SIZE as i32);
+
         log::info!("Index [ {} ]", global_index);
-
-        let chunk_group_lev_index = round::floor(global_index / CHUNK_SIZE);
-        let chunk_lev_index = global_index - (chunk_group_lev_index * CHUNK_SIZE);
-
-        log::info!("Group [ {} ]", chunk_group_lev_index);
-        log::info!("Chunk [ {} ]", chunk_lev_index);
+        log::info!("Group [ {} ]", group_index);
+        log::info!("Chunk [ {} ]", chunk_index);
 
         // voxel_data[chunk_group_lev_index].voxel_data[chunk_lev_index]
         global_index as i32
@@ -57,7 +58,7 @@ impl WorldData {
         let mut voxel_data: Vec<VoxelChunk> = vec![];
         for _ in 0 .. 27 { voxel_data.push(VoxelChunk { voxel_data: [0; CHUNK_SIZE] }); }
         log::info!("Len [ {} ]", voxel_data.len());
-        log::info!("VoxAtPos ( -512, -512, -512 ) [ {} ]", WorldData::get_voxel_at_pos(Vector3::new(-512.0, -512.0, -512.0), &voxel_data));
+        log::info!("VoxAtPos ( -12, -12, -12 ) [ {} ]", WorldData::get_voxel_at_pos(Vector3::new(-12.0, -12.0, 0.0), &voxel_data));
         WorldData { voxel_data }
     }
 

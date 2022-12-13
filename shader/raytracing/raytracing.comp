@@ -46,7 +46,7 @@ float getDistanceNext(float input_float, float dir) {
 }
 
 uint posToIndex(ivec3 pos, int sideLength, int chunkSize) {
-	return uint(pos.x + (pos.y * sideLength * sideLength) + (pos.z * sideLength) + (chunkSize / 2)); 
+	return uint(pos.x + (pos.y * sideLength) + (pos.z * sideLength * sideLength) + (chunkSize / 2)); 
 }
 
 int getVoxelAtPos(vec3 pos) {
@@ -78,7 +78,7 @@ void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos, ou
 
 		len += selectedLen;
 		voxAtPos = getVoxelAtPos(curPos);
-		// if (voxAtPos > 0) { break; }
+		if (voxAtPos > 0) { break; }
 	}
 }
 
