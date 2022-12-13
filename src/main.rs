@@ -86,6 +86,9 @@ fn run_graphic_related(app_start: Instant) {
     let (command_pool, command_buffer_list, ) = Vulkan::init_command_pool(graphics_queue_index, &device, &swapchain_image_list);
     let (available, render_finished, fence, ) = Vulkan::init_sync(&device);
     
+    log::info!("DebugUtil [ {} ]", debug_util.is_some());
+    log::info!("DebugUtilMessenger [ {} ]", debug_util_messenger.is_some());
+
     let mut vulkan = Vulkan { status, window, monitor_list, monitor, instance, debug_util, debug_util_messenger, surface, surface_khr, physical_device, physical_device_prop, physical_device_memory_prop, graphics_queue_index, present_queue_index, device, graphics_queue, present_queue, swapchain_loader, swapchain_khr, swapchain_image_list, swapchain_image_view_list, extent, scaled_extent, surface_format, present_mode, surface_capability, command_pool, command_buffer_list, available, render_finished, fence };
 
     // Init ComputeRenderPipeline
@@ -96,6 +99,7 @@ fn run_graphic_related(app_start: Instant) {
     let world_data = WorldData::collect();
     let buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_STORAGE_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, ), ];
     
+
     let std_buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_UNIFORM_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
 
     PipelineData::update_uniform_buffer(&vulkan.device, uniform_list[0].buffer_mem, unsafe { &[UNIFORM] }, );

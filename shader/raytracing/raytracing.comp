@@ -78,7 +78,7 @@ void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos, ou
 
 		len += selectedLen;
 		voxAtPos = getVoxelAtPos(curPos);
-		if (voxAtPos > 0) { break; }
+		// if (voxAtPos > 0) { break; }
 	}
 }
 
