@@ -40,8 +40,8 @@ static mut UNIFORM: Uniform = Uniform {
     rot_vertical: 215.0,
 
     X: 0.1,
-    Y: 237.0,
-    Z: 0.1,
+    Y: 0.1,
+    Z: -5.0,
 };
 
 static mut GRAPHIC_PREF: GraphicPref = GraphicPref {
