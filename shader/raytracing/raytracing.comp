@@ -79,7 +79,7 @@ void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos, ou
 		len += selectedLen;
 
 		if (gl_GlobalInvocationID.xy == uvec2(1,1)) {
-			debugPrintfEXT("\n%v3d", ivec3(curPos));
+			// debugPrintfEXT("\n%v3d", ivec3(curPos));
 		}
 
 		voxAtPos = getVoxelAtPos(curPos);
