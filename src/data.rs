@@ -37,14 +37,17 @@ impl WorldData {
 
         let index = WorldData::pos_to_index(pos_as_int, CHUNK_SIDE_LEN as i32, CHUNK_SIZE as i32);
 
+        log::info!("Index [ {} ]", index);
+
         voxel_data[index as usize]
     }
 
     pub fn collect() -> WorldData {
         let mut voxel_data: [i32; CHUNK_SIZE] = [-1; CHUNK_SIZE];
-        voxel_data[6] = 1;
-        voxel_data[6] = 1;
+        voxel_data[12782] = 1;
+        voxel_data[3456] = 1;
         log::info!("VoxAtPos [ {} ]", WorldData::get_voxel_at_pos(Vector3::new(-10.0, 5.0, 10.0), &voxel_data));
+        log::info!("VoxAtPos [ {} ]", WorldData::get_voxel_at_pos(Vector3::new(0.0, 0.0, -6.0), &voxel_data));
         WorldData { voxel_data }
     }
 

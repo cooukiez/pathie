@@ -28,7 +28,7 @@ layout (set = 1, binding = 0) uniform UniformBuffer {
 } uniformBuffer;
 
 layout (set = 2, binding = 0) readonly buffer VoxData {
-	int[CHUNK_SIZE] data[];
+	int[CHUNK_SIZE] voxData;
 };
 
 layout (set = 3, binding = 0) readonly buffer GraphicPref {
@@ -48,7 +48,11 @@ int getVoxelAtPos(vec3 pos) {
 	ivec3 posAsInt = ivec3(pos);
 	uint index = posToIndex(posAsInt, CHUNK_SIDE_LEN, CHUNK_SIZE);	
 
-	return data[index];
+	if (posAsInt == ivec3(0, 0, -6)) {
+		// debugPrintfEXT("\n%d", index);
+	}
+
+	return voxData[index];
 }
 
 void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos, out int test) {
@@ -70,18 +74,8 @@ void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos, ou
 
 		len += selectedLen;
 
-		if (gl_GlobalInvocationID.xy == uvec2(1,1)) {
-			// debugPrintfEXT("\n%v3d", ivec3(curPos));
-		}
-
-		
-
 		voxAtPos = getVoxelAtPos(curPos);
 		if (voxAtPos > 0) { break; }
-
-		if (ivec3(curPos) == ivec3(0,0,-6)) {
-			// debugPrintfEXT("\n%d", voxAtPos);
-		}
 	}
 }
 
@@ -91,7 +85,7 @@ void main () {
 	
 	float degree = ((uniformBuffer.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (uniformBuffer.fieldOfView / 2);
 
-	vec3 curPos = vec3(uniformBuffer.X, uniformBuffer.Y + pixelCoord.y / TMP_VERT_SCALE, uniformBuffer.Z);
+	vec3 curPos = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
 	float len = 0;
 	int voxAtPos = 0;
 	int test = 0;
