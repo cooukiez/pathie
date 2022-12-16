@@ -92,8 +92,6 @@ void main () {
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
 	
-	// float degree = ((uniformBuffer.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (uniformBuffer.fieldOfView / 2);
-
 	vec3 curPos = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
 	vec2 dir = rayDirection(vec2(imageSize * 16), vec2(pixelCoord));
 	float len = 0;
@@ -102,11 +100,10 @@ void main () {
 
 	castRay(dir, curPos, len, voxAtPos, test);
 
-	// debugPrintfEXT("\n%v2f", dir);
+	// debugPrintfEXT("");
 
-	if (gl_GlobalInvocationID.xy == uvec2(200,280)) {
-		// debugPrintfEXT("\n%v2f", dir);
-		// debugPrintfEXT("\np %v3f  l %f  v %d", curPos, len, voxAtPos);
+	if (gl_GlobalInvocationID.xy == uvec2(1,1)) {
+
 	}
 
 	imageStore(computeImage, pixelCoord, vec4(1 - len / 3000, 0, 0, 0));
