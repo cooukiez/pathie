@@ -5,8 +5,6 @@
 
 # define PI 3.141592654
 
-# define TMP_VERT_SCALE 8
-
 # define CHUNK_SIZE 13824
 # define CHUNK_SIDE_LEN 24
 
@@ -106,5 +104,5 @@ void main () {
 
 	}
 
-	imageStore(computeImage, pixelCoord, vec4(1 - len / 3000, 0, 0, 0));
+	imageStore(computeImage, pixelCoord, vec4(1 - len / uniformBuffer.maxRayLen, 0, 0, 0));
 }

@@ -24,14 +24,14 @@ const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
-const CHUNK_SIZE: usize = 13824;
+const CHUNK_SIZE: usize = 13924;
 const CHUNK_SIDE_LEN: usize = 24;
 
 static mut UNIFORM: Uniform = Uniform {
     time: 0,
 
     field_of_view: 60.0,
-    max_ray_length: 2000,
+    max_ray_length: 30,
 
     rot_horizontal: 124.0,
     rot_vertical: 215.0,
@@ -56,7 +56,7 @@ pub struct Pref {
 
 static mut PREF: Pref = Pref {
     pref_present_mode: vk::PresentModeKHR::MAILBOX, 
-    img_scale: 2,
+    img_scale: 1,
 
     key_rot_control_inc: 5.0,
 };
