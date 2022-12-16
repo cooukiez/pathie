@@ -5,11 +5,10 @@
 
 # define PI 3.141592654
 
-# define CHUNK_SIZE 512
-# define CHUNK_SIDE_LEN 8
+# define TMP_VERT_SCALE 8
 
-# define CHUNK_GROUP_SIZE 27
-# define CHUNK_GROUP_SIDE_LEN 3
+# define CHUNK_SIZE 13824
+# define CHUNK_SIDE_LEN 24
 
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
@@ -28,12 +27,8 @@ layout (set = 1, binding = 0) uniform UniformBuffer {
 	float Z;
 } uniformBuffer;
 
-struct VoxelChunk {
-	int[512] voxelData;
-};
-
-layout (set = 2, binding = 0) readonly buffer VoxelChunkList {
-	VoxelChunk voxelChunkList[];
+layout (set = 2, binding = 0) readonly buffer VoxData {
+	int[CHUNK_SIZE] data[];
 };
 
 layout (set = 3, binding = 0) readonly buffer GraphicPref {
@@ -51,12 +46,9 @@ uint posToIndex(ivec3 pos, int sideLength, int chunkSize) {
 
 int getVoxelAtPos(vec3 pos) {
 	ivec3 posAsInt = ivec3(pos);
-	uint global = posToIndex(posAsInt, int(CHUNK_SIDE_LEN * CHUNK_GROUP_SIDE_LEN), int(CHUNK_SIZE * CHUNK_GROUP_SIZE));	
-	
-	uint chunkGroupLevIndex = global / CHUNK_SIZE;
-	uint chunkLevIndex = global / CHUNK_GROUP_SIZE;
-	
-	return voxelChunkList[chunkGroupLevIndex].voxelData[chunkLevIndex];
+	uint index = posToIndex(posAsInt, CHUNK_SIDE_LEN, CHUNK_SIZE);	
+
+	return data[index];
 }
 
 void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos, out int test) {
@@ -82,8 +74,14 @@ void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos, ou
 			// debugPrintfEXT("\n%v3d", ivec3(curPos));
 		}
 
+		
+
 		voxAtPos = getVoxelAtPos(curPos);
 		if (voxAtPos > 0) { break; }
+
+		if (ivec3(curPos) == ivec3(0,0,-6)) {
+			// debugPrintfEXT("\n%d", voxAtPos);
+		}
 	}
 }
 
@@ -93,7 +91,7 @@ void main () {
 	
 	float degree = ((uniformBuffer.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (uniformBuffer.fieldOfView / 2);
 
-	vec3 curPos = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
+	vec3 curPos = vec3(uniformBuffer.X, uniformBuffer.Y + pixelCoord.y / TMP_VERT_SCALE, uniformBuffer.Z);
 	float len = 0;
 	int voxAtPos = 0;
 	int test = 0;

@@ -24,11 +24,8 @@ const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
-const CHUNK_SIZE: usize = 512;
-const CHUNK_SIDE_LEN: usize = 8;
-
-const CHUNK_GROUP_SIZE: usize = 27;
-const CHUNK_GROUP_SIDE_LEN: usize = 3;
+const CHUNK_SIZE: usize = 13824;
+const CHUNK_SIDE_LEN: usize = 24;
 
 static mut UNIFORM: Uniform = Uniform {
     time: 0,

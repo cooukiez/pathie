@@ -8,7 +8,7 @@ use ash::{
 };
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::{window::{Window, WindowBuilder}, event_loop::EventLoop, dpi::PhysicalSize, monitor::MonitorHandle};
-use crate::{data::{Uniform, VoxelChunk, GraphicPref}, DEBUG};
+use crate::{data::{Uniform, GraphicPref}, DEBUG, CHUNK_SIZE};
 
 pub struct EngineStatus {
     pub recreate_swapchain: bool,
@@ -296,11 +296,11 @@ impl PipelineData {
         slice.copy_from_slice(&data); unsafe { device.unmap_memory(buffer_mem); }
     }
 
-    pub fn update_voxel_buffer(device: &Device, buffer_mem: vk::DeviceMemory, data: &[VoxelChunk], ) {
-        log::info!("AlignSize VoxBuffer - {}", std::mem::align_of::<VoxelChunk>() as u64);
-        let ptr: * mut c_void = unsafe { device.map_memory(buffer_mem, 0, std::mem::size_of::<VoxelChunk>() as u64, vk::MemoryMapFlags::empty(), ).unwrap() };
-        let mut slice = unsafe { Align::new(ptr, std::mem::align_of::<VoxelChunk>() as u64, std::mem::size_of::<VoxelChunk>() as u64, ) };
-        slice.copy_from_slice(&data); unsafe { device.unmap_memory(buffer_mem); }
+    pub fn update_voxel_buffer(device: &Device, buffer_mem: vk::DeviceMemory, data: &[i32; CHUNK_SIZE], ) {
+        log::info!("AlignSize VoxBuffer - {}", std::mem::align_of::<[i32; CHUNK_SIZE]>() as u64);
+        let ptr: * mut c_void = unsafe { device.map_memory(buffer_mem, 0, std::mem::size_of::<[i32; CHUNK_SIZE]>() as u64, vk::MemoryMapFlags::empty(), ).unwrap() };
+        let mut slice = unsafe { Align::new(ptr, std::mem::align_of::<[i32; CHUNK_SIZE]>() as u64, std::mem::size_of::<[i32; CHUNK_SIZE]>() as u64, ) };
+        slice.copy_from_slice(data); unsafe { device.unmap_memory(buffer_mem); }
     }
 
     pub fn update_graphic_pref_buffer(device: &Device, buffer_mem: vk::DeviceMemory, data: &[GraphicPref], ) {
