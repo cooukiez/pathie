@@ -79,24 +79,35 @@ void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos, ou
 	}
 }
 
+vec2 rayDirection(in vec2 imageSize, in vec2 pixelCoord) {
+	float vertical_field = (imageSize.y / imageSize.x) * uniformBuffer.fieldOfView;
+	
+	float horizontal = (uniformBuffer.fieldOfView / imageSize.x) * pixelCoord.x - uniformBuffer.fieldOfView / 2;
+	float vertical = (vertical_field / imageSize.y) * pixelCoord.y - vertical_field / 2;
+
+	return vec2(horizontal, vertical);
+}
+
 void main () {
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
 	
-	float degree = ((uniformBuffer.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (uniformBuffer.fieldOfView / 2);
+	// float degree = ((uniformBuffer.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (uniformBuffer.fieldOfView / 2);
 
-	vec3 curPos = vec3(uniformBuffer.X, uniformBuffer.Y + pixelCoord.y / TMP_VERT_SCALE, uniformBuffer.Z);
+	vec3 curPos = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
+	vec2 dir = rayDirection(vec2(imageSize * 16), vec2(pixelCoord));
 	float len = 0;
 	int voxAtPos = 0;
 	int test = 0;
 
-	castRay(vec2(degree + uniformBuffer.rotHorizontal, uniformBuffer.rotVertical), curPos, len, voxAtPos, test);
+	castRay(dir, curPos, len, voxAtPos, test);
 
-	// debugPrintfEXT("");
+	// debugPrintfEXT("\n%v2f", dir);
 
-	if (gl_GlobalInvocationID.xy == uvec2(1,1)) {
+	if (gl_GlobalInvocationID.xy == uvec2(200,280)) {
+		// debugPrintfEXT("\n%v2f", dir);
 		// debugPrintfEXT("\np %v3f  l %f  v %d", curPos, len, voxAtPos);
 	}
 
-	imageStore(computeImage, pixelCoord, vec4(1 - (len / 4), 0, 0, 0));
+	imageStore(computeImage, pixelCoord, vec4(1 - len / 3000, 0, 0, 0));
 }
