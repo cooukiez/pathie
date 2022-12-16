@@ -34,20 +34,25 @@ impl WorldData {
 
     pub fn get_voxel_at_pos(pos: Vector3<f32>, voxel_data: &[i32; CHUNK_SIZE], ) -> i32 {
         let pos_as_int = Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32);
-
         let index = WorldData::pos_to_index(pos_as_int, CHUNK_SIDE_LEN as i32, CHUNK_SIZE as i32);
-
-        log::info!("Index [ {} ]", index);
 
         voxel_data[index as usize]
     }
 
+    pub fn set_voxel_at_pos(pos: Vector3<f32>, voxel_data: &mut [i32; CHUNK_SIZE], value: i32, ) {
+        let pos_as_int = Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32);
+        let index = WorldData::pos_to_index(pos_as_int, CHUNK_SIDE_LEN as i32, CHUNK_SIZE as i32);
+
+        voxel_data[index as usize] = value;
+    }
+
     pub fn collect() -> WorldData {
         let mut voxel_data: [i32; CHUNK_SIZE] = [-1; CHUNK_SIZE];
-        voxel_data[12782] = 1;
-        voxel_data[3456] = 1;
-        log::info!("VoxAtPos [ {} ]", WorldData::get_voxel_at_pos(Vector3::new(-10.0, 5.0, 10.0), &voxel_data));
-        log::info!("VoxAtPos [ {} ]", WorldData::get_voxel_at_pos(Vector3::new(0.0, 0.0, -6.0), &voxel_data));
+
+        WorldData::set_voxel_at_pos(Vector3::new(-10.0, 5.0, 10.0), &mut voxel_data, 1);
+        WorldData::set_voxel_at_pos(Vector3::new(0.0, 0.0, -6.0), &mut voxel_data, 1);
+        WorldData::set_voxel_at_pos(Vector3::new(0.0, 0.0, 5.0), &mut voxel_data, 1);
+
         WorldData { voxel_data }
     }
 

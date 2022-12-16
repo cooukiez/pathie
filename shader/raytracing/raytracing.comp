@@ -85,7 +85,7 @@ void main () {
 	
 	float degree = ((uniformBuffer.fieldOfView / float(imageSize.x * 16)) * float(pixelCoord.x)) - (uniformBuffer.fieldOfView / 2);
 
-	vec3 curPos = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
+	vec3 curPos = vec3(uniformBuffer.X, uniformBuffer.Y + pixelCoord.y / TMP_VERT_SCALE, uniformBuffer.Z);
 	float len = 0;
 	int voxAtPos = 0;
 	int test = 0;
