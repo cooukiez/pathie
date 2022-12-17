@@ -49,9 +49,9 @@ impl WorldData {
     pub fn collect() -> WorldData {
         let mut voxel_data: [i32; CHUNK_SIZE] = [-1; CHUNK_SIZE];
 
-        WorldData::set_voxel_at_pos(Vector3::new(-10.0, 5.0, 10.0), &mut voxel_data, 1);
+        // WorldData::set_voxel_at_pos(Vector3::new(-10.0, 5.0, 10.0), &mut voxel_data, 1);
         WorldData::set_voxel_at_pos(Vector3::new(0.0, 0.0, -6.0), &mut voxel_data, 1);
-        WorldData::set_voxel_at_pos(Vector3::new(0.0, 0.0, 5.0), &mut voxel_data, 1);
+        // WorldData::set_voxel_at_pos(Vector3::new(0.0, 0.0, 5.0), &mut voxel_data, 1);
 
         WorldData { voxel_data }
     }

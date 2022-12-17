@@ -31,7 +31,7 @@ static mut UNIFORM: Uniform = Uniform {
     time: 0,
 
     field_of_view: 60.0,
-    max_ray_length: 30,
+    max_ray_length: 60,
 
     rot_horizontal: 124.0,
     rot_vertical: 215.0,
@@ -61,6 +61,7 @@ static mut PREF: Pref = Pref {
     key_rot_control_inc: 5.0,
 };
 
+// Something
 fn main() {
     env_logger::builder().format(|buf, record| { let mut bold = buf.style(); bold.set_color(Color::Yellow).set_bold(true); writeln!(buf, "[ {} {} ] {}", chrono::Local::now().format("%H:%M:%S"), bold.value(record.level(), ), record.args(), ) }).init();
     let app_start = Instant::now();

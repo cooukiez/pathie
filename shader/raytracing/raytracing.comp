@@ -44,12 +44,8 @@ uint posToIndex(ivec3 pos, int sideLength, int chunkSize) {
 
 int getVoxelAtPos(vec3 pos) {
 	ivec3 posAsInt = ivec3(pos);
-	uint index = posToIndex(posAsInt, CHUNK_SIDE_LEN, CHUNK_SIZE);	
-
-	if (posAsInt == ivec3(0, 0, -6)) {
-		// debugPrintfEXT("\n%d", index);
-	}
-
+	uint index = posToIndex(posAsInt, CHUNK_SIDE_LEN, CHUNK_SIZE);
+	
 	return voxData[index];
 }
 
@@ -101,7 +97,7 @@ void main () {
 	// debugPrintfEXT("");
 
 	if (gl_GlobalInvocationID.xy == uvec2(1,1)) {
-		
+		// debugPrintfEXT("\np %v3f  l %f  v %d", curPos, len, voxAtPos);
 	}
 
 	imageStore(computeImage, pixelCoord, vec4(1 - len / uniformBuffer.maxRayLen, 0, 0, 0));
