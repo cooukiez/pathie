@@ -97,7 +97,7 @@ void main () {
 	// debugPrintfEXT("");
 
 	if (gl_GlobalInvocationID.xy == uvec2(1,1)) {
-		// debugPrintfEXT("\np %v3f  l %f  v %d", curPos, len, voxAtPos);
+		// debugPrintfEXT("\n%f", sin(90.0 * PI / 180.0));
 	}
 
 	imageStore(computeImage, pixelCoord, vec4(1 - len / uniformBuffer.maxRayLen, 0, 0, 0));

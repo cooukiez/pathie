@@ -8,9 +8,12 @@ use pipeline::{Render};
 use vulkan::{Vulkan, EngineStatus, PipelineData, BufferObj};
 use winit::{event_loop::{ControlFlow, EventLoop}, event::{Event, WindowEvent, KeyboardInput, ElementState, VirtualKeyCode}, window::{Fullscreen}};
 
+use crate::key::Keyboard;
+
 mod vulkan;
 mod pipeline;
 mod data;
+mod key;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const NAME: &str = env!("CARGO_PKG_NAME");
@@ -31,14 +34,14 @@ static mut UNIFORM: Uniform = Uniform {
     time: 0,
 
     field_of_view: 60.0,
-    max_ray_length: 60,
+    max_ray_length: 1000,
 
     rot_horizontal: 124.0,
     rot_vertical: 215.0,
 
-    X: 0.1,
-    Y: 0.1,
-    Z: -5.0,
+    X: 0.0,
+    Y: 0.0,
+    Z: 0.0,
 };
 
 static mut GRAPHIC_PREF: GraphicPref = GraphicPref {
@@ -56,12 +59,12 @@ pub struct Pref {
 
 static mut PREF: Pref = Pref {
     pref_present_mode: vk::PresentModeKHR::MAILBOX, 
-    img_scale: 2,
+    img_scale: 1,
 
     key_rot_control_inc: 5.0,
 };
 
-// Something
+// Something 
 fn main() {
     env_logger::builder().format(|buf, record| { let mut bold = buf.style(); bold.set_color(Color::Yellow).set_bold(true); writeln!(buf, "[ {} {} ] {}", chrono::Local::now().format("%H:%M:%S"), bold.value(record.level(), ), record.args(), ) }).init();
     let app_start = Instant::now();
@@ -75,6 +78,7 @@ fn run_graphic_related(app_start: Instant) {
     let event_loop = EventLoop::new();
     let entry = unsafe { Entry::load().unwrap() };
     let status = EngineStatus { recreate_swapchain: false, idle: false, frame_time: Duration::ZERO };
+    let keyboard = Keyboard::new();
 
     // Init VulkanLib Part
     let (window, monitor_list, monitor, instance, debug_util, debug_util_messenger, surface, surface_khr, ) = Vulkan::init_instance(&event_loop, &entry);
@@ -112,27 +116,16 @@ fn run_graphic_related(app_start: Instant) {
 
     let mut render = Render { image, uniform_list, buffer_list, std_buffer_list, descriptor_pool, descriptor_set_layout_list, pipeline_layout, descriptor_set_list, compute_pipeline };
 
-    event_loop.run(move | event, _, control_flow | { * control_flow = ControlFlow::Poll; handle_event(&event, &mut vulkan, &mut render, &app_start, control_flow, ); });
+    event_loop.run(move | event, _, control_flow | { * control_flow = ControlFlow::Poll; handle_event(&event, &mut vulkan, &mut render, &app_start, &keyboard, control_flow, ); });
 }
 
-pub fn handle_event(event: &Event<()>, vulkan: &mut Vulkan, render: &mut Render, app_start: &Instant, control_flow: &mut ControlFlow, ) {
+pub fn handle_event(event: &Event<()>, vulkan: &mut Vulkan, render: &mut Render, app_start: &Instant, keyboard: &Keyboard, control_flow: &mut ControlFlow, ) {
     match event {
         Event::WindowEvent { event: WindowEvent::Resized(..), .. } => { log::info!("Window -> Resize ..."); vulkan.status.recreate_swapchain = true; }
         Event::MainEventsCleared => { vulkan.status.recreate_swapchain = draw(vulkan, render, app_start, ).expect("TICK_FAILED"); }
-        Event::WindowEvent { event: WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(keycode), state, .. }, .. }, .. } => handle_input(keycode, state, &vulkan, ),
+        Event::WindowEvent { event: WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(keycode), state, .. }, .. }, .. } => Keyboard::handle_input(keyboard, keycode, state, &vulkan, ),
         Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => * control_flow = ControlFlow::Exit,
         Event::LoopDestroyed => Vulkan::wait_for_gpu(&vulkan.device).expect("FAILED_WORK"), _ => (),
-    }
-}
-
-pub fn handle_input(keycode: &VirtualKeyCode, state: &ElementState, vulkan: &Vulkan, ) {
-    match keycode {
-        &VirtualKeyCode::F if state == &ElementState::Pressed => { vulkan.window.set_fullscreen(Some(Fullscreen::Exclusive(vulkan.monitor.video_modes().next().expect("ERR_NO_MONITOR_MODE").clone()))); },
-        &VirtualKeyCode::W if state == &ElementState::Pressed => { unsafe { UNIFORM.rot_vertical += PREF.key_rot_control_inc; }; },
-        &VirtualKeyCode::S if state == &ElementState::Pressed => { unsafe { UNIFORM.rot_vertical -= PREF.key_rot_control_inc; }; },
-        &VirtualKeyCode::A if state == &ElementState::Pressed => { unsafe { UNIFORM.rot_horizontal += PREF.key_rot_control_inc; }; },
-        &VirtualKeyCode::D if state == &ElementState::Pressed => { unsafe { UNIFORM.rot_horizontal -= PREF.key_rot_control_inc; }; },
-        &VirtualKeyCode::Escape if state == &ElementState::Pressed => { vulkan.window.set_fullscreen(None); }, _ => (),
     }
 }
 
