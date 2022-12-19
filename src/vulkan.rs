@@ -8,7 +8,7 @@ use ash::{
 };
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::{window::{Window, WindowBuilder}, event_loop::EventLoop, dpi::PhysicalSize, monitor::MonitorHandle};
-use crate::{data::{Uniform, GraphicPref}, DEBUG, CHUNK_SIZE};
+use crate::{data::{Uniform, GraphicPref}, DEBUG };
 
 pub struct EngineStatus {
     pub recreate_swapchain: bool,
