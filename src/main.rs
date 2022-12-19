@@ -14,6 +14,7 @@ mod vulkan;
 mod pipeline;
 mod data;
 mod key;
+mod service;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const NAME: &str = env!("CARGO_PKG_NAME");
@@ -104,7 +105,7 @@ fn run_graphic_related(app_start: Instant) {
     let std_buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_UNIFORM_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
 
     PipelineData::update_uniform_buffer(&vulkan.device, uniform_list[0].buffer_mem, unsafe { &[UNIFORM] }, );
-    PipelineData::update_voxel_buffer(&vulkan.device, buffer_list[0].buffer_mem, &world_data.voxel_data, );
+    PipelineData::update_world_buffer(&vulkan.device, buffer_list[0].buffer_mem, &world_data.data, );
     PipelineData::update_graphic_pref_buffer(&vulkan.device, std_buffer_list[0].buffer_mem, unsafe { &[GRAPHIC_PREF] }, );
 
     let (descriptor_pool, descriptor_set_layout_list, ) = Render::init_descriptor_pool(&uniform_list, &buffer_list, &std_buffer_list, &vulkan.device, &image, );
