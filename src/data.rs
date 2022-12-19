@@ -64,20 +64,24 @@ impl WorldData {
         WorldData::vec_to_array(children)
     }
 
-    pub fn get_child_index() {
-
+    pub fn choose_child_node(parent: &TreeNode, cur_size: f32, cur_pos: Vector3<f32>, ) -> u32 {
+        for child in CHILD_SIGN {
+            
+        }
+        0
     }
 
-    pub fn insert_node(root: &TreeNode, root_index: u32, root_size: f32, depth: u32, ) {
+    pub fn insert_node(root: &TreeNode, root_index: u32, root_size: f32, size_limit: f32, data: &mut Vec<TreeNode>, ) {
         let cur_node = root; let cur_index = root_index; let cur_size = root_size;
-        for cur_depth in 0 .. depth {
+        while cur_size >= size_limit {
             if cur_node.children == [0; 8] {
                 
             }
             else {
                 let children = WorldData::create_children(cur_node, cur_index, cur_size, );
                 for child_index in 0 .. children.len() {
-                    
+                    cur_node.children[child_index] = data.len() as u32;
+                    data.push(children[child_index]);
                 }
             }
         }
@@ -85,9 +89,8 @@ impl WorldData {
 
     pub fn collect() -> WorldData {
         let mut data: [TreeNode; OCTREE_MAX_NODE] = [TreeNode::new(); OCTREE_MAX_NODE];
+        let mut editable_data: Vec<TreeNode> = vec![];
 
         WorldData { octree_root: 0, data }
     }
-
-    
 }
