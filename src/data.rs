@@ -62,36 +62,38 @@ impl WorldData {
         Service::vec_to_array(children)
     }
 
-    pub fn choose_child_node(parent: &TreeNode, cur_size: f32, cur_pos: Vector3<f32>, ) -> u32 {
+    pub fn choose_child_node(parent: &TreeNode, cur_size: f32, cur_pos: &Vector3<f32>, ) -> usize {
         let mut selected = -1;
         for index in 0 .. CHILD_SIGN.len() {
             let child_boundary = Vector3::new(parent.X + (CHILD_SIGN[index][0] as f32 * cur_size / 2.0), parent.Y + (CHILD_SIGN[index][1] as f32 * cur_size / 2.0),parent.Z + (CHILD_SIGN[index][2] as f32 * cur_size / 2.0));
-            let mut acceptable = false;
-            acceptable = Service::check_boundary([parent.X, child_boundary.x], cur_pos.x, );
-            acceptable = Service::check_boundary([parent.Y, child_boundary.y], cur_pos.y, );
-            acceptable = Service::check_boundary([parent.Z, child_boundary.z], cur_pos.z, );
-            if acceptable { selected = index as i32; break; }
+            let x = Service::check_boundary([parent.X, child_boundary.x], cur_pos.x, );
+            let y = Service::check_boundary([parent.Y, child_boundary.y], cur_pos.y, );
+            let z = Service::check_boundary([parent.Z, child_boundary.z], cur_pos.z, );
+            if x && y && z { selected = index as i32; break; }
         }
-        
-        u32::try_from(selected).unwrap()
+        selected as usize
     }
 
     pub fn insert_node(root_index: u32, root_size: f32, size_limit: f32, data: &mut Vec<TreeNode>, pos_to_insert: Vector3<f32>, ) {
         let mut cur_node = data[root_index as usize]; let mut cur_index = root_index; let mut cur_size = root_size;
-        while cur_size >= size_limit {
+        while (cur_size * 1000.0).fract() == 0.0 {
             if cur_node.children == [0; 8] {
                 let children = WorldData::create_children(&cur_node, cur_index, cur_size, );
                 for child_index in 0 .. children.len() {
                     cur_node.children[child_index] = data.len() as u32;
                     data.push(children[child_index]);
                 }
-                let child_node_index = WorldData::choose_child_node(&cur_node, cur_size, pos_to_insert);
-                cur_node = data[child_node_index as usize]; cur_index = child_node_index; cur_size /= 2.0;
+                log::info!("{} {} {}", pos_to_insert.x, pos_to_insert.y, pos_to_insert.z);
+                let child_node_index = WorldData::choose_child_node(&cur_node, cur_size, &pos_to_insert);
+                log::info!("{} {} {}", data[cur_node.children[child_node_index] as usize].X, data[cur_node.children[child_node_index] as usize].Y, data[cur_node.children[child_node_index] as usize].Z);
+                cur_node = data[cur_node.children[child_node_index] as usize]; cur_index = cur_node.children[child_node_index]; cur_size /= 2.0;
             }
             else {
-                let child_node_index = WorldData::choose_child_node(&cur_node, cur_size, pos_to_insert);
-                cur_node = data[child_node_index as usize]; cur_index = child_node_index; cur_size /= 2.0;
+                let child_node_index = WorldData::choose_child_node(&cur_node, cur_size, &pos_to_insert);
+                cur_node = data[cur_node.children[child_node_index] as usize]; cur_index = cur_node.children[child_node_index]; cur_size /= 2.0;
             }
+
+            log::info!("{}", cur_index);
         }
     }
 
@@ -99,7 +101,7 @@ impl WorldData {
         let mut data: [TreeNode; OCTREE_MAX_NODE] = [TreeNode::new(); OCTREE_MAX_NODE];
         let mut editable_data: Vec<TreeNode> = vec![TreeNode::new()];
 
-        WorldData::insert_node(0, 100.0, 1.0, &mut editable_data, Vector3 { x: 5.0, y: 6.0, z: 6.0 });
+        WorldData::insert_node(0, 100.0, 1.0, &mut editable_data, Vector3::new(5.0, 6.0, 4.0));
 
         WorldData { octree_root: 0, data }
     }

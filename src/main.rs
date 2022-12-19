@@ -59,7 +59,7 @@ pub struct Pref {
 
 static mut PREF: Pref = Pref {
     pref_present_mode: vk::PresentModeKHR::MAILBOX, 
-    img_scale: 1,
+    img_scale: 2,
 
     key_rot_control_inc: 5.0,
 };
