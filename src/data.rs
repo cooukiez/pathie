@@ -1,9 +1,23 @@
 use cgmath::Vector3;
 
-use crate::{CHUNK_SIZE, CHUNK_SIDE_LEN};
+use crate::OCTREE_MAX_NODE;
+
+const CHILD_SIGN: [[i32; 3]; 8] = [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1], [-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1]];
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct TreeNode {
+    pub parent: u32,
+    pub children: [u32; 8],
+
+    pub X: f32,
+    pub Y: f32,
+    pub Z: f32,
+}
 
 pub struct WorldData {
-    pub voxel_data: [i32; CHUNK_SIZE],
+    pub octree_root: u32,
+    pub data: [TreeNode; OCTREE_MAX_NODE],
 }
 
 #[repr(C)]
@@ -28,32 +42,51 @@ pub struct GraphicPref {
     pub empty: u32,
 }
 
+impl TreeNode {
+    pub fn new() -> TreeNode {
+        TreeNode { parent: 0, children: [0; 8], X: 0.0, Y: 0.0, Z: 0.0 }
+    }
+}
+
 impl WorldData {
     pub fn vec_to_array<Type, const Length: usize>(vec: Vec<Type>) -> [Type; Length] { vec.try_into().unwrap_or_else(| vec: Vec<Type> | panic!("ERR_INVALI_LEN -> Expected {} | Got {}", Length, vec.len())) }
-    pub fn pos_to_index(pos: Vector3<i32>, side_length: i32, chunk_size: i32, ) -> i32 { pos.x + (pos.y * side_length) + (pos.z * side_length * side_length) + (chunk_size / 2) }
 
-    pub fn get_voxel_at_pos(pos: Vector3<f32>, voxel_data: &[i32; CHUNK_SIZE], ) -> i32 {
-        let pos_as_int = Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32);
-        let index = WorldData::pos_to_index(pos_as_int, CHUNK_SIDE_LEN as i32, CHUNK_SIZE as i32);
+    pub fn create_children(parent: &TreeNode, parent_index: u32, child_size: f32, ) -> [TreeNode; 8] {
+        let child_pos = | parent_pos: Vector3<f32>, sign: Vector3<i32>, size: f32 | -> Vector3<f32> 
+        { Vector3::new(parent_pos.x + (sign.x as f32* size), parent_pos.y + (sign.y as f32* size), parent_pos.z + (sign.z as f32* size)) };
 
-        voxel_data[index as usize]
+        let children: Vec<TreeNode> = vec![];
+        for sign in CHILD_SIGN {
+            let cur_child_pos = child_pos(Vector3::new(parent.X, parent.Y, parent.Z, ), Vector3::new(sign[0], sign[1], sign[2], ), child_size, );
+            children.push(TreeNode { parent: parent_index, children: [0; 8], X: cur_child_pos.x, Y: cur_child_pos.y, Z: cur_child_pos.z })
+        }
+
+        WorldData::vec_to_array(children)
     }
 
-    pub fn set_voxel_at_pos(pos: Vector3<f32>, voxel_data: &mut [i32; CHUNK_SIZE], value: i32, ) {
-        let pos_as_int = Vector3::new(pos.x as i32, pos.y as i32, pos.z as i32);
-        let index = WorldData::pos_to_index(pos_as_int, CHUNK_SIDE_LEN as i32, CHUNK_SIZE as i32);
+    pub fn get_child_index() {
 
-        voxel_data[index as usize] = value;
+    }
+
+    pub fn insert_node(root: &TreeNode, root_index: u32, root_size: f32, depth: u32, ) {
+        let cur_node = root; let cur_index = root_index; let cur_size = root_size;
+        for cur_depth in 0 .. depth {
+            if cur_node.children == [0; 8] {
+                
+            }
+            else {
+                let children = WorldData::create_children(cur_node, cur_index, cur_size, );
+                for child_index in 0 .. children.len() {
+                    
+                }
+            }
+        }
     }
 
     pub fn collect() -> WorldData {
-        let mut voxel_data: [i32; CHUNK_SIZE] = [-1; CHUNK_SIZE];
+        let mut data: [TreeNode; OCTREE_MAX_NODE] = [TreeNode::new(); OCTREE_MAX_NODE];
 
-        // WorldData::set_voxel_at_pos(Vector3::new(-10.0, 5.0, 10.0), &mut voxel_data, 1);
-        WorldData::set_voxel_at_pos(Vector3::new(0.0, 0.0, -6.0), &mut voxel_data, 1);
-        WorldData::set_voxel_at_pos(Vector3::new(0.0, 0.0, 5.0), &mut voxel_data, 1);
-
-        WorldData { voxel_data }
+        WorldData { octree_root: 0, data }
     }
 
     
