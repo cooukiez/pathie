@@ -28,6 +28,11 @@ const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
+const MOVE_INC_FRONT: f32 = 5.0;
+const MOVE_INC_SIDE: f32 = 5.0;
+const JUMP_INC: f32 = 2.0;
+const ROT_INC: f32 = 5.0;
+
 const OCTREE_MAX_NODE: usize = 2000;
 
 static mut UNIFORM: Uniform = Uniform {
@@ -39,9 +44,9 @@ static mut UNIFORM: Uniform = Uniform {
     rot_horizontal: 124.0,
     rot_vertical: 215.0,
 
-    X: 0.0,
-    Y: 0.0,
-    Z: 0.0,
+    x: 0.0,
+    y: 0.0,
+    z: 0.0,
 };
 
 static mut GRAPHIC_PREF: GraphicPref = GraphicPref {
@@ -52,20 +57,15 @@ pub struct Pref {
     // Render
     pub pref_present_mode: vk::PresentModeKHR,
     pub img_scale: u32,
-
-    // Movement
-    pub key_rot_control_inc: f32,
 }
 
 static mut PREF: Pref = Pref {
     pref_present_mode: vk::PresentModeKHR::MAILBOX, 
     img_scale: 2,
-
-    key_rot_control_inc: 5.0,
 };
 
 // Something 
-fn main() {
+ fn main() {
     env_logger::builder().format(|buf, record| { let mut bold = buf.style(); bold.set_color(Color::Yellow).set_bold(true); writeln!(buf, "[ {} {} ] {}", chrono::Local::now().format("%H:%M:%S"), bold.value(record.level(), ), record.args(), ) }).init();
     let app_start = Instant::now();
 

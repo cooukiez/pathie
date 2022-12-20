@@ -1,70 +1,55 @@
-use cgmath::Vector3;
 use winit::{event::{VirtualKeyCode, ElementState}, window::Fullscreen};
 
-use crate::{vulkan::Vulkan, UNIFORM};
+use crate::{vulkan::Vulkan, UNIFORM, data::Uniform, MOVE_INC_FRONT, MOVE_INC_SIDE, JUMP_INC};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum Action {
-    X,
-    Y,
-    Z,
+    NONE,
+
+    FORWARD,
+    BACKWARD,
+    LEFT,
+    RIGHT,
+
+    JUMP,
 
     FULLSCREEN,
     ESCAPE,
 }
 
-#[derive(PartialEq)]
-pub enum BindingType {
-    GENERAL,
-    MOVEMENT,
-}
-
-pub struct Binding {
-    pub key: VirtualKeyCode,
-    pub action: Action,
-    pub value: i32,
-    pub binding_type: BindingType,
-}
-
 pub struct Keyboard {
-    pub binding_list: Vec<Binding>,
+    pub binding_list: [Action; 256],
 }
 
 impl Keyboard {
     pub fn new() -> Keyboard {
-        let forward = Binding { key: VirtualKeyCode::W, action: Action::Z, value: 1, binding_type: BindingType::MOVEMENT };
-        let backward = Binding { key: VirtualKeyCode::S, action: Action::Z, value: -1, binding_type: BindingType::MOVEMENT };
-        let left = Binding { key: VirtualKeyCode::A, action: Action::X, value: -1, binding_type: BindingType::MOVEMENT };
-        let right = Binding { key: VirtualKeyCode::D, action: Action::X, value: 1, binding_type: BindingType::MOVEMENT };
+        let mut binding_list = [Action::NONE; 256];
 
-        let fullscreen = Binding { key: VirtualKeyCode::F, action: Action::FULLSCREEN, value: 0, binding_type: BindingType::GENERAL };
-        let escape = Binding { key: VirtualKeyCode::Escape, action: Action::ESCAPE, value: 0, binding_type: BindingType::GENERAL };
+        binding_list[VirtualKeyCode::W as usize] = Action::FORWARD;
+        binding_list[VirtualKeyCode::S as usize] = Action::BACKWARD;
+        binding_list[VirtualKeyCode::A as usize] = Action::LEFT;
+        binding_list[VirtualKeyCode::D as usize] = Action::RIGHT;
 
-        let binding_list: Vec<Binding> = vec![forward, backward, left, right, fullscreen, escape];
+        binding_list[VirtualKeyCode::Space as usize] = Action::JUMP;
+
+        binding_list[VirtualKeyCode::F as usize] = Action::FULLSCREEN;
+        binding_list[VirtualKeyCode::Escape as usize] = Action::ESCAPE;
 
         Keyboard { binding_list }
     }
 
-    pub fn change_pos(action: &Action, value: f32, ) {
-        match action {
-            Action::X => unsafe { UNIFORM.X += value },
-            Action::Y => unsafe { UNIFORM.Y += value },
-            Action::Z => unsafe { UNIFORM.Z += value }, _ => (),
-        }
-    }
-
-    pub fn general_operation(action: &Action, vulkan: &Vulkan, ) {
-        match action {
-            Action::FULLSCREEN => { vulkan.window.set_fullscreen(Some(Fullscreen::Exclusive(vulkan.monitor.video_modes().next().expect("ERR_NO_MONITOR_MODE").clone()))); },
-            Action::ESCAPE => { vulkan.window.set_fullscreen(None); }, _ => (),
-        }
-    }
-
     pub fn handle_input(keyboard: &Keyboard, keycode: &VirtualKeyCode, state: &ElementState, vulkan: &Vulkan, ) {
-        for binding in &keyboard.binding_list {
-            if keycode == &binding.key && state == &ElementState::Pressed {
-                if binding.binding_type == BindingType::MOVEMENT { Keyboard::change_pos(&binding.action, binding.value as f32); }
-                if binding.binding_type == BindingType::GENERAL { Keyboard::general_operation(&binding.action, vulkan); }
+        if state == &ElementState::Pressed {
+            match keyboard.binding_list[* keycode as usize] {
+                Action::FORWARD => unsafe { UNIFORM.z += MOVE_INC_FRONT },
+                Action::BACKWARD => unsafe { UNIFORM.z -= MOVE_INC_FRONT },
+                Action::LEFT => unsafe { UNIFORM.x -= MOVE_INC_SIDE },
+                Action::RIGHT => unsafe { UNIFORM.z += MOVE_INC_SIDE },
+
+                Action::JUMP => unsafe { UNIFORM.y += JUMP_INC },
+                
+                Action::FULLSCREEN => vulkan.window.set_fullscreen(Some(Fullscreen::Exclusive(vulkan.monitor.video_modes().next().expect("ERR_NO_MONITOR_MODE").clone()))),
+                Action::ESCAPE => vulkan.window.set_fullscreen(None), _ => (),
             }
         }
     }

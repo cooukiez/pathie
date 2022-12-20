@@ -8,7 +8,7 @@ impl Service {
     }
 
     pub fn check_boundary(boundary: [f32; 2], number: f32, ) -> bool {
-        if boundary[0] < boundary[1] { boundary[0] < number && number < boundary[1] } else { boundary[1] < number && number < boundary[0] }
+        if boundary[0] < boundary[1] { boundary[0] <= number && number <= boundary[1] } else { boundary[1] <= number && number <= boundary[0] }
     }
 
     pub fn check_in_volume(first: &Vector3<f32>, sec: &Vector3<f32>, check: &Vector3<f32>, ) -> bool {
