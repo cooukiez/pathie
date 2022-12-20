@@ -6,7 +6,7 @@ use env_logger::fmt::Color;
 
 use pipeline::{Render};
 use vulkan::{Vulkan, EngineStatus, PipelineData, BufferObj};
-use winit::{event_loop::{ControlFlow, EventLoop}, event::{Event, WindowEvent, KeyboardInput, ElementState, VirtualKeyCode}, window::{Fullscreen}};
+use winit::{event_loop::{ControlFlow, EventLoop}, event::{Event, WindowEvent, KeyboardInput}};
 
 use crate::key::Keyboard;
 
@@ -16,7 +16,7 @@ mod data;
 mod key;
 mod service;
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+// const VERSION: &str = env!("CARGO_PKG_VERSION");
 const NAME: &str = env!("CARGO_PKG_NAME");
 const ENGINE_NAME: &str = "VulkanEngine";
 
@@ -31,7 +31,7 @@ const HEIGHT: u32 = 600;
 const MOVE_INC_FRONT: f32 = 5.0;
 const MOVE_INC_SIDE: f32 = 5.0;
 const JUMP_INC: f32 = 2.0;
-const ROT_INC: f32 = 5.0;
+// const ROT_INC: f32 = 5.0;
 
 const OCTREE_MAX_NODE: usize = 2000;
 

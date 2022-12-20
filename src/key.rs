@@ -1,6 +1,6 @@
 use winit::{event::{VirtualKeyCode, ElementState}, window::Fullscreen};
 
-use crate::{vulkan::Vulkan, UNIFORM, data::Uniform, MOVE_INC_FRONT, MOVE_INC_SIDE, JUMP_INC};
+use crate::{vulkan::Vulkan, UNIFORM, MOVE_INC_FRONT, MOVE_INC_SIDE, JUMP_INC};
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Action {
