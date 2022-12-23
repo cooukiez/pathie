@@ -101,7 +101,6 @@ fn run_graphic_related(app_start: Instant) {
     let world_data = WorldData::collect();
     let buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_STORAGE_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, ), ];
     
-
     let std_buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_UNIFORM_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
 
     PipelineData::update_uniform_buffer(&vulkan.device, uniform_list[0].buffer_mem, unsafe { &[UNIFORM] }, );
