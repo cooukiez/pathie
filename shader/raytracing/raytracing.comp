@@ -23,6 +23,7 @@ layout (set = 1, binding = 0) uniform UniformBuffer {
 
 	uint octreeRootIndex;
 	uint maxSearchDepth;
+	uint startNode;
 	
 	float X;
 	float Y;
@@ -59,31 +60,6 @@ vec3 getOuterPos(in vec3 innerPos, in vec3 dir, in float diameter) {
 float betweenVectorGroup(in vec3 bottomLeft, in vec3 topRight, in vec3 vector) {
     vec3 stepVector = step(bottomLeft, vector) - step(topRight, vector);
     return stepVector.x * stepVector.y * stepVector.z; 
-}
-
-vec3[2] parentCenterAndChildPos(in TreeNode parent, in uint[3] childSign, in float childDistance) {
-	vec3 parentCenter = vec3(octreeData[parentIndex].X, octreeData[parentIndex].Y, octreeData[parentIndex].Z);
-	vec3 childPos = getOuterPos(parentCenter, vec3(childSign[0], childSign[1], childSign[2]), childDistance);
-
-	return [parentCenter, childPos];
-}
-
-uint chooseChildNode(in uint parentIndex, in vec3 posToCheck) {
-	TreeNode parent = octreeData[parentIndex];
-	float childDist = float(octreeData[parentIndex].span) / 2;
-
-	uint selectedChild = 0;
-	for (int iter = 0; iter < CHILD_SIGN.length() / 2; iter += 1) {
-		vec3[2] info = parentCenterAndChildPos(parent, CHILD_SIGN[iter], childDist);
-		selectedChild = iter * betweenVectorGroup(info[0], infop[1], posToCheck);
-	}
-
-	for (int iter = CHILD_SIGN.length() / 2; iter < CHILD_SIGN.length(); iter += 1) {
-		vec3[2] info = parentCenterAndChildPos(parent, CHILD_SIGN[iter], childDist);
-		selectedChild = iter * betweenVectorGroup(info[1], infop[0], posToCheck);
-	}
-
-	return selectedChild;
 }
 
 int getVoxelAtPos(in uint rootIndex, in vec3 voxPos, in uint maxSearchDepth) {
