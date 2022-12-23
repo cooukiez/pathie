@@ -6,6 +6,7 @@
 # define PI 3.141592654
 
 # define OCTREE_MAX_NODE 2000
+# define CHILD_SIGN [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1], [-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1]]
 
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
@@ -13,11 +14,15 @@ layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 layout (set = 1, binding = 0) uniform UniformBuffer {
 	uint time;
 
-	float fieldOfView;
+	float rawfieldOfView;
+	float imgCamDistance;
 	uint maxRayLen;
 
 	float rotHorizontal;
 	float rotVertical;
+
+	uint octreeRootIndex;
+	uint maxSearchDepth;
 	
 	float X;
 	float Y;
@@ -42,19 +47,50 @@ layout (set = 3, binding = 0) readonly buffer GraphicPref {
 	uint empty;
 } graphicPref;
 
-float getDistanceNext(float input_float, float dir, uint voxSpan) {
-	if (dir < 0.0) { return ceil(input_float - voxSpan) - input_float; }
-	else { return floor(input_float + voxSpan) - input_float; }
+float getDistanceNext(in float inputFloat, in float dir, in uint voxSpan) {
+	if (dir < 0.0) { return ceil(inputFloat - voxSpan) - inputFloat; }
+	else { return floor(inputFloat + voxSpan) - inputFloat; }
 }
 
-uint posToIndex(ivec3 pos, int sideLength, int chunkSize) {
-	return uint(pos.x + (pos.y * sideLength) + (pos.z * sideLength * sideLength) + (chunkSize / 2)); 
+vec3 getOuterPos(in vec3 innerPos, in vec3 dir, in float diameter) {
+	return innerPos + (dir * diameter);
 }
 
-int getVoxelAtPos(vec3 pos) {
-	ivec3 posAsInt = ivec3(pos);
-	uint index = posToIndex(posAsInt, CHUNK_SIDE_LEN, CHUNK_SIZE);
-  
+float betweenVectorGroup(in vec3 bottomLeft, in vec3 topRight, in vec3 vector) {
+    vec3 stepVector = step(bottomLeft, vector) - step(topRight, vector);
+    return stepVector.x * stepVector.y * stepVector.z; 
+}
+
+vec3[2] parentCenterAndChildPos(in TreeNode parent, in uint[3] childSign, in float childDistance) {
+	vec3 parentCenter = vec3(octreeData[parentIndex].X, octreeData[parentIndex].Y, octreeData[parentIndex].Z);
+	vec3 childPos = getOuterPos(parentCenter, vec3(childSign[0], childSign[1], childSign[2]), childDistance);
+
+	return [parentCenter, childPos];
+}
+
+uint chooseChildNode(in uint parentIndex, in vec3 posToCheck) {
+	TreeNode parent = octreeData[parentIndex];
+	float childDist = float(octreeData[parentIndex].span) / 2;
+
+	uint selectedChild = 0;
+	for (int iter = 0; iter < CHILD_SIGN.length() / 2; iter += 1) {
+		vec3[2] info = parentCenterAndChildPos(parent, CHILD_SIGN[iter], childDist);
+		selectedChild = iter * betweenVectorGroup(info[0], infop[1], posToCheck);
+	}
+
+	for (int iter = CHILD_SIGN.length() / 2; iter < CHILD_SIGN.length(); iter += 1) {
+		vec3[2] info = parentCenterAndChildPos(parent, CHILD_SIGN[iter], childDist);
+		selectedChild = iter * betweenVectorGroup(info[1], infop[0], posToCheck);
+	}
+
+	return selectedChild;
+}
+
+int getVoxelAtPos(in uint rootIndex, in vec3 voxPos, in uint maxSearchDepth) {
+	uint curIndex = rootIndex;
+	for (int iter = 0; iter < maxSearchDepth; iter += 1) {
+		
+	}
 }
 
 void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos, out int test) {
@@ -81,11 +117,15 @@ void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos, ou
 	}
 }
 
+vec2 getFieldOfView(in vec2 imageSize) {
+	return vec2((imageSize.y / imageSize.x) * uniformBuffer.rawfieldOfView, uniformBuffer.rawfieldOfView);
+}
+
 vec3 getCameraDirection(in vec2 imageSize, in vec2 pixelCoord) {
-	float verticalFieldOfView = (imageSize.y / imageSize.x) * uniformBuffer.fieldOfView;
-	
-	float horizontal = (uniformBuffer.fieldOfView / imageSize.x) * pixelCoord.x - uniformBuffer.fieldOfView / 2;
-	float vertical = (vertical_field / imageSize.y) * pixelCoord.y - vertical_field / 2;
+	vec2 fieldOfView = getFieldOfView(imageSize);
+
+	float horizontalDegree = (fieldOfView.x / imageSize.x) * pixelCoord.x - fieldOfView.x / 2;
+	float verticalDegree = (fieldOfView.y / imageSize.y) * pixelCoord.y - fieldOfView.y / 2;
 
 	return vec2(horizontal, vertical);
 }
