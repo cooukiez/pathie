@@ -44,6 +44,8 @@ static mut UNIFORM: Uniform = Uniform {
     rot_horizontal: 124.0,
     rot_vertical: 215.0,
 
+    octree_root_index: 0,
+
     x: 0.0,
     y: 0.0,
     z: 0.0,
@@ -98,7 +100,7 @@ fn run_graphic_related(app_start: Instant) {
 
     let uniform_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::UNIFORM_BUFFER, DEFAULT_UNIFORM_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];
 
-    let world_data = WorldData::collect();
+    let world_data = WorldData::collect(); unsafe { UNIFORM.octree_root_index = world_data.octree_root }
     let buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_STORAGE_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, ), ];
     
     let std_buffer_list: Vec<BufferObj> = vec![PipelineData::init_storage_buffer(vk::BufferUsageFlags::STORAGE_BUFFER, DEFAULT_UNIFORM_BUFFER_SIZE, &vulkan.device, &vulkan.physical_device_memory_prop, )];

@@ -31,6 +31,8 @@ pub struct Uniform {
 
     pub rot_horizontal: f32,
     pub rot_vertical: f32,
+
+    pub octree_root_index: u32,
     
     pub x: f32,
     pub y: f32,
@@ -52,17 +54,17 @@ impl TreeNode {
         TreeNode { parent, span, children: [0; 8], x: pos.x, y: pos.y, z: pos.z }
     }
 
-    pub fn child_boundary(&self, sign: &Vector3<i32>, size: u32, ) -> Vector3<f32> {
-        Vector3::new(self.x + (sign.x as f32 * size as f32), self.y + (sign.y as f32 * size as f32), self.z + (sign.z as f32 * size as f32))
+    pub fn get_outer_pos(&self, sign: &Vector3<i32>, diameter: u32, ) -> Vector3<f32> {
+        Vector3::new(self.x + (sign.x as f32 * diameter as f32), self.y + (sign.y as f32 * diameter as f32), self.z + (sign.z as f32 * diameter as f32))
     }
 
     pub fn create_child(&self, sign: &Vector3<i32>, parent: u32, ) -> TreeNode {
-        let child_pos = self.child_boundary(sign, self.span / 4);
+        let child_pos = self.get_outer_pos(sign, self.span / 4);
         TreeNode::new(parent, self.span / 2, child_pos, )
     }
 
     pub fn check_pos_in_child(&self, sign: &Vector3<i32>, cur_pos: Vector3<f32>, ) -> bool {
-        Service::check_in_volume(&Vector3::new(self.x, self.y, self.z), &self.child_boundary(sign, self.span / 2), &cur_pos, )
+        Service::check_in_volume(&Vector3::new(self.x, self.y, self.z), &self.get_outer_pos(sign, self.span / 2), &cur_pos, )
     }
 }
 

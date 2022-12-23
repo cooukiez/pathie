@@ -7,11 +7,11 @@ impl Service {
         vec.try_into().unwrap_or_else(| vec: Vec<Type> | panic!("ERR_INVALI_LEN -> Expected {} | Got {}", Length, vec.len()))
     }
 
-    pub fn check_boundary(boundary: [f32; 2], number: f32, ) -> bool {
-        if boundary[0] < boundary[1] { boundary[0] <= number && number <= boundary[1] } else { boundary[1] <= number && number <= boundary[0] }
+    pub fn check_number_in_range(range: [f32; 2], number: f32, ) -> bool {
+        if range[0] < range[1] { range[0] <= number && number <= range[1] } else { range[1] <= number && number <= range[0] }
     }
 
     pub fn check_in_volume(first: &Vector3<f32>, sec: &Vector3<f32>, check: &Vector3<f32>, ) -> bool {
-        Self::check_boundary([first.x, sec.x], check.x, ) && Self::check_boundary([first.y, sec.y], check.y, ) && Self::check_boundary([first.z, sec.z], check.z, )
+        Self::check_number_in_range([first.x, sec.x], check.x, ) && Self::check_number_in_range([first.y, sec.y], check.y, ) && Self::check_number_in_range([first.z, sec.z], check.z, )
     }
 }
