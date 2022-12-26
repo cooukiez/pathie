@@ -9,6 +9,7 @@ const CHILD_SIGN: [[i32; 3]; 8] = [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -
 pub struct TreeNode {
     pub parent: u32,
     pub children: [u32; 8],
+    pub space_index: u32,
     pub span: u32,
 
     pub x: f32,
@@ -33,7 +34,9 @@ pub struct Uniform {
     pub rot_vertical: f32,
 
     pub octree_root_index: u32,
+    pub max_search_depth: u32,
     
+    pub node_at_pos: u32,
     pub x: f32,
     pub y: f32,
     pub z: f32,
@@ -47,20 +50,20 @@ pub struct GraphicPref {
 
 impl TreeNode {
     pub fn empty() -> TreeNode {
-        TreeNode { parent: 0, span: 0, children: [0; 8], x: 0.0, y: 0.0, z: 0.0 }
+        TreeNode { parent: 0, span: 0, space_index: 0, children: [0; 8], x: 0.0, y: 0.0, z: 0.0 }
     }
 
-    pub fn new(parent: u32, span: u32, pos: Vector3<f32>, ) -> TreeNode {
-        TreeNode { parent, span, children: [0; 8], x: pos.x, y: pos.y, z: pos.z }
+    pub fn new(parent: u32, span: u32, space_index: u32, pos: Vector3<f32>, ) -> TreeNode {
+        TreeNode { parent, span, children: [0; 8], space_index, x: pos.x, y: pos.y, z: pos.z }
     }
 
     pub fn get_outer_pos(&self, sign: &Vector3<i32>, diameter: u32, ) -> Vector3<f32> {
         Vector3::new(self.x + (sign.x as f32 * diameter as f32), self.y + (sign.y as f32 * diameter as f32), self.z + (sign.z as f32 * diameter as f32))
     }
 
-    pub fn create_child(&self, sign: &Vector3<i32>, parent: u32, ) -> TreeNode {
-        let child_pos = self.get_outer_pos(sign, self.span / 4);
-        TreeNode::new(parent, self.span / 2, child_pos, )
+    pub fn create_child(&self, space_index: usize, parent: u32, ) -> TreeNode {
+        let child_pos = self.get_outer_pos(&Vector3::new(CHILD_SIGN[space_index][0], CHILD_SIGN[space_index][1], CHILD_SIGN[space_index][2]), self.span / 4, );
+        TreeNode::new(parent, self.span / 2, space_index as u32, child_pos, )
     }
 
     pub fn check_pos_in_child(&self, sign: &Vector3<i32>, cur_pos: Vector3<f32>, ) -> bool {
@@ -71,7 +74,7 @@ impl TreeNode {
 impl WorldData {
     pub fn create_children(parent: &TreeNode, parent_index: u32, ) -> [TreeNode; 8] {
         let mut children: Vec<TreeNode> = vec![];
-        for sign in CHILD_SIGN { children.push(parent.create_child(&Vector3::new(sign[0], sign[1], sign[2]), parent_index)) }
+        for index in 0 .. CHILD_SIGN.len() { children.push(parent.create_child(index, parent_index, )) }
         Service::vec_to_array(children)
     }
 
@@ -104,7 +107,7 @@ impl WorldData {
 
     pub fn collect() -> WorldData { 
         let mut editable_data: Vec<TreeNode> = vec![TreeNode::empty()];
-        editable_data[0] = TreeNode::new(0, 64, Vector3::new(0.0, 0.0, 0.0, ), );
+        editable_data[0] = TreeNode::new(0, 64, 0, Vector3::new(0.0, 0.0, 0.0, ), );
         WorldData::insert_node(0, 1,&mut editable_data, Vector3::new(5.0, 6.0, 4.0), );
         WorldData::insert_node(0, 1,&mut editable_data, Vector3::new(5.0, 6.0, 5.0), );
 

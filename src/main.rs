@@ -45,7 +45,9 @@ static mut UNIFORM: Uniform = Uniform {
     rot_vertical: 215.0,
 
     octree_root_index: 0,
+    max_search_depth: 100,
 
+    node_at_pos: 0,
     x: 0.0,
     y: 0.0,
     z: 0.0,

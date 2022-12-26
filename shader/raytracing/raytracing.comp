@@ -6,7 +6,6 @@
 # define PI 3.141592654
 
 # define OCTREE_MAX_NODE 2000
-# define CHILD_SIGN [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1], [-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1]]
 
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
@@ -23,8 +22,11 @@ layout (set = 1, binding = 0) uniform UniformBuffer {
 
 	uint octreeRootIndex;
 	uint maxSearchDepth;
-	uint startNode;
+
+	uint[8][3] adjacentNode,
+	uint[8][3] childSign,
 	
+	uint nodeAtPos;
 	float X;
 	float Y;
 	float Z;
@@ -33,6 +35,7 @@ layout (set = 1, binding = 0) uniform UniformBuffer {
 struct TreeNode {
 	uint parent;
 	uint[8] children;
+	uint spaceIndex;
 	uint span;
 
 	float X;
@@ -49,37 +52,83 @@ layout (set = 3, binding = 0) readonly buffer GraphicPref {
 } graphicPref;
 
 float getDistanceNext(in float inputFloat, in float dir, in uint voxSpan) {
-	if (dir < 0.0) { return ceil(inputFloat - voxSpan) - inputFloat; }
-	else { return floor(inputFloat + voxSpan) - inputFloat; }
+	return trunc(inputFloat + (voxSpan * dir)) - inputFloat;
+}
+
+vec3 childSignToVec(in uint[3] childSign) {
+	return vec3(childSign[0], childSign[1], childSign[2]);
 }
 
 vec3 getOuterPos(in vec3 innerPos, in vec3 dir, in float diameter) {
 	return innerPos + (dir * diameter);
 }
 
-float betweenVectorGroup(in vec3 bottomLeft, in vec3 topRight, in vec3 vector) {
-    vec3 stepVector = step(bottomLeft, vector) - step(topRight, vector);
-    return stepVector.x * stepVector.y * stepVector.z; 
+// 1 = inside | 0 = outside
+float betweenVectorGroup(in vec3 first, in vec3 sec, in vec3 vector) {
+    vec3 stepVector = step(min(first, sec), vector) - step(max(first, sec), vector);
+    return stepVector.x * stepVector.y * stepVector.z;
 }
 
-int getVoxelAtPos(in uint rootIndex, in vec3 voxPos, in uint maxSearchDepth) {
-	uint curIndex = rootIndex;
-	for (int iter = 0; iter < maxSearchDepth; iter += 1) {
+uint getNextVox(in uint curIndex, in ivec3 nextPos, in ivec3 dir) {
+	TreeNode curVox = octreeData[curIndex];
+	uint spaceIndex = curVox.spaceIndex;
+
+	vec3 bottomLeft = vec3(0, 0, 0);
+	vec3 topRight = vec3(0, 0, 0);
+
+	float nextPosInParent = 0.0;
+
+	uint[3] adjacent;
+	uint selectedDir;
+	uint nextNode = 0;
+
+	for (int iter = 0; iter < uniformBuffer.maxSearchDepth; iter += 1) {
+		bottomLeft = getOuterPos(vec3(curVox.X, curVox.Y, curVox.Z), vec3(-1, -1, -1), curVox.span / 2);
+		topRight = getOuterPos(vec3(curVox.X, curVox.Y, curVox.Z), vec3(1, 1, 1), curVox.span / 2);
 		
+		nextPosInParent = betweenVectorGroup(bottomLeft, topRight, curPos);
+
+		if (nextPosInParent > 0.0)	{
+			adjacent = uniformBuffer.adjacentNode[spaceIndex];
+			selectedDir = dir.x * 0 + dir.y * 1 + dir.z * 2;
+
+			nextNode = adjacent[selectedDir];
+			curIndex = curVox.children[nextNode];
+			curVox = octreeData[curIndex];
+			spaceIndex = curVox.spaceIndex;
+
+			if (curVox.children != [0, 0, 0, 0, 0, 0, 0, 0]) {
+				// select child
+			}
+		}
+		else {
+			if (curVox.parent == uniformBuffer.octreeRootIndex) { break; }
+			
+			curIndex = curVox.parent;
+			curVox = octreeData[curIndex];
+			spaceIndex = curVox.spaceIndex;
+		}
 	}
 }
 
-void castRay(in vec2 dir, inout vec3 curPos, out float len, out int voxAtPos, out int test) {
+void castRay(in vec2 dir, inout uint curIndex, inout vec3 curPos, out float len, out int voxAtPos) {
 	float alpha = dir.x * PI / 180.0;
 	float beta = dir.y * PI / 180.0;
 	
 	vec3 unit = vec3(abs(cos(alpha) * cos(beta)) * sign(sin(alpha)), sin(beta), abs(sin(alpha) * cos(beta)) * sign(cos(alpha)));
-	
-	float selectedLen = 0;
+
 	vec3 distNextVox = vec3(0, 0, 0);
 	vec3 lengthCertainDir = vec3(0, 0, 0);
 
+	float selectedLen = 0;
+	float inCurNode = 0;
+
+	uint nodeWithChild = 0;
+
 	for (int iter = 0; iter < uniformBuffer.maxRayLen; iter += 1) {
+		curVox = octreeData[curIndex];
+		posBefore = ivec3(curPos);
+
 		distNextVox = vec3(getDistanceNext(curPos.x, unit.x), getDistanceNext(curPos.y, unit.y), getDistanceNext(curPos.z, unit.z));
 		lengthCertainDir = vec3(abs(distNextVox.x / unit.x), abs(distNextVox.y / unit.y), abs(distNextVox.z / unit.z));
 
@@ -112,11 +161,11 @@ void main () {
 	
 	vec3 curPos = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
 	vec2 dir = getCameraDirection(vec2(imageSize * 16), vec2(pixelCoord));
+	uint curIndex = uniformBuffer.nodeAtPos;
 	float len = 0;
 	int voxAtPos = 0;
-	int test = 0;
 
-	castRay(dir, curPos, len, voxAtPos, test);
+	castRay(dir, curIndex, curPos, len, voxAtPos);
 
 	// debugPrintfEXT("");
 
