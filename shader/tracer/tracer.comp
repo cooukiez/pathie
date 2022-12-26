@@ -71,43 +71,41 @@ float betweenVectorGroup(in vec3 first, in vec3 sec, in vec3 vector) {
 
 uint getNextVox(in uint curIndex, in ivec3 nextPos, in ivec3 dir) {
 	TreeNode curVox = octreeData[curIndex];
-	uint spaceIndex = curVox.spaceIndex;
 
 	vec3 bottomLeft = vec3(0, 0, 0);
 	vec3 topRight = vec3(0, 0, 0);
 
 	float nextPosInParent = 0.0;
+	
+	uint[8][3] adjacentNode;
+	
+	uint curLev = 0;
+	uint[8] levSpaceIndex = 0
 
-	uint[3] adjacent;
-	uint selectedDir;
-	uint nextNode = 0;
-
-	for (int iter = 0; iter < uniformBuffer.maxSearchDepth; iter += 1) {
+	for (; curLev < uniformBuffer.maxSearchDepth; curLev += 1) {
 		bottomLeft = getOuterPos(vec3(curVox.X, curVox.Y, curVox.Z), vec3(-1, -1, -1), curVox.span / 2);
 		topRight = getOuterPos(vec3(curVox.X, curVox.Y, curVox.Z), vec3(1, 1, 1), curVox.span / 2);
 		
 		nextPosInParent = betweenVectorGroup(bottomLeft, topRight, curPos);
 
-		if (nextPosInParent > 0.0)	{
-			adjacent = uniformBuffer.adjacentNode[spaceIndex];
-			selectedDir = dir.x * 0 + dir.y * 1 + dir.z * 2;
-
-			nextNode = adjacent[selectedDir];
+		if (nextPosInParent > 0.0) { break; }
+		else {
+			curIndex = curVox.parent;
+			curVox = octreeData[curIndex];
+			levSpaceIndex[curLev] = curVox.spaceIndex;
+		}
+	}
+	
+	adjacent = uniformBuffer.adjacentNode[spaceIndex];
+	selectedDir = dir.x * 0 + dir.y * 1 + dir.z * 2;
+	
+	nextNode = adjacent[selectedDir];
 			curIndex = curVox.children[nextNode];
 			curVox = octreeData[curIndex];
 			spaceIndex = curVox.spaceIndex;
-
-			if (curVox.children != [0, 0, 0, 0, 0, 0, 0, 0]) {
-				// select child
-			}
-		}
-		else {
-			if (curVox.parent == uniformBuffer.octreeRootIndex) { break; }
-			
-			curIndex = curVox.parent;
-			curVox = octreeData[curIndex];
-			spaceIndex = curVox.spaceIndex;
-		}
+	
+	if (curVox.children != [0, 0, 0, 0, 0, 0, 0, 0]) {
+		// select child
 	}
 }
 
