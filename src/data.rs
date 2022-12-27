@@ -71,37 +71,44 @@ impl TreeNode {
         TreeNode::new(parent, self.span / 2.0, space_index as u32, child_pos, )
     }
 
-    pub fn check_pos_in_child(&self, sign: &Vector3<i32>, cur_pos: Vector3<f32>, ) -> bool {
-        Service::check_in_volume(&Vector3::new(self.x, self.y, self.z), &self.get_outer_pos(sign, self.span / 2), &cur_pos, )
+    pub fn choose_child_node(&self, cur_pos: Vector3<f32>, ) -> u32 {
+        let parent_pos = Vector3::new(self.x, self.y, self.z);
+
+        let horizontal = Service::check_number_in_range([parent_pos.x, parent_pos.x + self.span / 2.0], cur_pos.x, ) as u32 as f32;
+        let vertical = Service::check_number_in_range([parent_pos.y, parent_pos.y + self.span / 2.0], cur_pos.y, ) as u32 as f32;
+        let depth = Service::check_number_in_range([parent_pos.z, parent_pos.z + self.span / 2.0], cur_pos.z, ) as u32 as f32;
+
+        Service::pos_to_index(&Vector3::new(horizontal, vertical, depth), 2.0)
+    }
+
+    pub fn create_children(&self, parent_index: u32, ) -> [TreeNode; 8] {
+        let mut children: Vec<TreeNode> = vec![];
+
+        for index in 0 .. self.children.len() {
+            children.push(self.create_child(index, parent_index, ))
+        }
+
+        Service::vec_to_array(children)
     }
 }
 
 impl WorldData {
-    pub fn create_children(parent: &TreeNode, parent_index: u32, ) -> [TreeNode; 8] {
-        let mut children: Vec<TreeNode> = vec![];
-        for index in 0 .. parent.children.len() { children.push(parent.create_child(index, parent_index, )) }
-        Service::vec_to_array(children)
-    }
+    
 
-    pub fn choose_child_node(parent: &TreeNode, cur_pos: Vector3<f32>, ) -> Option<&u32> {
-        for (index, child, ) in parent.children.iter().enumerate() 
-        { if parent.check_pos_in_child(&Vector3::new(CHILD_SIGN[index][0], CHILD_SIGN[index][1], CHILD_SIGN[index][2]), cur_pos) { return Some(child) } } None
-    }
-
-    pub fn insert_node(root_index: u32, min_span: u32, data: &mut Vec<TreeNode>, pos_to_insert: Vector3<f32>, ) {
+    pub fn insert_node(root_index: u32, min_span: f32, data: &mut Vec<TreeNode>, pos_to_insert: Vector3<f32>, ) {
         let mut cur_index = root_index;
         loop {
             if data[cur_index as usize].span <= min_span { break; }
             if data[cur_index as usize].children == [0; 8] {
-                let children = Self::create_children(&data[cur_index as usize], cur_index, );
+                let children = &data[cur_index as usize].create_children(cur_index);
 
                 for (index, child, ) in children.iter().enumerate() 
                 { data[cur_index as usize].children[index] = data.len() as u32; data.push(child.to_owned()); }
             }
 
-            let child_node_index = Self::choose_child_node(&data[cur_index as usize], pos_to_insert.clone());
+            let child_node_index = &data[cur_index as usize].choose_child_node(pos_to_insert.clone());
             
-            cur_index = child_node_index.unwrap().to_owned();
+            cur_index = child_node_index.clone();
         }
     }
 
@@ -112,9 +119,9 @@ impl WorldData {
 
     pub fn collect() -> WorldData { 
         let mut editable_data: Vec<TreeNode> = vec![TreeNode::empty()];
-        editable_data[0] = TreeNode::new(0, 64, 0, Vector3::new(0.0, 0.0, 0.0, ), );
-        WorldData::insert_node(0, 1,&mut editable_data, Vector3::new(5.0, 6.0, 4.0), );
-        WorldData::insert_node(0, 1,&mut editable_data, Vector3::new(5.0, 6.0, 5.0), );
+        editable_data[0] = TreeNode::new(0, 64.0, 0, Vector3::new(0.0, 0.0, 0.0, ), );
+        WorldData::insert_node(0, 1.0,&mut editable_data, Vector3::new(5.0, 6.0, 4.0), );
+        WorldData::insert_node(0, 1.0,&mut editable_data, Vector3::new(5.0, 6.0, 5.0), );
 
         let octree = Self::format_octree(&mut editable_data.clone());
         WorldData { octree_root: 0, data: octree }

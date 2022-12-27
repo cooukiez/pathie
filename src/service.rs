@@ -19,7 +19,7 @@ impl Service {
         Vector3::new(((index % (side_len * side_len)) % side_len) as f32, (index.rem_euclid(side_len * side_len)) as f32, ((index % (side_len * side_len)).rem_euclid(side_len)) as f32)
     }
 
-    pub fn pos_to_index(pos: Vector3<f32>, side_len: f32, ) -> u32 {
+    pub fn pos_to_index(pos: &Vector3<f32>, side_len: f32, ) -> u32 {
         (pos.x + pos.y * side_len * side_len + pos.z * side_len) as u32
     }
 }
