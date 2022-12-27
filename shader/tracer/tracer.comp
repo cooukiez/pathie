@@ -6,6 +6,7 @@
 # define PI 3.141592654
 
 # define OCTREE_MAX_NODE 2000
+# define MAX_SEARCH_DEPTH 64
 
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
@@ -21,7 +22,7 @@ layout (set = 1, binding = 0) uniform UniformBuffer {
 	float rotVertical;
 
 	uint octreeRootIndex;
-	uint maxSearchDepth;
+	uint[8][3] adjacentNodeList;
 	
 	uint nodeAtPos;
 	float X;
@@ -30,10 +31,11 @@ layout (set = 1, binding = 0) uniform UniformBuffer {
 } uniformBuffer;
 
 struct TreeNode {
+	uint mat;
 	uint parent;
 	uint[8] children;
 	uint spaceIndex;
-	uint span;
+	float span;
 
 	float X;
 	float Y;
@@ -52,18 +54,13 @@ uint posToIndex(vec3 pos, float sideLen) {
 	return uint(pos.x + pos.y * sideLen * sideLen + pos.z * sideLen);
 }
 
-float getDistanceNext(in float inputFloat, in float dir, in uint voxSpan) {
-	return trunc(inputFloat + (voxSpan * dir)) - inputFloat;
-}
-
 vec3 getOuterPos(in vec3 innerPos, in vec3 dir, in float diameter) {
 	return innerPos + (dir * diameter);
 }
 
 // 1 = inside | 0 = outside
 float inRange(in float first, in float sec, in float check) {
-    float stepVector = step(min(first, sec), check) - step(max(first, sec), check);
-    return stepVector.x * stepVector.y * stepVector.z;
+    return step(min(first, sec), check) - step(max(first, sec), check);
 }
 
 // 1 = inside | 0 = outside
@@ -73,8 +70,8 @@ float betweenVectorGroup(in vec3 first, in vec3 sec, in vec3 vector) {
 }
 
 float checkPosInNode(TreeNode node, vec3 checkPos) {
-	vec3 bottomLeft = getOuterPos(vec3(node.X, node.Y, node.Z), vec3(-1, -1, -1), float(node.span) / 2.0);
-	vec3 topRight = getOuterPos(vec3(node.X, node.Y, node.Z), vec3(1, 1, 1), float(node.span) / 2.0);
+	vec3 bottomLeft = getOuterPos(vec3(node.X, node.Y, node.Z), vec3(-1, -1, -1), node.span / 2.0);
+	vec3 topRight = getOuterPos(vec3(node.X, node.Y, node.Z), vec3(1, 1, 1), node.span / 2.0);
 	
 	return betweenVectorGroup(bottomLeft, topRight, checkPos);
 }
@@ -93,51 +90,61 @@ uint getNextVox(in uint curIndex, in vec3 nextPos, in ivec3 dir) {
 	vec3 topRight = vec3(0, 0, 0);
 	float nextPosInParent = 0.0;
 	
-	uint[8][3] adjacentNodeList;
 	uint adjacentNode = 0;
 	
 	uint curLev = 0;
-	uint[uniformBuffer.maxSearchDepth] levSpaceIndex;
+	uint[MAX_SEARCH_DEPTH] levSpaceIndex;
 
 	vec3 childPos = vec3(0, 0, 0);
 
 	// Check if nextPos is in Parent -> If not, curVox = curVox.parent
-	for (curLev = 1; curLev < uniformBuffer.maxSearchDepth; curLev += 1) {
+	for (curLev = 1; curLev < MAX_SEARCH_DEPTH; curLev += 1) {
 		nextPosInParent = checkPosInNode(curVox, nextPos);
-		(nextPosInParent > 0.0) ? break : (
-			updateVox(curVox.parent, curIndex, curVox),
-			levSpaceIndex[curLev] = curVox.spaceIndex
-		);
+		if (nextPosInParent > 0.0) { break; }
+		else {
+			updateVox(curVox.parent, curIndex, curVox);
+			levSpaceIndex[curLev] = curVox.spaceIndex;
+		}
 	}
 	
 	// Select Unspecific Neighbor
-	adjacentNode = adjacentNodeList[curVox.spaceIndex][selectedDir];
+	adjacentNode = uniformBuffer.adjacentNodeList[curVox.spaceIndex][selectedDir];
 	updateVox(octreeData[curVox.parent].children[adjacentNode], curIndex, curVox);
 
 	// Select childNode based on recent visited Level
 	for (curLev -= 1; curLev > -1; curLev -= 1) {
-		(curVox.children == [0, 0, 0, 0, 0, 0, 0, 0]) ? break : (
-			adjacentNode = adjacentNodeList[levSpaceIndex[curLev]][selectedDir],
-			updateVox(curVox.children[adjacentNode], curIndex, curVox),
-		);
+		if (curVox.children == uint[8](0, 0, 0, 0, 0, 0, 0, 0)) { break; }
+		else {
+			adjacentNode = uniformBuffer.adjacentNodeList[levSpaceIndex[curLev]][selectedDir];
+			updateVox(curVox.children[adjacentNode], curIndex, curVox);
+		}
 	}
-	
+
 	// Select childNode based on Position <- No recent visit on curLev
-	for (int iter = 0; iter < maxSearchDepth; iter += 1) {
-		(curVox.children == [0, 0, 0, 0, 0, 0, 0, 0]) ? break : (
+	for (int iter = 0; iter < MAX_SEARCH_DEPTH; iter += 1) {
+		if (curVox.children == uint[8](0, 0, 0, 0, 0, 0, 0, 0)) { break; }
+		else {
 			// Generate childPos -> Check in which Vox [ 0 / 1 ] nextPos is in, for each Direction
 			childPos = vec3(
-				inRange(curVox.x, curVox.x + float(curVox.span) / 2.0, nextPos.x)
-				inRange(curVox.y, curVox.y + float(curVox.span) / 2.0, nextPos.y)
-				inRange(curVox.z, curVox.z + float(curVox.span) / 2.0, nextPos.z)
+				inRange(curVox.X, curVox.X + curVox.span / 2.0, nextPos.x),
+				inRange(curVox.Y, curVox.Y + curVox.span / 2.0, nextPos.y),
+				inRange(curVox.Z, curVox.Z + curVox.span / 2.0, nextPos.z)
 			);
 
-			updateVox(curVox.children[posToIndex(childPos)], curIndex, curVox),
-		);
+			updateVox(curVox.children[posToIndex(childPos, 2.0)], curIndex, curVox);
+		}
 	}
+
+	return curIndex;
+}
+
+float getDistanceNext(in float voxCenter, in float dir, in float voxSpan, in float pos) {
+	return voxCenter + (voxSpan * sign(dir)) - (pos * sign(dir));
 }
 
 void castRay(in vec2 dir, inout uint curIndex, inout vec3 curPos, out float len, out int voxAtPos) {
+	TreeNode curVox = octreeData[curIndex];
+
 	// Convert Degree into Radiant
 	float alpha = dir.x * PI / 180.0;
 	float beta = dir.y * PI / 180.0;
@@ -153,11 +160,13 @@ void castRay(in vec2 dir, inout uint curIndex, inout vec3 curPos, out float len,
 
 	uint nodeWithChild = 0;
 
+	ivec3 posBefore = ivec3(0, 0, 0);
+	ivec3 posDiff = ivec3(0, 0, 0);
+
 	for (int iter = 0; iter < uniformBuffer.maxRayLen; iter += 1) {
-		curVox = octreeData[curIndex];
 		posBefore = ivec3(curPos);
 
-		distNextVox = vec3(getDistanceNext(curPos.x, unit.x), getDistanceNext(curPos.y, unit.y), getDistanceNext(curPos.z, unit.z));
+		distNextVox = vec3(getDistanceNext(curVox.X, unit.x, curVox.span, curPos.x), getDistanceNext(curVox.Y, unit.y, curVox.span, curPos.y), getDistanceNext(curVox.Z, unit.z, curVox.span, curPos.z));
 		// Compute Time for each Direction
 		lengthCertainDir = vec3(abs(distNextVox.x / unit.x), abs(distNextVox.y / unit.y), abs(distNextVox.z / unit.z));
 		// Select most efficient Direction
@@ -166,9 +175,13 @@ void castRay(in vec2 dir, inout uint curIndex, inout vec3 curPos, out float len,
 		curPos += vec3(unit.x * selectedLen, unit.y * selectedLen, unit.z * selectedLen);
 
 		len += selectedLen;
-	
-		voxAtPos = getVoxelAtPos(curPos);
-		if (voxAtPos > 0) { break; }
+		// Compute difference between Position [ before / after ] and use as Direction
+		posDiff = ivec3(curPos) - posBefore;
+
+		curIndex = getNextVox(curIndex, curPos, posDiff);
+
+		curVox = octreeData[curIndex];
+		if (curVox.mat > 0) { break; }
 	}
 }
 
@@ -176,13 +189,13 @@ vec2 getFieldOfView(in vec2 imageSize) {
 	return vec2((imageSize.y / imageSize.x) * uniformBuffer.rawfieldOfView, uniformBuffer.rawfieldOfView);
 }
 
-vec3 getCameraDirection(in vec2 imageSize, in vec2 pixelCoord) {
+vec2 getCameraDirection(in vec2 imageSize, in vec2 pixelCoord) {
 	vec2 fieldOfView = getFieldOfView(imageSize);
 
 	float horizontalDegree = (fieldOfView.x / imageSize.x) * pixelCoord.x - fieldOfView.x / 2;
 	float verticalDegree = (fieldOfView.y / imageSize.y) * pixelCoord.y - fieldOfView.y / 2;
 
-	return vec2(horizontal, vertical);
+	return vec2(horizontalDegree, verticalDegree);
 }
 
 void main () {
