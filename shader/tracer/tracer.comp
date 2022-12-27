@@ -38,11 +38,11 @@ struct TreeNode {
 	float X;
 	float Y;
 	float Z;
-}
+};
 
 layout (set = 2, binding = 0) readonly buffer OctreeData {
 	TreeNode[OCTREE_MAX_NODE] octreeData;
-}
+};
 
 layout (set = 3, binding = 0) readonly buffer GraphicPref {
 	uint empty;
@@ -62,7 +62,7 @@ vec3 getOuterPos(in vec3 innerPos, in vec3 dir, in float diameter) {
 
 // 1 = inside | 0 = outside
 float inRange(in float first, in float sec, in float check) {
-    float stepVector = step(min(first, sec), vector) - step(max(first, sec), check);
+    float stepVector = step(min(first, sec), check) - step(max(first, sec), check);
     return stepVector.x * stepVector.y * stepVector.z;
 }
 
@@ -77,6 +77,11 @@ float checkPosInNode(TreeNode node, vec3 checkPos) {
 	vec3 topRight = getOuterPos(vec3(node.X, node.Y, node.Z), vec3(1, 1, 1), float(node.span) / 2.0);
 	
 	return betweenVectorGroup(bottomLeft, topRight, checkPos);
+}
+
+void updateVox(in uint nextIndex, inout uint curIndex, inout TreeNode curVox) {
+	curIndex = nextIndex;
+	curVox = octreeData[nextIndex];
 }
 
 uint getNextVox(in uint curIndex, in vec3 nextPos, in ivec3 dir) {
@@ -94,41 +99,40 @@ uint getNextVox(in uint curIndex, in vec3 nextPos, in ivec3 dir) {
 	uint curLev = 0;
 	uint[uniformBuffer.maxSearchDepth] levSpaceIndex;
 
+	vec3 childPos = vec3(0, 0, 0);
+
 	// Check if nextPos is in Parent -> If not, curVox = curVox.parent
 	for (curLev = 1; curLev < uniformBuffer.maxSearchDepth; curLev += 1) {
 		nextPosInParent = checkPosInNode(curVox, nextPos);
 		(nextPosInParent > 0.0) ? break : (
-			curIndex = curVox.parent,
-			curVox = octreeData[curIndex],
+			updateVox(curVox.parent, curIndex, curVox),
 			levSpaceIndex[curLev] = curVox.spaceIndex
 		);
 	}
 	
 	// Select Unspecific Neighbor
 	adjacentNode = adjacentNodeList[curVox.spaceIndex][selectedDir];
-	curIndex = octreeData[curVox.parent].children[adjacentNode];
-	curVox = octreeData[curIndex];
-	
+	updateVox(octreeData[curVox.parent].children[adjacentNode], curIndex, curVox);
+
 	// Select childNode based on recent visited Level
 	for (curLev -= 1; curLev > -1; curLev -= 1) {
 		(curVox.children == [0, 0, 0, 0, 0, 0, 0, 0]) ? break : (
 			adjacentNode = adjacentNodeList[levSpaceIndex[curLev]][selectedDir],
-			curIndex = curVox.children[adjacentNode],
-			curVox = octreeData[curIndex]
+			updateVox(curVox.children[adjacentNode], curIndex, curVox),
 		);
 	}
 	
 	// Select childNode based on Position <- No recent visit on curLev
 	for (int iter = 0; iter < maxSearchDepth; iter += 1) {
 		(curVox.children == [0, 0, 0, 0, 0, 0, 0, 0]) ? break : (
+			// Generate childPos -> Check in which Vox [ 0 / 1 ] nextPos is in, for each Direction
 			childPos = vec3(
 				inRange(curVox.x, curVox.x + float(curVox.span) / 2.0, nextPos.x)
 				inRange(curVox.y, curVox.y + float(curVox.span) / 2.0, nextPos.y)
 				inRange(curVox.z, curVox.z + float(curVox.span) / 2.0, nextPos.z)
 			);
 
-			curIndex = curVox.children[posToIndex(childPos)];
-			curVox = octreeData[curIndex];
+			updateVox(curVox.children[posToIndex(childPos)], curIndex, curVox),
 		);
 	}
 }
