@@ -15,7 +15,6 @@ layout (set = 1, binding = 0) uniform UniformBuffer {
 	uint time;
 
 	float rawfieldOfView;
-	float imgCamDistance;
 	uint maxRayLen;
 
 	float rotHorizontal;

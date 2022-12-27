@@ -60,7 +60,7 @@ impl Render {
 
     pub fn init_compute_pipeline(device: &Device, descriptor_set_layout_list: &Vec<vk::DescriptorSetLayout> ) -> (vk::Pipeline, vk::PipelineLayout, ) {
         log::info!("Init ComputePipeline ...");
-        let mut compute_spv_file = Cursor::new(&include_bytes!("../shader/raytracing/comp.spv")[..]);
+        let mut compute_spv_file = Cursor::new(&include_bytes!("../shader/tracer/comp.spv")[..]);
         let compute_code = util::read_spv(&mut compute_spv_file).expect("ERROR_READ_SPV");
 
         let compute_shader_info = vk::ShaderModuleCreateInfo::builder().code(&compute_code).build();

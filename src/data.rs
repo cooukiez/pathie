@@ -1,16 +1,17 @@
+use cgmath::InnerSpace;
 use cgmath::Vector3;
+use cgmath::VectorSpace;
 
 use crate::{OCTREE_MAX_NODE, service::Service};
-
-const CHILD_SIGN: [[i32; 3]; 8] = [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1], [-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1]];
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct TreeNode {
+    pub mat: u32,
     pub parent: u32,
     pub children: [u32; 8],
     pub space_index: u32,
-    pub span: u32,
+    pub span: f32,
 
     pub x: f32,
     pub y: f32,
@@ -27,14 +28,13 @@ pub struct WorldData {
 pub struct Uniform {
     pub time: u32,
 
-    pub field_of_view: f32,
+    pub raw_field_of_view: f32,
     pub max_ray_length: u32,
 
     pub rot_horizontal: f32,
     pub rot_vertical: f32,
 
     pub octree_root_index: u32,
-    pub max_search_depth: u32,
     
     pub node_at_pos: u32,
     pub x: f32,
@@ -50,20 +50,25 @@ pub struct GraphicPref {
 
 impl TreeNode {
     pub fn empty() -> TreeNode {
-        TreeNode { parent: 0, span: 0, space_index: 0, children: [0; 8], x: 0.0, y: 0.0, z: 0.0 }
+        TreeNode { mat: 0, parent: 0, span: 0.0, space_index: 0, children: [0; 8], x: 0.0, y: 0.0, z: 0.0 }
     }
 
-    pub fn new(parent: u32, span: u32, space_index: u32, pos: Vector3<f32>, ) -> TreeNode {
-        TreeNode { parent, span, children: [0; 8], space_index, x: pos.x, y: pos.y, z: pos.z }
+    pub fn new(parent: u32, span: f32, space_index: u32, pos: Vector3<f32>, ) -> TreeNode {
+        TreeNode { mat: 0, parent, span, children: [0; 8], space_index, x: pos.x, y: pos.y, z: pos.z }
     }
 
     pub fn get_outer_pos(&self, sign: &Vector3<i32>, diameter: u32, ) -> Vector3<f32> {
         Vector3::new(self.x + (sign.x as f32 * diameter as f32), self.y + (sign.y as f32 * diameter as f32), self.z + (sign.z as f32 * diameter as f32))
     }
 
+    pub fn get_start_pos(&self) -> Vector3<f32> {
+        Vector3::new(self.x - self.span / 2.0, self.y - self.span / 2.0, self.z - self.span / 2.0)
+    }
+
     pub fn create_child(&self, space_index: usize, parent: u32, ) -> TreeNode {
-        let child_pos = self.get_outer_pos(&Vector3::new(CHILD_SIGN[space_index][0], CHILD_SIGN[space_index][1], CHILD_SIGN[space_index][2]), self.span / 4, );
-        TreeNode::new(parent, self.span / 2, space_index as u32, child_pos, )
+        let space_index_as_pos = Service::convert_index_to_pos(space_index as u32, 2) * self.span / 2.0;
+        let child_pos = self.get_start_pos() + Vector3::new(self.span / 2.0, self.span / 2.0, self.span / 2.0) + space_index_as_pos;
+        TreeNode::new(parent, self.span / 2.0, space_index as u32, child_pos, )
     }
 
     pub fn check_pos_in_child(&self, sign: &Vector3<i32>, cur_pos: Vector3<f32>, ) -> bool {
@@ -74,7 +79,7 @@ impl TreeNode {
 impl WorldData {
     pub fn create_children(parent: &TreeNode, parent_index: u32, ) -> [TreeNode; 8] {
         let mut children: Vec<TreeNode> = vec![];
-        for index in 0 .. CHILD_SIGN.len() { children.push(parent.create_child(index, parent_index, )) }
+        for index in 0 .. parent.children.len() { children.push(parent.create_child(index, parent_index, )) }
         Service::vec_to_array(children)
     }
 

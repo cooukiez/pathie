@@ -38,14 +38,13 @@ const OCTREE_MAX_NODE: usize = 2000;
 static mut UNIFORM: Uniform = Uniform {
     time: 0,
 
-    field_of_view: 60.0,
+    raw_field_of_view: 60.0,
     max_ray_length: 1000,
 
     rot_horizontal: 124.0,
     rot_vertical: 215.0,
 
     octree_root_index: 0,
-    max_search_depth: 100,
 
     node_at_pos: 0,
     x: 0.0,
