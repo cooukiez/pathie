@@ -91,12 +91,13 @@ uint getNextVox(in uint curIndex, in ivec3 nextPos, in vec3 dir) {
 	uint curLev = 0;
 	uint[uniformBuffer.maxSearchDepth] levSpaceIndex;
 
+	// Check if nextPos is in Parent -> If not, curVox = curVox.parent
 	for (curLev = 1; curLev < uniformBuffer.maxSearchDepth; curLev += 1) {
 		nextPosInParent = checkPosInNode(curVox);
 		(nextPosInParent > 0.0) ? break : (curIndex = curVox.parent, curVox = octreeData[curIndex], levSpaceIndex[curLev] = curVox.spaceIndex);
 	}
 	
-	adjacentNode = adjacentNodeList[curLev][selectedDir];
+	adjacentNode = adjacentNodeList[curVox.spaceIndex][selectedDir];
 	curIndex = octreeData[curVox.parent].children[adjacentNode];
 	
 	for (curLev -= 1; curLev > -1; curLev -= 1) {
