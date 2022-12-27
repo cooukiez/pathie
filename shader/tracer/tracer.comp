@@ -48,6 +48,10 @@ layout (set = 3, binding = 0) readonly buffer GraphicPref {
 	uint empty;
 } graphicPref;
 
+uint posToIndex(vec3 pos, float sideLen) {
+	return uint(pos.x + pos.y * sideLen * sideLen + pos.z * sideLen);
+}
+
 float getDistanceNext(in float inputFloat, in float dir, in uint voxSpan) {
 	return trunc(inputFloat + (voxSpan * dir)) - inputFloat;
 }
@@ -57,21 +61,25 @@ vec3 getOuterPos(in vec3 innerPos, in vec3 dir, in float diameter) {
 }
 
 // 1 = inside | 0 = outside
+float inRange(in float first, in float sec, in float check) {
+    float stepVector = step(min(first, sec), vector) - step(max(first, sec), check);
+    return stepVector.x * stepVector.y * stepVector.z;
+}
+
+// 1 = inside | 0 = outside
 float betweenVectorGroup(in vec3 first, in vec3 sec, in vec3 vector) {
     vec3 stepVector = step(min(first, sec), vector) - step(max(first, sec), vector);
     return stepVector.x * stepVector.y * stepVector.z;
 }
 
 float checkPosInNode(TreeNode node, vec3 checkPos) {
-	vec3 bottomLeft = getOuterPos(vec3(node.X, node.Y, node.Z), vec3(-1, -1, -1), node.span / 2);
-	vec3 topRight = getOuterPos(vec3(node.X, node.Y, node.Z), vec3(1, 1, 1), node.span / 2);
+	vec3 bottomLeft = getOuterPos(vec3(node.X, node.Y, node.Z), vec3(-1, -1, -1), float(node.span) / 2.0);
+	vec3 topRight = getOuterPos(vec3(node.X, node.Y, node.Z), vec3(1, 1, 1), float(node.span) / 2.0);
 	
 	return betweenVectorGroup(bottomLeft, topRight, checkPos);
 }
 
 uint getNextVox(in uint curIndex, in vec3 nextPos, in ivec3 dir) {
-	uint[2][2][2] childPosToIndex;
-
 	TreeNode curVox = octreeData[curIndex];
 
 	int selectedDir = dir.x * 0 + dir.y * 1 + dir.z * 2;
@@ -113,9 +121,14 @@ uint getNextVox(in uint curIndex, in vec3 nextPos, in ivec3 dir) {
 	// Select childNode based on Position <- No recent visit on curLev
 	for (int iter = 0; iter < maxSearchDepth; iter += 1) {
 		(curVox.children == [0, 0, 0, 0, 0, 0, 0, 0]) ? break : (
-			adjacentNode = adjacentNodeList[levSpaceIndex[curLev]][selectedDir],
-			curIndex = curVox.children[adjacentNode],
-			curVox = octreeData[curIndex]
+			childPos = vec3(
+				inRange(curVox.x, curVox.x + float(curVox.span) / 2.0, nextPos.x)
+				inRange(curVox.y, curVox.y + float(curVox.span) / 2.0, nextPos.y)
+				inRange(curVox.z, curVox.z + float(curVox.span) / 2.0, nextPos.z)
+			);
+
+			curIndex = curVox.children[posToIndex(childPos)];
+			curVox = octreeData[curIndex];
 		);
 	}
 }
