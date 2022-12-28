@@ -3,6 +3,10 @@ use cgmath::Vector3;
 pub struct Service { }
 
 impl Service {
+    pub fn pos_to_index(pos: &Vector3<f32>, side_len: i32, ) -> u32 {
+        (((pos.x as i32) % side_len) + ((pos.x as i32) % side_len) * side_len * side_len + ((pos.x as i32) % side_len) * side_len) as u32 
+    }
+
     pub fn vec_to_array<Type, const Length: usize>(vec: Vec<Type>) -> [Type; Length] { 
         vec.try_into().unwrap_or_else(| vec: Vec<Type> | panic!("ERR_INVALI_LEN -> Expected {} | Got {}", Length, vec.len()))
     }
@@ -16,10 +20,9 @@ impl Service {
     }
 
     pub fn convert_index_to_pos(index: u32, side_len: u32, ) -> Vector3<f32> {
-        Vector3::new(((index % (side_len * side_len)) % side_len) as f32, (index.rem_euclid(side_len * side_len)) as f32, ((index % (side_len * side_len)).rem_euclid(side_len)) as f32)
-    }
-
-    pub fn pos_to_index(pos: &Vector3<f32>, side_len: f32, ) -> u32 {
-        (pos.x + pos.y * side_len * side_len + pos.z * side_len) as u32
+        let x = ((index % (side_len * side_len)) % side_len) as f32;
+        let y = (index / (side_len * side_len)) as f32;
+        let z = ((index % (side_len * side_len)) / side_len) as f32;
+        Vector3::new(x, y, z)
     }
 }

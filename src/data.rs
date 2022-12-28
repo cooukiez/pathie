@@ -1,6 +1,5 @@
-use cgmath::InnerSpace;
 use cgmath::Vector3;
-use cgmath::VectorSpace;
+use rand::Rng;
 
 use crate::{OCTREE_MAX_NODE, service::Service};
 
@@ -67,63 +66,56 @@ impl TreeNode {
 
     pub fn create_child(&self, space_index: usize, parent: u32, ) -> TreeNode {
         let space_index_as_pos = Service::convert_index_to_pos(space_index as u32, 2) * self.span / 2.0;
-        let child_pos = self.get_start_pos() + Vector3::new(self.span / 2.0, self.span / 2.0, self.span / 2.0) + space_index_as_pos;
+        let child_pos = self.get_start_pos() + Vector3::new(self.span / 4.0, self.span / 4.0, self.span / 4.0) + space_index_as_pos;
+        
         TreeNode::new(parent, self.span / 2.0, space_index as u32, child_pos, )
     }
 
-    pub fn choose_child_node(&self, cur_pos: Vector3<f32>, ) -> u32 {
+    pub fn choose_child_node(&self, cur_pos: &Vector3<f32>, ) -> u32 {
         let parent_pos = Vector3::new(self.x, self.y, self.z);
 
         let horizontal = Service::check_number_in_range([parent_pos.x, parent_pos.x + self.span / 2.0], cur_pos.x, ) as u32 as f32;
         let vertical = Service::check_number_in_range([parent_pos.y, parent_pos.y + self.span / 2.0], cur_pos.y, ) as u32 as f32;
         let depth = Service::check_number_in_range([parent_pos.z, parent_pos.z + self.span / 2.0], cur_pos.z, ) as u32 as f32;
-
-        Service::pos_to_index(&Vector3::new(horizontal, vertical, depth), 2.0)
-    }
-
-    pub fn create_children(&self, parent_index: u32, ) -> [TreeNode; 8] {
-        let mut children: Vec<TreeNode> = vec![];
-
-        for index in 0 .. self.children.len() {
-            children.push(self.create_child(index, parent_index, ))
-        }
-
-        Service::vec_to_array(children)
+        
+        Service::pos_to_index(&Vector3::new(horizontal, vertical, depth), 2)
     }
 }
 
 impl WorldData {
-    
-
-    pub fn insert_node(root_index: u32, min_span: f32, data: &mut Vec<TreeNode>, pos_to_insert: Vector3<f32>, ) {
+    pub fn insert_node(root_index: usize, data: &mut Vec<TreeNode>, pos_to_insert: Vector3<f32>, ) -> usize {
         let mut cur_index = root_index;
-        loop {
-            if data[cur_index as usize].span <= min_span { break; }
-            if data[cur_index as usize].children == [0; 8] {
-                let children = &data[cur_index as usize].create_children(cur_index);
-
-                for (index, child, ) in children.iter().enumerate() 
-                { data[cur_index as usize].children[index] = data.len() as u32; data.push(child.to_owned()); }
+        while data[cur_index].span > 1.0 {
+            if data[cur_index].children == [0; 8] {
+                for index in 0 .. data[cur_index].children.len() {
+                    data[cur_index].children[index] = data.len() as u32;
+                    data.push(data[cur_index].create_child(index, cur_index as u32, ))
+                }
             }
 
-            let child_node_index = &data[cur_index as usize].choose_child_node(pos_to_insert.clone());
-            
-            cur_index = child_node_index.clone();
-        }
+            let child_node_index = (&data[cur_index].choose_child_node(&pos_to_insert)).clone();
+            cur_index = (&data[cur_index].children[child_node_index as usize]).clone() as usize;
+        } cur_index
+    }
+
+    pub fn create_random_octree(root_index: usize, vox_amount: u32, span: f32, ) -> Vec<TreeNode> {
+        let mut data: Vec<TreeNode> = vec![TreeNode::empty()]; let mut rnd = rand::thread_rng();
+        data[root_index] = TreeNode::new(root_index as u32, span, 0, Vector3::new(0.0, 0.0, 0.0, ), );
+        for _ in 0 .. vox_amount {
+            let pos_to_insert =  Vector3::new(rnd.gen_range((- span / 2.0) .. (span / 2.0)), rnd.gen_range((- span / 2.0) .. (span / 2.0)), rnd.gen_range((- span / 2.0) .. (span / 2.0)));
+            Self::insert_node(0, &mut data, pos_to_insert, ); 
+        } data
     }
 
     pub fn format_octree(editable_data: &mut Vec<TreeNode>) -> [TreeNode; OCTREE_MAX_NODE] {
-        for _ in 0 .. (OCTREE_MAX_NODE - editable_data.len()) { editable_data.push(TreeNode::empty()); } 
-        Service::vec_to_array(editable_data.clone())
+        let mut data = [TreeNode::empty(); OCTREE_MAX_NODE];
+        for index in 0 .. data.len() { if editable_data.len() > index { data[index] = editable_data[index]; } } data
     }
 
     pub fn collect() -> WorldData { 
-        let mut editable_data: Vec<TreeNode> = vec![TreeNode::empty()];
-        editable_data[0] = TreeNode::new(0, 64.0, 0, Vector3::new(0.0, 0.0, 0.0, ), );
-        WorldData::insert_node(0, 1.0,&mut editable_data, Vector3::new(5.0, 6.0, 4.0), );
-        WorldData::insert_node(0, 1.0,&mut editable_data, Vector3::new(5.0, 6.0, 5.0), );
-
-        let octree = Self::format_octree(&mut editable_data.clone());
-        WorldData { octree_root: 0, data: octree }
+        let mut editable_data = Self::create_random_octree(0, 50, 64.0, );
+        editable_data.push(TreeNode::empty());
+        let data = Self::format_octree(&mut editable_data.clone());
+        WorldData { octree_root: 0, data }
     }
 }

@@ -6,7 +6,19 @@
 # define PI 3.141592654
 
 # define OCTREE_MAX_NODE 2000
-# define MAX_SEARCH_DEPTH 64
+# define MAX_SEARCH_DEPTH 8
+
+const uint[3][8] ADJACENT_NODE_LIST = uint[3][8](
+		uint[3](1, 4, 2),
+		uint[3](0, 5, 3),
+		uint[3](3, 6, 0),
+		uint[3](2, 7, 1),
+
+		uint[3](5, 0, 6),
+		uint[3](4, 1, 7),
+		uint[3](7, 2, 4),
+		uint[3](6, 3, 5),
+	);
 
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
@@ -20,8 +32,7 @@ layout (set = 1, binding = 0) uniform UniformBuffer {
 	float rotHorizontal;
 	float rotVertical;
 
-	uint octreeRootIndex;
-	uint[8][3] adjacentNodeList;
+	uint octreeRootIndex; 
 	
 	uint nodeAtPos;
 	float X;
@@ -105,16 +116,20 @@ uint getNextVox(in uint curIndex, in vec3 nextPos, in ivec3 dir) {
 			levSpaceIndex[curLev] = curVox.spaceIndex;
 		}
 	}
+
+	if (gl_GlobalInvocationID.xy == uvec2(1,1)) {
+		debugPrintfEXT("\n%d %d", curIndex, curLev);
+	}
 	
 	// Select Unspecific Neighbor
-	adjacentNode = uniformBuffer.adjacentNodeList[curVox.spaceIndex][selectedDir];
+	adjacentNode = ADJACENT_NODE_LIST[curVox.spaceIndex][selectedDir];
 	updateVox(octreeData[curVox.parent].children[adjacentNode], curIndex, curVox);
 
 	// Select childNode based on recent visited Level
 	for (curLev -= 1; curLev > -1; curLev -= 1) {
 		if (curVox.children == uint[8](0, 0, 0, 0, 0, 0, 0, 0)) { break; }
 		else {
-			adjacentNode = uniformBuffer.adjacentNodeList[levSpaceIndex[curLev]][selectedDir];
+			adjacentNode = ADJACENT_NODE_LIST[levSpaceIndex[curLev]][selectedDir];
 			updateVox(curVox.children[adjacentNode], curIndex, curVox);
 		}
 	}
@@ -192,7 +207,7 @@ vec2 getCameraDirection(in vec2 imageSize, in vec2 pixelCoord) {
 	vec2 fieldOfView = getFieldOfView(imageSize);
 
 	float horizontalDegree = (fieldOfView.x / imageSize.x) * pixelCoord.x - fieldOfView.x / 2;
-	float verticalDegree = (fieldOfView.y / imageSize.y) * pixelCoord.y - fieldOfView.y / 2;
+	float verticalDegree = (fieldOfView.y / imageSize.y) * pixelCoord.y - fieldOfView.y / 2;	
 
 	return vec2(horizontalDegree, verticalDegree);
 }
