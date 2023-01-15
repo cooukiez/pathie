@@ -8,17 +8,7 @@
 # define OCTREE_MAX_NODE 2000
 # define MAX_SEARCH_DEPTH 8
 
-const uint[3][8] ADJACENT_NODE_LIST = uint[3][8](
-		uint[3](1, 4, 2),
-		uint[3](0, 5, 3),
-		uint[3](3, 6, 0),
-		uint[3](2, 7, 1),
-
-		uint[3](5, 0, 6),
-		uint[3](4, 1, 7),
-		uint[3](7, 2, 4),
-		uint[3](6, 3, 5),
-	);
+uint[8][3] ADJACENT_NODE_LIST;
 
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
@@ -32,9 +22,9 @@ layout (set = 1, binding = 0) uniform UniformBuffer {
 	float rotHorizontal;
 	float rotVertical;
 
-	uint octreeRootIndex; 
-	
+	uint octreeRootIndex;
 	uint nodeAtPos;
+	
 	float X;
 	float Y;
 	float Z;
@@ -44,9 +34,9 @@ struct TreeNode {
 	uint mat;
 	uint parent;
 	uint[8] children;
-	uint spaceIndex;
-	float span;
+	uint[6] neighbor;
 
+	float span;
 	float X;
 	float Y;
 	float Z;
@@ -107,47 +97,7 @@ uint getNextVox(in uint curIndex, in vec3 nextPos, in ivec3 dir) {
 
 	vec3 childPos = vec3(0, 0, 0);
 
-	// Check if nextPos is in Parent -> If not, curVox = curVox.parent
-	for (curLev = 1; curLev < MAX_SEARCH_DEPTH; curLev += 1) {
-		nextPosInParent = checkPosInNode(curVox, nextPos);
-		if (nextPosInParent > 0.0) { break; }
-		else {
-			updateVox(curVox.parent, curIndex, curVox);
-			levSpaceIndex[curLev] = curVox.spaceIndex;
-		}
-	}
-
-	if (gl_GlobalInvocationID.xy == uvec2(1,1)) {
-		debugPrintfEXT("\n%d %d", curIndex, curLev);
-	}
 	
-	// Select Unspecific Neighbor
-	adjacentNode = ADJACENT_NODE_LIST[curVox.spaceIndex][selectedDir];
-	updateVox(octreeData[curVox.parent].children[adjacentNode], curIndex, curVox);
-
-	// Select childNode based on recent visited Level
-	for (curLev -= 1; curLev > -1; curLev -= 1) {
-		if (curVox.children == uint[8](0, 0, 0, 0, 0, 0, 0, 0)) { break; }
-		else {
-			adjacentNode = ADJACENT_NODE_LIST[levSpaceIndex[curLev]][selectedDir];
-			updateVox(curVox.children[adjacentNode], curIndex, curVox);
-		}
-	}
-
-	// Select childNode based on Position <- No recent visit on curLev
-	for (int iter = 0; iter < MAX_SEARCH_DEPTH; iter += 1) {
-		if (curVox.children == uint[8](0, 0, 0, 0, 0, 0, 0, 0)) { break; }
-		else {
-			// Generate childPos -> Check in which Vox [ 0 / 1 ] nextPos is in, for each Direction
-			childPos = vec3(
-				inRange(curVox.X, curVox.X + curVox.span / 2.0, nextPos.x),
-				inRange(curVox.Y, curVox.Y + curVox.span / 2.0, nextPos.y),
-				inRange(curVox.Z, curVox.Z + curVox.span / 2.0, nextPos.z)
-			);
-
-			updateVox(curVox.children[posToIndex(childPos, 2.0)], curIndex, curVox);
-		}
-	}
 
 	return curIndex;
 }
@@ -213,6 +163,7 @@ vec2 getCameraDirection(in vec2 imageSize, in vec2 pixelCoord) {
 }
 
 void main () {
+	init();
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 imageSize = ivec2(gl_NumWorkGroups.xy);
 	
