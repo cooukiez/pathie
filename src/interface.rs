@@ -1,5 +1,5 @@
 use crate::{ HEIGHT, NAME, WIDTH, Pref, };
-use ash::{ extensions::{ ext::DebugUtils, khr::{ Surface, Swapchain }, }, vk::{ self, SurfaceTransformFlagsKHR }, Device, Entry, Instance, };
+use ash::{ extensions::{ ext::DebugUtils, khr::{ Surface, Swapchain, DynamicRendering }, }, vk::{ self, SurfaceTransformFlagsKHR }, Device, Entry, Instance, };
 use raw_window_handle::{ HasRawDisplayHandle, HasRawWindowHandle };
 use std::{ ffi::{ c_void, CStr, CString }, error::Error };
 use winit::{ event_loop::EventLoop, monitor::MonitorHandle, window::{ WindowBuilder }, };
@@ -12,6 +12,8 @@ pub struct Interface {
     pub swapchain_loader: Swapchain,
     pub debug_util_loader: DebugUtils,
     pub window: winit::window::Window,
+    pub monitor_list: Vec<MonitorHandle>,
+    pub monitor: MonitorHandle,
     pub debug_call_back: vk::DebugUtilsMessengerEXT,
 
     pub phy_device: vk::PhysicalDevice,
@@ -183,6 +185,7 @@ impl Interface {
             let queue_family_index = queue_family_index as u32;
             let device_extension_list = [
                 Swapchain::name().as_ptr(),
+                DynamicRendering::name().as_ptr(),
                 #[cfg(any(target_os = "macos", target_os = "ios", ))]
                 KhrPortabilitySubsetFn::name().as_ptr(),
             ];
@@ -195,10 +198,13 @@ impl Interface {
                 .queue_family_index(queue_family_index)
                 .queue_priorities(&priority);
 
+            let mut dynamic_rendering_feature = vk::PhysicalDeviceDynamicRenderingFeaturesKHR::builder().dynamic_rendering(true);
+
             let device_create_info = vk::DeviceCreateInfo::builder()
                 .queue_create_infos(std::slice::from_ref(&queue_info))
                 .enabled_extension_names(&device_extension_list)
-                .enabled_features(&feature);
+                .enabled_features(&feature)
+                .push_next(&mut dynamic_rendering_feature);
 
             let device: Device = instance
                 .create_device(phy_device, &device_create_info, None, )
@@ -329,6 +335,8 @@ impl Interface {
                 physical_device_prop,
                 device_memory_prop,
                 window,
+                monitor_list,
+                monitor,
                 surface_loader,
                 surface_format,
                 present_queue,

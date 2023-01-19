@@ -1,6 +1,6 @@
 use std::{ffi::{c_void, CString}, mem::{align_of, self}, io::Cursor, error::Error};
 
-use ash::{vk::{self, DescriptorSetLayout, DescriptorSet}, util::{Align, read_spv}};
+use ash::{vk::{self, DescriptorSetLayout, DescriptorSet, ImageAspectFlags}, util::{Align, read_spv}};
 
 use crate::{interface::Interface, offset_of, octree::{Octree, TreeNode}, uniform::Uniform, Pref};
 
@@ -11,9 +11,6 @@ struct Vertex {
 }
 
 pub struct Pipe {
-    pub renderpass: vk::RenderPass,
-    pub framebuffer_list: Vec<vk::Framebuffer>,
-
     pub index_buffer_data: Vec<u32>,
     pub index_buffer: vk::Buffer,
     pub index_buffer_memory: vk::DeviceMemory,
@@ -38,48 +35,8 @@ pub struct Pipe {
 }
 
 impl Pipe {
-    pub fn init(interface: &Interface, pref: &Pref, ) -> Pipe {
+    pub fn init(interface: &Interface, uniform_data: &Uniform, ) -> Pipe {
         unsafe {
-            log::info!("Creating Renderpass ...");
-            let renderpass_attachment = [
-                vk::AttachmentDescription { format: interface.surface_format.format, samples: vk::SampleCountFlags::TYPE_1, load_op: vk::AttachmentLoadOp::CLEAR, store_op: vk::AttachmentStoreOp::STORE, final_layout: vk::ImageLayout::PRESENT_SRC_KHR, ..Default::default() },
-                vk::AttachmentDescription { format: vk::Format::D16_UNORM, samples: vk::SampleCountFlags::TYPE_1, load_op: vk::AttachmentLoadOp::CLEAR, initial_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL, final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL, ..Default::default() },
-            ];
-
-            let color_attachment_ref = [vk::AttachmentReference { attachment: 0, layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL, }];
-            let depend = [vk::SubpassDependency { src_subpass: vk::SUBPASS_EXTERNAL, src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT, dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE, dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT, ..Default::default() }];
-
-            let subpass = vk::SubpassDescription::builder()
-                .color_attachments(&color_attachment_ref)
-                .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS);
-
-            let renderpass_create_info = vk::RenderPassCreateInfo::builder()
-                .attachments(&renderpass_attachment)
-                .subpasses(std::slice::from_ref(&subpass))
-                .dependencies(&depend);
-            
-            let renderpass = interface.device
-                .create_render_pass(&renderpass_create_info, None, )
-                .unwrap();
-
-            log::info!("Getting Framebuffer List ...");
-            let framebuffer_list: Vec<vk::Framebuffer> = interface.present_img_view_list
-                .iter()
-                .map(| &present_image_view | {
-                    let framebuffer_attachment = [present_image_view];
-                    let frame_buffer_create_info = vk::FramebufferCreateInfo::builder()
-                        .render_pass(renderpass)
-                        .attachments(&framebuffer_attachment)
-                        .width(interface.surface_resolution.width)
-                        .height(interface.surface_resolution.height)
-                        .layers(1);
-                    
-                    interface.device
-                        .create_framebuffer(&frame_buffer_create_info, None, )
-                        .unwrap()
-                })
-                .collect();
-
             // Create Index Buffer
             log::info!("Creating IndexBuffer ...");
             let index_buffer_data: Vec<u32> = vec![0u32, 1, 2, 2, 3, 0];
@@ -142,7 +99,7 @@ impl Pipe {
             
             // Create Uniform Buffer
             log::info!("Creating UniformBuffer ...");
-            let uniform_buffer_data = Uniform::empty();
+            let uniform_buffer_data = uniform_data.clone();
             let uniform_buffer_info = vk::BufferCreateInfo { size: std::mem::size_of_val(&uniform_buffer_data) as u64, usage: vk::BufferUsageFlags::UNIFORM_BUFFER, sharing_mode: vk::SharingMode::EXCLUSIVE, ..Default::default() };
             
             let uniform_buffer = interface.device
@@ -337,6 +294,10 @@ impl Pipe {
             let dynamic_state_info =
                 vk::PipelineDynamicStateCreateInfo::builder().dynamic_states(&dynamic_state);
 
+            let format_list = [interface.surface_format.format];
+            let mut pipeline_rendering = vk::PipelineRenderingCreateInfoKHR::builder()
+                .color_attachment_formats(&format_list);
+
             log::info!("Pipe incoming ...");
             let graphic_pipeline_info_list = vk::GraphicsPipelineCreateInfo::builder()
                 .stages(&shader_stage_info_list)
@@ -348,7 +309,7 @@ impl Pipe {
                 .color_blend_state(&color_blend_state)
                 .dynamic_state(&dynamic_state_info)
                 .layout(pipeline_layout)
-                .render_pass(renderpass)
+                .push_next(&mut pipeline_rendering)
                 .build();
 
             let graphic_pipeline_list = interface.device
@@ -357,8 +318,6 @@ impl Pipe {
 
             log::info!("Rendering initialisation finished ...");
             Pipe {
-                renderpass,
-                framebuffer_list,
                 index_buffer_data,
                 index_buffer,
                 index_buffer_memory,
@@ -381,7 +340,7 @@ impl Pipe {
         }
     }
 
-    pub fn draw(&self, interface: &Interface, ) -> Result<bool, Box<dyn Error>> {
+    pub fn draw(&self, interface: &Interface) -> Result<bool, Box<dyn Error>> {
         unsafe {
             let next_image = interface.swapchain_loader
                 .acquire_next_image(interface.swapchain, std::u64::MAX, interface.present_complete_semaphore, vk::Fence::null(), );
@@ -394,13 +353,6 @@ impl Pipe {
                 };
 
             let clear_value = [vk::ClearValue { color: vk::ClearColorValue { float32: [0.0, 0.0, 0.0, 0.0], }, }];
-
-            // Begin Draw
-            let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-                .render_pass(self.renderpass)
-                .framebuffer(self.framebuffer_list[present_index as usize])
-                .render_area(interface.surface_resolution.into())
-                .clear_values(&clear_value);
 
             interface.device
                 .wait_for_fences(&[interface.draw_command_fence], true, std::u64::MAX)
@@ -421,9 +373,25 @@ impl Pipe {
                 .begin_command_buffer(interface.draw_command_buffer, &command_buffer_begin_info)
                 .expect("ERR_BEGIN_CMD_BUFFER");
 
+            let color_attachment_info = vk::RenderingAttachmentInfoKHR::builder()
+                .image_view(interface.present_img_view_list[present_index as usize])
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .clear_value(clear_value[0])
+                .build();
+
+            let color_attachment_list = [color_attachment_info];
+
+            // Begin Draw
+            let dim = interface.surface_resolution;
+            let rendering_info = vk::RenderingInfoKHR::builder()
+                .render_area(vk::Rect2D { offset: vk::Offset2D { x: 0, y: 0 }, extent: vk::Extent2D { width: dim.width, height: dim.height } })
+                .layer_count(1)
+                .color_attachments(&color_attachment_list);
+
             // Pipe Rendering Part
             interface.device
-                .cmd_begin_render_pass(interface.draw_command_buffer, &render_pass_begin_info, vk::SubpassContents::INLINE, );
+                .cmd_begin_rendering(interface.draw_command_buffer, &rendering_info);
             interface.device
                 .cmd_bind_descriptor_sets(interface.draw_command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, &self.descriptor_set_list[..], &[], );
             interface.device
@@ -439,9 +407,9 @@ impl Pipe {
             interface.device
                 .cmd_draw_indexed(interface.draw_command_buffer, self.index_buffer_data.len() as u32, 1, 0, 0, 1, );
             interface.device
-                .cmd_end_render_pass(interface.draw_command_buffer);
+                .cmd_end_rendering(interface.draw_command_buffer);
                 
-            // End Draw
+            // Finish Draw
             interface.device
                 .end_command_buffer(interface.draw_command_buffer)
                 .expect("ERR_END_CMD_BUFFER");
@@ -455,7 +423,7 @@ impl Pipe {
                 .signal_semaphores(&[interface.rendering_complete_semaphore])
                 .build();
     
-             interface.device
+            interface.device
                 .queue_submit(interface.present_queue, &[submit_info], interface.draw_command_fence)
                 .expect("QUEUE_SUBMIT_FAILED");
 
@@ -463,6 +431,8 @@ impl Pipe {
 
             let present_result = interface.swapchain_loader
                 .queue_present(interface.present_queue, &present_info);
+
+            
 
             match present_result {
                 Ok(is_suboptimal) if is_suboptimal => { return Ok(true); },
@@ -474,12 +444,11 @@ impl Pipe {
         }
     }
 
-    pub fn recreate_swapchain(&mut self, interface: &mut Interface, pref: &Pref, new_extent: vk::Extent2D, ) {
+    pub fn recreate_swapchain(&mut self, interface: &mut Interface, pref: &Pref, ) {
         unsafe {
             interface.wait_for_gpu().expect("DEVICE_LOST");
 
             log::info!("Recreating Swapchain ...");
-            self.framebuffer_list.iter().for_each(| framebuffer | interface.device.destroy_framebuffer(* framebuffer, None, ));
             interface.present_img_view_list.iter().for_each(| view | interface.device.destroy_image_view(* view, None, ));
             interface.swapchain_loader.destroy_swapchain(interface.swapchain, None, );
 
@@ -487,8 +456,9 @@ impl Pipe {
                 .get_physical_device_surface_capabilities(interface.phy_device, interface.surface, )
                 .unwrap();
 
+            let dim = interface.window.inner_size();
             interface.surface_resolution = match interface.surface_capability.current_extent.width {
-                std::u32::MAX => new_extent,
+                std::u32::MAX => vk::Extent2D { width: dim.width, height: dim.height },
                 _ => interface.surface_capability.current_extent,
             };
 
@@ -516,7 +486,6 @@ impl Pipe {
                 .create_swapchain(&swapchain_create_info, None, )
                 .unwrap();
 
-            log::info!("Load PresentImgList ...");
             interface.present_img_list = interface.swapchain_loader.get_swapchain_images(interface.swapchain).unwrap();
             interface.present_img_view_list = interface.present_img_list
                 .iter()
@@ -528,24 +497,6 @@ impl Pipe {
                         .subresource_range(vk::ImageSubresourceRange { aspect_mask: vk::ImageAspectFlags::COLOR, base_mip_level: 0, level_count: 1, base_array_layer: 0, layer_count: 1, })
                         .image(image);
                         interface.device.create_image_view(&create_view_info, None, ).unwrap()
-                })
-                .collect();
-
-            log::info!("Getting Framebuffer List ...");
-            self.framebuffer_list = interface.present_img_view_list
-                .iter()
-                .map(| &present_image_view | {
-                    let framebuffer_attachment = [present_image_view];
-                    let frame_buffer_create_info = vk::FramebufferCreateInfo::builder()
-                        .render_pass(self.renderpass)
-                        .attachments(&framebuffer_attachment)
-                        .width(interface.surface_resolution.width)
-                        .height(interface.surface_resolution.height)
-                        .layers(1);
-                    
-                    interface.device
-                        .create_framebuffer(&frame_buffer_create_info, None)
-                        .unwrap()
                 })
                 .collect();
 

@@ -32,7 +32,7 @@ struct TreeNode {
 	float X;
 	float Y;
 	float Z;
-}
+};
 
 layout (location = 0) in vec2 outCoord;
 layout (location = 0) out vec4 fragColor;
@@ -41,6 +41,7 @@ void main() {
     fragColor = vec4(int(outCoord.y * 2.0),int(sin(outCoord.x * 2.0) * 10),0,0);
     
     if (outCoord.x < 0.001 && outCoord.y < 0.001) {
-		debugPrintfEXT("\n%f", uniformBuffer.rawfieldOfView);
+		fragColor = vec4(1,1,1,0);
+		// debugPrintfEXT("\n%f", uniformBuffer.rawfieldOfView);
 	}
 }

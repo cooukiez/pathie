@@ -6,6 +6,7 @@ use input::Input;
 use interface::Interface;
 use log::Record;
 use pipe::Pipe;
+use uniform::Uniform;
 use winit::{event_loop::{EventLoop, ControlFlow}, event::{WindowEvent, KeyboardInput, Event}, platform::run_return::EventLoopExtRunReturn};
 
 mod pipe;
@@ -34,6 +35,9 @@ pub struct Render {
     event_loop: EventLoop<()>,
 
     pref: Pref,
+    uniform: Uniform,
+
+    input: Input,
 
     interface: Interface,
     graphic_pipe: Pipe,
@@ -47,28 +51,24 @@ pub struct Pref {
 
 fn main() {
     let log_format = | buf: &mut Formatter, record: &Record | {
-        // Get Style
         let mut buf_style = buf.style();
 
-        // Set Design
         buf_style
             .set_color(Color::Yellow)
             .set_bold(true);
 
-        // Write Line
-        writeln!(buf, "[ {} {} ] {}", chrono::Local::now().format("%H:%M:%S"), buf_style.value(record.level()), record.args(), ) 
+        let time = chrono::Local::now().format("%H:%M:%S");
+
+        writeln!(buf, "[ {} {} ] {}", time, buf_style.value(record.level()), record.args(), ) 
     };
 
-    // Apply Format
     env_logger::builder()
         .format(log_format)
         .init();
 
     log::info!("Starting Application ...");
-    // Init Threading
     thread::spawn(| | { loop { } });
 
-    // Start Rendering
     let mut render = Render::get_render();
     render.execute(Instant::now());
 }
@@ -77,16 +77,21 @@ impl Render {
     pub fn get_render() -> Render {
         let event_loop = EventLoop::new();
 
-        let pref = Pref { pref_present_mode: vk::PresentModeKHR::MAILBOX, img_scale: 18, };
+        let pref = Pref { pref_present_mode: vk::PresentModeKHR::MAILBOX, img_scale: 2, };
         let state = RenderState { out_of_date: false, idle: false, frame_time: Duration::ZERO };
 
+        let input = Input::new();
+        let uniform = Uniform::empty();
+
         let interface = Interface::init(&event_loop, &pref, );
-        let graphic_pipe = Pipe::init(&interface, &pref, );
+        let graphic_pipe = Pipe::init(&interface, &uniform, );
 
         Render {
             state,
             event_loop,
             pref,
+            uniform,
+            input,
             interface,
             graphic_pipe,
         }
@@ -100,7 +105,7 @@ impl Render {
                 match event {
                     Event::WindowEvent { event: WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(keycode), state, .. }, .. }, .. } =>
                         // Handle KeyboardInput
-                        Input::handle_key_input(keyboard, keycode, state, &vulkan, ),
+                        self.input.handle_key_input(&keycode, &state, &self.interface, &mut self.uniform, ),
 
                     Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => * control_flow = ControlFlow::Exit,
                     Event::MainEventsCleared =>
@@ -109,7 +114,7 @@ impl Render {
                             let dim = self.interface.window.inner_size();
                             if dim.width > 0 && dim.height > 0 {
                                 // Not Minimized
-                                self.graphic_pipe.recreate_swapchain(&mut self.interface, &self.pref, vk::Extent2D { width: dim.width, height: dim.height  }, );
+                                self.graphic_pipe.recreate_swapchain(&mut self.interface, &self.pref, );
 
                                 self.state.idle = false;
                                 self.state.out_of_date = false;
@@ -122,6 +127,9 @@ impl Render {
                             let start = Instant::now();
                             self.state.out_of_date = self.graphic_pipe.draw(&self.interface).expect("RENDER_FAILED");
                             self.state.frame_time = start.elapsed();
+
+                            // Update Uniform
+                            self.uniform.update_uniform(app_start.elapsed());
                         },
 
                     Event::LoopDestroyed => self.interface.wait_for_gpu().expect("DEVICE_LOST"), _ => (),
