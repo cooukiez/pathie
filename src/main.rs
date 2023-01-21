@@ -22,6 +22,9 @@ const ENGINE_NAME: &str = "VulkanEngine";
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
+const DEFAULT_STORAGE_BUFFER_SIZE: u64 = 10485760;
+const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
+
 pub struct RenderState {
     pub out_of_date: bool,
     pub idle: bool,
@@ -46,7 +49,8 @@ pub struct Render {
 // General Setting
 pub struct Pref {
     pub pref_present_mode: vk::PresentModeKHR,
-    pub img_scale: u32,
+    pub img_scale_filter: vk::Filter,
+    pub img_scale: f32,
 }
 
 fn main() {
@@ -77,14 +81,14 @@ impl Render {
     pub fn get_render() -> Render {
         let event_loop = EventLoop::new();
 
-        let pref = Pref { pref_present_mode: vk::PresentModeKHR::MAILBOX, img_scale: 2, };
+        let pref = Pref { pref_present_mode: vk::PresentModeKHR::IMMEDIATE, img_scale_filter: vk::Filter::LINEAR, img_scale: 1.5, };
         let state = RenderState { out_of_date: false, idle: false, frame_time: Duration::ZERO };
 
         let input = Input::new();
-        let uniform = Uniform::empty();
+        let mut uniform = Uniform::empty();
 
         let interface = Interface::init(&event_loop, &pref, );
-        let graphic_pipe = Pipe::init(&interface, &uniform, );
+        let graphic_pipe = Pipe::init(&interface, &pref, &mut uniform, );
 
         Render {
             state,
@@ -114,7 +118,7 @@ impl Render {
                             let dim = self.interface.window.inner_size();
                             if dim.width > 0 && dim.height > 0 {
                                 // Not Minimized
-                                self.graphic_pipe.recreate_swapchain(&mut self.interface, &self.pref, );
+                                self.graphic_pipe.recreate_swapchain(&mut self.interface, &mut self.uniform, &self.pref, );
 
                                 self.state.idle = false;
                                 self.state.out_of_date = false;
@@ -125,11 +129,12 @@ impl Render {
                         } else {
                             // Draw and capture FrameTime
                             let start = Instant::now();
-                            self.state.out_of_date = self.graphic_pipe.draw(&self.interface).expect("RENDER_FAILED");
+                            self.state.out_of_date = self.graphic_pipe.draw(&self.interface, &self.pref, ).expect("RENDER_FAILED");
                             self.state.frame_time = start.elapsed();
 
                             // Update Uniform
                             self.uniform.update_uniform(app_start.elapsed());
+                            self.graphic_pipe.update_buffer(&self.interface, self.graphic_pipe.uniform_buffer_memory, &[self.uniform]);
                         },
 
                     Event::LoopDestroyed => self.interface.wait_for_gpu().expect("DEVICE_LOST"), _ => (),

@@ -1,4 +1,4 @@
-use crate::{ HEIGHT, NAME, WIDTH, Pref, };
+use crate::{ HEIGHT, NAME, WIDTH, Pref, uniform::Uniform, };
 use ash::{ extensions::{ ext::DebugUtils, khr::{ Surface, Swapchain, DynamicRendering }, }, vk::{ self, SurfaceTransformFlagsKHR }, Device, Entry, Instance, };
 use raw_window_handle::{ HasRawDisplayHandle, HasRawWindowHandle };
 use std::{ ffi::{ c_void, CStr, CString }, error::Error };
@@ -290,7 +290,9 @@ impl Interface {
             let draw_command_buffer = command_buffer_list[1];
 
             log::info!("Load PresentImgList ...");
-            let present_img_list = swapchain_loader.get_swapchain_images(swapchain).unwrap();
+            let present_img_list = swapchain_loader
+                .get_swapchain_images(swapchain)
+                .unwrap();
             let present_img_view_list: Vec<vk::ImageView> = present_img_list
                 .iter()
                 .map(| &image | {
@@ -300,7 +302,9 @@ impl Interface {
                         .components(vk::ComponentMapping { r: vk::ComponentSwizzle::R, g: vk::ComponentSwizzle::G, b: vk::ComponentSwizzle::B, a: vk::ComponentSwizzle::A, })
                         .subresource_range(vk::ImageSubresourceRange { aspect_mask: vk::ImageAspectFlags::COLOR, base_mip_level: 0, level_count: 1, base_array_layer: 0, layer_count: 1, })
                         .image(image);
-                    device.create_image_view(&create_view_info, None, ).unwrap()
+                    device
+                        .create_image_view(&create_view_info, None, )
+                        .unwrap()
                 })
                 .collect();
             

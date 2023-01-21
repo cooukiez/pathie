@@ -3,9 +3,6 @@ use rand::Rng;
 
 use crate::{service::Service};
 
-const OCTREE_MAX_NODE: usize = 2000;
-pub type OctreeData = [TreeNode; OCTREE_MAX_NODE];
-
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct TreeNode {
@@ -24,7 +21,7 @@ pub struct TreeNode {
 
 pub struct Octree {
     pub octree_root: u32,
-    pub data: OctreeData,
+    pub data: Vec<TreeNode>,
 }
 
 impl TreeNode {
@@ -84,18 +81,10 @@ impl Octree {
         } cur_index
     }
 
-    pub fn format_octree(editable_data: &mut Vec<TreeNode>) -> OctreeData {
-        let mut data = [TreeNode::empty(); OCTREE_MAX_NODE];
-        for index in 0 .. data.len() {
-            if editable_data.len() > index {
-                data[index] = editable_data[index];
-            }
-        } data
-    }
-
     pub fn collect(root_index: usize, vox_amount: u32, span: f32, ) -> Octree {
-        let mut editable_data: Vec<TreeNode> = vec![TreeNode::empty()]; let mut rnd = rand::thread_rng();
-        editable_data[root_index] = TreeNode::new(root_index as u32, span, 0, Vector3::new(0.0, 0.0, 0.0, ), );
+        let mut data: Vec<TreeNode> = vec![TreeNode::empty()]; 
+        let mut rnd = rand::thread_rng();
+        data[root_index] = TreeNode::new(root_index as u32, span, 0, Vector3::new(0.0, 0.0, 0.0, ), );
 
         // Remove Later
         for _ in 0 .. vox_amount {
@@ -103,10 +92,9 @@ impl Octree {
                 x: rnd.gen_range((- span / 2.0) .. (span / 2.0)), y: rnd.gen_range((- span / 2.0) .. (span / 2.0)), z: rnd.gen_range((- span / 2.0) .. (span / 2.0)),
             };
 
-            Self::insert_node(0, &mut editable_data, pos_to_insert, ); 
+            Self::insert_node(0, &mut data, pos_to_insert, ); 
         }
-        
-        let data = Self::format_octree(&mut editable_data.clone());
+
         Octree { octree_root: 0, data }
     }
 }
