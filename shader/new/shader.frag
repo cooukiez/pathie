@@ -113,7 +113,7 @@ void main() {
     for (curStep = 0; curStep < uniformBuffer.maxRayLen; curStep += 1) {
         if (dist > uniformBuffer.maxDist) break;
         if (fragCoord.x < 1 && fragCoord.y < 1) {
-            debugPrintfEXT("\nlro %v3f | fro %v3f | ird %v3f | ro %v3f | rd %v3f", lro, fro, ird, rayOrigin, rayDir);
+            // debugPrintfEXT("\nlro %v3f | fro %v3f | ird %v3f | ro %v3f | rd %v3f", lro, fro, ird, rayOrigin, rayDir);
         }
 
         //i go up a level
@@ -157,6 +157,9 @@ void main() {
                 vec3 hit = voxel(lro, rayDir, ird, size);
 
                 mask = vec3(lessThan(hit,min(hit.yzx, hit.zxy)));
+                if (fragCoord.x < 1 && fragCoord.y < 1) {
+                    debugPrintfEXT("\n%v3f", mask);
+                }
                 float len = dot(hit, mask);
 
 				if (voxelstate == 2) {
