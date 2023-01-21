@@ -81,7 +81,7 @@ impl Render {
     pub fn get_render() -> Render {
         let event_loop = EventLoop::new();
 
-        let pref = Pref { pref_present_mode: vk::PresentModeKHR::IMMEDIATE, img_scale_filter: vk::Filter::CUBIC_EXT, img_scale: 1.0, };
+        let pref = Pref { pref_present_mode: vk::PresentModeKHR::IMMEDIATE, img_scale_filter: vk::Filter::LINEAR, img_scale: 1.5, };
         let state = RenderState { out_of_date: false, idle: false, frame_time: Duration::ZERO };
 
         let input = Input::new();

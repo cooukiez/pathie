@@ -66,8 +66,8 @@ impl Uniform {
             resolution: VecTwo::new(0.0, 0.0),
             
             raw_field_of_view: 60.0,
-            max_ray_length: 300,
-            max_distance: 300.0,
+            max_ray_length: 1000,
+            max_distance: 100.0,
 
             rot: VecTwo::new(0.0, 0.0),
 
