@@ -1,12 +1,15 @@
 use std::time::Duration;
 
 use ash::vk;
-use cgmath::{Vector3, Vector2};
-use winit::dpi::PhysicalSize;
+use cgmath::{Vector3, Vector2, Vector4};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
-pub struct VecThree { x: f32, y: f32, z: f32, }
+pub struct VecFour { x: f32, y: f32, z: f32, w: f32 }
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct VecThree { x: f32, y: f32, z: f32 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -21,6 +24,7 @@ pub struct Uniform {
 
     pub raw_field_of_view: f32,
     pub max_ray_length: u32,
+    pub max_distance: f32,
 
     pub rot: VecTwo,
 
@@ -31,9 +35,18 @@ pub struct Uniform {
 }
 
 // DataTransport Type
+impl VecFour {
+    pub fn new(x: f32, y: f32, z: f32, w: f32, ) -> VecFour { VecFour { x, y, z, w } }
+    pub fn from_vec(vec: Vector4<f32>) -> VecFour { VecFour::new(vec.x, vec.y, vec.z, vec.w, ) }
+    pub fn from_float(in_float: f32) -> VecFour { VecFour::new(in_float, in_float, in_float, in_float, ) }
+    pub fn to_vec(&self) -> Vector4<f32> { Vector4::new(self.x, self.y, self.z, self.w, ) }
+}
+
+// DataTransport Type
 impl VecThree {
     pub fn new(x: f32, y: f32, z: f32, ) -> VecThree { VecThree { x, y, z } }
     pub fn from_vec(vec: Vector3<f32>) -> VecThree { VecThree::new(vec.x, vec.y, vec.z, ) }
+    pub fn from_float(in_float: f32) -> VecThree { VecThree::new(in_float, in_float, in_float, ) }
     pub fn to_vec(&self) -> Vector3<f32> { Vector3::new(self.x, self.y, self.z, ) }
 }
 
@@ -41,6 +54,7 @@ impl VecThree {
 impl VecTwo {
     pub fn new(x: f32, y: f32, ) -> VecTwo { VecTwo { x, y } }
     pub fn from_vec(vec: Vector2<f32>) -> VecTwo { VecTwo::new(vec.x, vec.y, ) }
+    pub fn from_float(in_float: f32) -> VecTwo { VecTwo::new(in_float, in_float, ) }
     pub fn to_vec(&self) -> Vector2<f32> { Vector2::new(self.x, self.y, ) }
 }
 
@@ -53,13 +67,14 @@ impl Uniform {
             
             raw_field_of_view: 60.0,
             max_ray_length: 300,
+            max_distance: 300.0,
 
             rot: VecTwo::new(0.0, 0.0),
 
             octree_root_index: 0,
 
             node_at_pos: 0,
-            pos: VecThree::new(0.0, 0.0, 0.0),
+            pos: VecThree::new(0.1, 0.1, 0.1),
         }
     }
 
