@@ -203,7 +203,9 @@ impl Pipe {
 
             // Create Octree Buffer
             log::info!("Creating OctreeBuffer ...");
-            let octree_buffer_data = Octree::collect(0, 3, 16.0).data.clone();
+            let mut octree = Octree::empty(&uniform);
+            octree.collect_random(3);
+            let octree_buffer_data = octree.data.clone();
             
             let octree_buffer_info = vk::BufferCreateInfo { size: DEFAULT_STORAGE_BUFFER_SIZE, usage: vk::BufferUsageFlags::STORAGE_BUFFER, sharing_mode: vk::SharingMode::EXCLUSIVE, ..Default::default() };
             
