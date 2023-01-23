@@ -5,6 +5,7 @@ use env_logger::fmt::{Color, Formatter};
 use input::Input;
 use interface::Interface;
 use log::Record;
+use octree::Octree;
 use pipe::Pipe;
 use uniform::Uniform;
 use winit::{event_loop::{EventLoop, ControlFlow}, event::{WindowEvent, KeyboardInput, Event}, platform::run_return::EventLoopExtRunReturn};
@@ -39,6 +40,7 @@ pub struct Render {
 
     pref: Pref,
     uniform: Uniform,
+    octree: Octree,
 
     input: Input,
 
@@ -86,15 +88,18 @@ impl Render {
 
         let input = Input::new();
         let mut uniform = Uniform::empty();
+        let mut octree = Octree::empty(&uniform);
+        octree.collect_random(3);
 
         let interface = Interface::init(&event_loop, &pref, );
-        let graphic_pipe = Pipe::init(&interface, &pref, &mut uniform, );
+        let graphic_pipe = Pipe::init(&interface, &pref, &mut uniform, &octree, );
 
         Render {
             state,
             event_loop,
             pref,
             uniform,
+            octree,
             input,
             interface,
             graphic_pipe,
@@ -127,14 +132,14 @@ impl Render {
                                 self.state.idle = true;
                             }
                         } else {
+                            // Update Uniform
+                            self.uniform.update_uniform(app_start.elapsed(), &mut self.octree, );
+                            self.graphic_pipe.update_buffer(&self.interface, self.graphic_pipe.uniform_buffer_memory, &[self.uniform]);
+                            
                             // Draw and capture FrameTime
                             let start = Instant::now();
                             self.state.out_of_date = self.graphic_pipe.draw(&self.interface, &self.pref, ).expect("RENDER_FAILED");
                             self.state.frame_time = start.elapsed();
-
-                            // Update Uniform
-                            self.uniform.update_uniform(app_start.elapsed());
-                            self.graphic_pipe.update_buffer(&self.interface, self.graphic_pipe.uniform_buffer_memory, &[self.uniform]);
                         },
 
                     Event::LoopDestroyed => self.interface.wait_for_gpu().expect("DEVICE_LOST"), _ => (),
