@@ -117,7 +117,7 @@ impl Octree {
         } cur_index
     }
 
-    pub fn collect_random(&mut self, uniform: &Uniform, vox_amount: u32, ) {
+    pub fn collect_random(&mut self, vox_amount: u32, ) {
         let mut rnd = rand::thread_rng();
         for _ in 0 .. vox_amount { 
             octree.insert_node(VecThree::from_float(rnd.gen_range((- span / 2.0) .. (span / 2.0))).to_vec()); 
