@@ -28,7 +28,8 @@ pub struct Uniform {
 
     pub rot: VecTwo,
 
-    pub octree_root_index: u32,
+    pub root_index: u32,
+    pub root_span: f32,
     
     pub node_at_pos: u32,
     pub pos: VecThree,
@@ -71,8 +72,9 @@ impl Uniform {
 
             rot: VecTwo::new(0.0, 0.0),
 
-            octree_root_index: 0,
-
+            root_index: 0,
+            root_span: 64.0,
+        
             node_at_pos: 0,
             pos: VecThree::new(0.1, 0.1, 0.1),
         }
