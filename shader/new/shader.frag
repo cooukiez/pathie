@@ -16,7 +16,8 @@ layout (set = 0, binding = 0) uniform Uniform {
 	float rotHorizontal;
 	float rotVertical;
 
-	uint octreeRootIndex;
+	float rootSpan;
+    float maxDetail;
 	
 	uint nodeAtPos;
 	float X;

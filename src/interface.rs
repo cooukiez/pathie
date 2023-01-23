@@ -1,4 +1,4 @@
-use crate::{ HEIGHT, NAME, WIDTH, Pref, uniform::Uniform, };
+use crate::{ HEIGHT, NAME, WIDTH, Pref, };
 use ash::{ extensions::{ ext::DebugUtils, khr::{ Surface, Swapchain, DynamicRendering }, }, vk::{ self, SurfaceTransformFlagsKHR }, Device, Entry, Instance, };
 use raw_window_handle::{ HasRawDisplayHandle, HasRawWindowHandle };
 use std::{ ffi::{ c_void, CStr, CString }, error::Error };
