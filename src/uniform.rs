@@ -32,7 +32,9 @@ pub struct Uniform {
 
     pub root_span: f32,
     pub max_detail: f32,
+
     pub node_at_pos: u32,
+    pub node_at_pos_span: f32,
 
     pub pos: VecThree,
 }
@@ -76,7 +78,9 @@ impl Uniform {
 
             root_span: 64.0,
             max_detail: 1.0,
+
             node_at_pos: 0,
+            node_at_pos_span: 64.0,
 
             pos: VecThree::new(0.1, 0.1, 0.1),
         }
@@ -96,6 +100,6 @@ impl Uniform {
 
     pub fn update_uniform(&mut self, cur_time: Duration, octree: &mut Octree, ) {
         self.time = cur_time.as_millis() as u32;
-        self.node_at_pos = octree.node_at_pos(self.pos.to_vec()) as u32;
+        (self.node_at_pos, self.node_at_pos_span, ) = octree.node_at_pos(self.pos.to_vec());
     }
 }

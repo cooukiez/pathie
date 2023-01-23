@@ -82,7 +82,7 @@ impl Octree {
         }
     }
 
-    pub fn node_at_pos(&mut self, pos_to_find: Vector3<f32>, ) -> usize {
+    pub fn node_at_pos(&mut self, pos_to_find: Vector3<f32>, ) -> (u32, f32, ) {
         // Start at Root
         let mut cur_index = 0;
         let mut cur_span = self.root_span;
@@ -98,12 +98,12 @@ impl Octree {
                 cur_span /= 2.0;
             } else {
                 // Case -> At Leaf -> Return current LeafNode
-                return cur_index
+                return (cur_index as u32, cur_span, )
             }
-        } cur_index
+        } (cur_index as u32, cur_span, )
     }
 
-    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, ) -> usize {
+    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, ) -> u32 {
         // Start at Root
         let mut cur_index = 0;
         let mut cur_span = self.root_span;
@@ -128,7 +128,7 @@ impl Octree {
             cur_index = self.data[cur_index].children[child_node_index as usize] as usize;
             // Next Node is half the Span
             cur_span /= 2.0;
-        } cur_index
+        } cur_index as u32
     }
 
     pub fn collect_random(&mut self, vox_amount: u32, ) {

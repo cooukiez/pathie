@@ -20,6 +20,8 @@ layout (set = 0, binding = 0) uniform Uniform {
     float maxDetail;
 	
 	uint nodeAtPos;
+    float nodeAtPosSpan;
+
 	float X;
 	float Y;
 	float Z;
@@ -39,37 +41,17 @@ struct TreeNode {
 	float Z;
 };
 
-# define detail 10
+layout (set = 1, binding = 0) readonly buffer OctreeData {
+	TreeNode[2000] octreeData;
+}
 
-# define emptycells 0.5
-# define subdivisions 0.99 //should be higher than emptycells
+# define detail 1.0
 
 # define sqr(number) (number * number)
 
-float rnd(vec4 v) { return fract(4e4*sin(dot(v, vec4(13.46,41.74,-73.36,14.24))+17.34)); }
-
-//0 is empty, 1 is subdivide and 2 is full
-int getvoxel(vec3 position, float size) {
-    if (position.x == 0.0 && position.y == 0.0) {
-        return 0;
-    }
-    
-    float val = rnd(vec4(position,size));
-    
-    if (val < emptycells) {
-        return 0;
-    } else if (val < subdivisions) {
-        return 1;
-    } else {
-        return 2;
-    }
-    
-    return int(val * val * 3.0);
-}
-
 // RayCube Intersection on inside of Cube
-vec3 voxel(vec3 rayOrigin, vec3 rayDir, vec3 inverseRayDir, float size) {
-    return - (sign(rayDir) * (rayOrigin - size * 0.5) - size * 0.5) * inverseRayDir;
+vec3 voxel(vec3 rayOrigin, vec3 rayDir, vec3 inverseRayDir, float curVoxSpan) {
+    return - (sign(rayDir) * (rayOrigin - curVoxSpan * 0.5) - curVoxSpan * 0.5) * inverseRayDir;
 }
 
 layout (location = 0) in vec2 localPos;
@@ -83,14 +65,16 @@ void main() {
 	fragColor = vec4(0.0);
 
     vec2 screenPos = (fragCoord * 2.0 - curRes) / curRes.y;
-    float size = 1.0;
     int curStep;
 	
     vec3 rayOrigin = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
     vec3 rayDir = normalize(vec3(screenPos, 1.0));
 
+    TreeNode curVox = octreeData[uniformBuffer.nodeAtPos];
+    float curVoxSpan = uniformBuffer.nodeAtPosSpan;
+
     // Position within current Cell / Node
-    vec3 localRayOrigin = mod(rayOrigin, size);
+    vec3 localRayOrigin = mod(rayOrigin, curVoxSpan);
     // RayOrigin on the Edge of the Node
     vec3 originOnEdge = rayOrigin - localRayOrigin;
     // ? Used for RayCube Intersection
@@ -108,8 +92,6 @@ void main() {
 
     vec3 lastMask;
     vec3 normal = vec3(0.0);
-
-    
     
     // The Octree TraverseLoop
     // Each Iteration either check ...
@@ -127,43 +109,41 @@ void main() {
         // Should go up
         if (exitOctree) {
             // ?
-            vec3 newOriginOnEdge = floor(originOnEdge / (size * 2.0)) * (size * 2.0);
+            vec3 newOriginOnEdge = floor(originOnEdge / (curVoxSpan * 2.0)) * (curVoxSpan * 2.0);
             
             localRayOrigin += originOnEdge - newOriginOnEdge;
             originOnEdge = newOriginOnEdge;
             
-            // Moving one Layer up -> Decrease RecursionAmount & Double Size
+            // Moving one Layer up -> Decrease RecursionAmount & Double curVoxSpan
             recursionAmount -= 1;
-            size *= 2.0;
+            curVoxSpan *= 2.0;
             
             // ?
-            exitOctree = (recursionAmount > 0) && (abs(dot(mod(originOnEdge / size + 0.5, 2.0) - 1.0 + mask * sign(rayDir) * 0.5, mask)) < 0.1);
-        }
-        else
-        {
+            exitOctree = (recursionAmount > 0) && (abs(dot(mod(originOnEdge / curVoxSpan + 0.5, 2.0) - 1.0 + mask * sign(rayDir) * 0.5, mask)) < 0.1);
+        } else {
             // Getting Node Type
-            int state = getvoxel(originOnEdge, size); // Replace
+            int state = getvoxel(originOnEdge, curVoxSpan); // Replace
 
             // If State == Subdivide && too much Detail -> State = Empty
             if (state == 1 && recursionAmount > detail) { state = 0; }
             
             // If State = Subdivide && no Limit of Detail reached -> Select Child
             if(state == 1 && recursionAmount <= detail) {
-                // Moving one Layer down -> Increase RecursionAmount & Half Size
+                // Moving one Layer down -> Increase RecursionAmount & Half curVoxSpan
                 recursionAmount += 1;
-                size *= 0.5;
+                curVoxSpan *= 0.5;
 
                 // Select specific Child
-                vec3 childMask = step(vec3(size), localRayOrigin);
+                vec3 childMask = step(vec3(curVoxSpan), localRayOrigin);
 
-                originOnEdge += childMask * size;
-                localRayOrigin -= childMask * size;
+                originOnEdge += childMask * curVoxSpan;
+                localRayOrigin -= childMask * curVoxSpan;
 
             // Move forward or stop -> 0 = Empty , 2 = Full
             } else if (state == 0) {
                 // Raycast and find distance to NearestVoxSurface in direction of Ray
                 // No need to call everytime
-                vec3 hit = voxel(localRayOrigin, rayDir, inverseRayDir, size);
+                vec3 hit = voxel(localRayOrigin, rayDir, inverseRayDir, curVoxSpan);
 
                 mask = vec3(lessThan(hit,min(hit.yzx, hit.zxy)));
                 float len = dot(hit, mask);
@@ -176,11 +156,11 @@ void main() {
                 dist += len;
 
                 // ?
-                localRayOrigin += rayDir * len - mask * sign(rayDir) * size;
-                vec3 newOriginOnEdge = originOnEdge + mask * sign(rayDir) * size;
+                localRayOrigin += rayDir * len - mask * sign(rayDir) * curVoxSpan;
+                vec3 newOriginOnEdge = originOnEdge + mask * sign(rayDir) * curVoxSpan;
 
                 // ? Check if need to move up
-                exitOctree = (floor(newOriginOnEdge / size * 0.5 + 0.25) != floor(originOnEdge / size * 0.5 + 0.25)) && (recursionAmount > 0);
+                exitOctree = (floor(newOriginOnEdge / curVoxSpan * 0.5 + 0.25) != floor(originOnEdge / curVoxSpan * 0.5 + 0.25)) && (recursionAmount > 0);
 
                 originOnEdge = newOriginOnEdge;
                 lastMask = mask;
