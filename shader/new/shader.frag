@@ -25,11 +25,11 @@ layout (set = 0, binding = 0) uniform Uniform {
 } uniformBuffer;
 
 struct TreeNode {
-    uint mat;
-	uint parent;
+    vec4 baseColor;
 
-    uint span;
-    uint spaceIndex;
+    // 0 = empty | 1 = subdivide | 2 = full
+    uint nodeType;
+	uint parent;
 
 	uint[8] children;
 	
@@ -45,7 +45,7 @@ struct TreeNode {
 
 # define sqr(number) (number * number)
 
-float rnd(vec4 v) { return fract(4e4*sin(dot(v,vec4(13.46,41.74,-73.36,14.24))+17.34)); }
+float rnd(vec4 v) { return fract(4e4*sin(dot(v, vec4(13.46,41.74,-73.36,14.24))+17.34)); }
 
 //0 is empty, 1 is subdivide and 2 is full
 int getvoxel(vec3 position, float size) {
@@ -66,9 +66,9 @@ int getvoxel(vec3 position, float size) {
     return int(val * val * 3.0);
 }
 
-//ray-cube intersection, on the inside of the cube
+// RayCube Intersection on inside of Cube
 vec3 voxel(vec3 rayOrigin, vec3 rayDir, vec3 inverseRayDir, float size) {
-    return - (sign(rayDir) * (rayOrigin - size * 0.5) - size * 0.5) * inverseRayDir;;
+    return - (sign(rayDir) * (rayOrigin - size * 0.5) - size * 0.5) * inverseRayDir;
 }
 
 layout (location = 0) in vec2 localPos;
@@ -92,7 +92,7 @@ void main() {
     vec3 localRayOrigin = mod(rayOrigin, size);
     // RayOrigin on the Edge of the Node
     vec3 originOnEdge = rayOrigin - localRayOrigin;
-    // ?
+    // ? Used for RayCube Intersection
     vec3 inverseRayDir = 1.0 / max(abs(rayDir), 0.001);
     // ? Mask -> Which Node to choose
     vec3 mask;
@@ -104,11 +104,11 @@ void main() {
 
     // Travelled Distance
     float dist = 0.0;
-    // ? -> Replace Name
-    float fdist = 0.0;
 
     vec3 lastMask;
     vec3 normal = vec3(0.0);
+
+    
     
     // The Octree TraverseLoop
     // Each Iteration either check ...
@@ -173,7 +173,6 @@ void main() {
 
                 // Moving forward in direciton of Ray
                 dist += len;
-                fdist += len;
 
                 // ?
                 localRayOrigin += rayDir * len - mask * sign(rayDir) * size;
