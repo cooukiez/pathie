@@ -54,7 +54,7 @@ pub struct Pref {
     pub img_scale_filter: vk::Filter,
     pub img_scale: f32,
 }
-
+    
 fn main() {
     let log_format = | buf: &mut Formatter, record: &Record | {
         let mut buf_style = buf.style();
@@ -66,7 +66,7 @@ fn main() {
         let time = chrono::Local::now().format("%H:%M:%S");
 
         writeln!(buf, "[ {} {} ] {}", time, buf_style.value(record.level()), record.args(), ) 
-    };
+    };  
 
     env_logger::builder()
         .format(log_format)

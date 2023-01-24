@@ -31,7 +31,7 @@ pub struct Uniform {
     pub rot: VecTwo,
 
     pub root_span: f32,
-    pub max_detail: f32,
+    pub max_recursion: u32,
 
     pub node_at_pos: u32,
     pub node_at_pos_span: f32,
@@ -71,13 +71,13 @@ impl Uniform {
             resolution: VecTwo::new(0.0, 0.0),
             
             raw_field_of_view: 60.0,
-            max_ray_length: 1000,
-            max_distance: 100.0,
+            max_ray_length: 100,
+            max_distance: 30.0,
 
             rot: VecTwo::new(0.0, 0.0),
 
             root_span: 64.0,
-            max_detail: 1.0,
+            max_recursion: 10,
 
             node_at_pos: 0,
             node_at_pos_span: 64.0,

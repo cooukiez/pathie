@@ -21,8 +21,7 @@ pub struct TreeNode {
 pub struct Octree {
     // RootIndex = 0
     pub root_span: f32,
-    // MinVoxSpan
-    pub max_detail: f32,
+    pub max_recursion: u32,
     // Octree as List
     pub data: Vec<TreeNode>,
 }
@@ -57,6 +56,10 @@ impl TreeNode {
         TreeNode::new(VecFour::from_float(0.0), 0, parent_index, global_pos, )
     }
 
+    pub fn create_children(&mut self) {
+
+    }
+
     // Return SpaceIndex
     pub fn choose_child_node(&self, cur_pos: &Vector3<f32>, parent_span: f32, ) -> u32 {
         let center = self.center.to_vec();
@@ -67,8 +70,9 @@ impl TreeNode {
         let y = Service::check_number_in_range([center.y, top_right.y], cur_pos.y, ) as u32 as f32;
         let z = Service::check_number_in_range([center.z, top_right.z], cur_pos.z, ) as u32 as f32;
         
-        // Convert to SpaceIndex -> Index inside Parent
-        Service::pos_to_index(&Vector3::new(x, y, z, ), 2)
+        // Convert to SpaceIndex -> Index inside Parent\
+        let child_space_index = Service::pos_to_index(&Vector3::new(x, y, z, ), 2);
+        self.children[child_space_index as usize]
     }
 }
 
@@ -77,7 +81,7 @@ impl Octree {
         let data: Vec<TreeNode> = vec![TreeNode::empty()];
         Octree { 
             root_span: uniform.root_span,
-            max_detail: uniform.max_detail,
+            max_recursion: uniform.max_recursion,
             data
         }
     }
@@ -88,12 +92,10 @@ impl Octree {
         let mut cur_span = self.root_span;
 
         // Stop at MaxDetail
-        while cur_span >= self.max_detail {
+        for _  in 0 .. self.max_recursion {
             if self.data[cur_index].node_type == 1 {
-                // Select ChildNode base on the Position which is searched
-                let child_node_index = self.data[cur_index].choose_child_node(&pos_to_find, cur_span, );
-                // Update CurIndex with certain ChildNode of current Index
-                cur_index = self.data[cur_index].children[child_node_index as usize] as usize;
+                // Select ChildNode based on the Position which is searched
+                cur_index = self.data[cur_index].choose_child_node(&pos_to_find, cur_span, ) as usize;
                 // Next Node is half the Span
                 cur_span /= 2.0;
             } else {
@@ -103,32 +105,33 @@ impl Octree {
         } (cur_index as u32, cur_span, )
     }
 
-    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, ) -> u32 {
+    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, ) {
         // Start at Root
         let mut cur_index = 0;
         let mut cur_span = self.root_span;
 
         // Stop at MaxDetail
-        while cur_span >= self.max_detail {
+        for _  in 0 .. self.max_recursion {
             // If not Subdivide then change into
             if self.data[cur_index].node_type == 0 {
                 self.data[cur_index].node_type = 1;
-
                 for index in 0 .. 8 {
                     // Child Index = Next Index of OctreeData + CurChildIndex
-                    self.data[cur_index as usize].children[index] = self.data.len() as u32;
+                    self.data[cur_index].children[index] = self.data.len() as u32;
                     // Add Child to Octree
-                    self.data.push(self.data[cur_index as usize].create_child(index as u32, cur_index as u32, cur_span, ))
+                    let child = self.data[cur_index].create_child(index as u32, cur_index as u32, cur_span, );
+                    self.data.push(child);
                 }
             }
 
-            // Select ChildNode base on the InsertPos
-            let child_node_index = self.data[cur_index].choose_child_node(&insert_pos, cur_span, );
-            // Update CurIndex with certain ChildNode of current Index
-            cur_index = self.data[cur_index].children[child_node_index as usize] as usize;
+            // Select ChildNode based on the InsertPos
+            cur_index = self.data[cur_index].choose_child_node(&insert_pos, cur_span, ) as usize;
             // Next Node is half the Span
             cur_span /= 2.0;
-        } cur_index as u32
+        }
+
+        // Set CurNode to full
+        self.data[cur_index].node_type = 2;
     }
 
     pub fn collect_random(&mut self, vox_amount: u32, ) {

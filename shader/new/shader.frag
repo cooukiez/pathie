@@ -17,7 +17,7 @@ layout (set = 0, binding = 0) uniform Uniform {
 	float rotVertical;
 
 	float rootSpan;
-    float maxDetail;
+    uint maxRecursion;
 	
 	uint nodeAtPos;
     float nodeAtPosSpan;
@@ -43,15 +43,18 @@ struct TreeNode {
 
 layout (set = 1, binding = 0) readonly buffer OctreeData {
 	TreeNode[2000] octreeData;
-}
+};
 
 # define detail 1.0
-
 # define sqr(number) (number * number)
 
 // RayCube Intersection on inside of Cube
-vec3 voxel(vec3 rayOrigin, vec3 rayDir, vec3 inverseRayDir, float curVoxSpan) {
+vec3 rayCubeIntersect(vec3 rayOrigin, vec3 rayDir, vec3 inverseRayDir, float curVoxSpan) {
     return - (sign(rayDir) * (rayOrigin - curVoxSpan * 0.5) - curVoxSpan * 0.5) * inverseRayDir;
+}
+
+uint posToIndex(vec3 pos, float sideLen) {
+    return uint(pos.x + pos.y * sqr(sideLen) + pos.z * sideLen);
 }
 
 layout (location = 0) in vec2 localPos;
@@ -118,23 +121,41 @@ void main() {
             recursionAmount -= 1;
             curVoxSpan *= 2.0;
             
+            curVox = octreeData[curVox.parent];
+
+            if (fragCoord.x < 1 && fragCoord.y < 1) {
+                debugPrintfEXT("\nUp");
+            }
+
             // ?
             exitOctree = (recursionAmount > 0) && (abs(dot(mod(originOnEdge / curVoxSpan + 0.5, 2.0) - 1.0 + mask * sign(rayDir) * 0.5, mask)) < 0.1);
         } else {
             // Getting Node Type
-            int state = getvoxel(originOnEdge, curVoxSpan); // Replace
+            uint state = curVox.nodeType;
+
+            if (fragCoord.x < 1 && fragCoord.y < 1) {
+                // debugPrintfEXT("\n%d", curVox.parent);
+            }
 
             // If State == Subdivide && too much Detail -> State = Empty
-            if (state == 1 && recursionAmount > detail) { state = 0; }
+            if (state == 1 && recursionAmount > uniformBuffer.maxRecursion) { state = 0; }
             
             // If State = Subdivide && no Limit of Detail reached -> Select Child
-            if(state == 1 && recursionAmount <= detail) {
+            if (state == 1 && recursionAmount <= uniformBuffer.maxRecursion) {
                 // Moving one Layer down -> Increase RecursionAmount & Half curVoxSpan
                 recursionAmount += 1;
                 curVoxSpan *= 0.5;
 
                 // Select specific Child
                 vec3 childMask = step(vec3(curVoxSpan), localRayOrigin);
+                if (fragCoord.x < 1 && fragCoord.y < 1) {
+                    // debugPrintfEXT("\n%d", curVox.children[posToIndex(childMask, 2.0)]);
+                }
+                curVox = octreeData[curVox.children[posToIndex(childMask, 2.0)]];
+
+                if (fragCoord.x < 1 && fragCoord.y < 1) {
+                    debugPrintfEXT("\nDown");
+                }
 
                 originOnEdge += childMask * curVoxSpan;
                 localRayOrigin -= childMask * curVoxSpan;
@@ -143,9 +164,10 @@ void main() {
             } else if (state == 0) {
                 // Raycast and find distance to NearestVoxSurface in direction of Ray
                 // No need to call everytime
-                vec3 hit = voxel(localRayOrigin, rayDir, inverseRayDir, curVoxSpan);
+                vec3 hit = rayCubeIntersect(localRayOrigin, rayDir, inverseRayDir, curVoxSpan);
 
                 mask = vec3(lessThan(hit,min(hit.yzx, hit.zxy)));
+                curVox = octreeData[octreeData[curVox.parent].children[posToIndex(mask, 2.0)]];
                 float len = dot(hit, mask);
 
                 if (fragCoord.x < 1 && fragCoord.y < 1) {
@@ -159,6 +181,10 @@ void main() {
                 localRayOrigin += rayDir * len - mask * sign(rayDir) * curVoxSpan;
                 vec3 newOriginOnEdge = originOnEdge + mask * sign(rayDir) * curVoxSpan;
 
+                if (fragCoord.x < 1 && fragCoord.y < 1) {
+                    debugPrintfEXT("\nForward");
+                }
+
                 // ? Check if need to move up
                 exitOctree = (floor(newOriginOnEdge / curVoxSpan * 0.5 + 0.25) != floor(originOnEdge / curVoxSpan * 0.5 + 0.25)) && (recursionAmount > 0);
 
@@ -167,18 +193,11 @@ void main() {
             } else if (state == 2) { break; }
         }
     }
-    
-    // ?
-    rayOrigin += rayDir * dist;
-    if(curStep < uniformBuffer.maxRayLen && dist < uniformBuffer.maxDist) {
-        // ?
-    	float val = fract(dot(originOnEdge, vec3(15.23, 754.345, 3.454)));
-        vec3 color = sin(val * vec3(39.896,57.3225,48.25)) * 0.5 + 0.5;
 
-        // ?
-    	fragColor = vec4(color * (normal * 0.25 + 0.75), 1.0);
+    if (fragCoord.x < 1 && fragCoord.y < 1) {
+        debugPrintfEXT("\nFinished");
+        debugPrintfEXT("\n");
     }
 
-    // ?
-    fragColor = sqrt(fragColor);
+    fragColor = vec4(0, dist / uniformBuffer.maxRayLen, 0, 0);
 }
