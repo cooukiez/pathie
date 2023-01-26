@@ -89,7 +89,7 @@ impl Render {
         let input = Input::new();
         let mut uniform = Uniform::empty();
         let mut octree = Octree::empty(&uniform);
-        octree.collect_random(3);
+        octree.collect_random();
 
         let interface = Interface::init(&event_loop, &pref, );
         let graphic_pipe = Pipe::init(&interface, &pref, &mut uniform, &octree, );
@@ -115,6 +115,9 @@ impl Render {
                     Event::WindowEvent { event: WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(keycode), state, .. }, .. }, .. } =>
                         // Handle KeyboardInput
                         self.input.handle_key_input(&keycode, &state, &self.interface, &mut self.uniform, ),
+
+                    Event::WindowEvent { event: WindowEvent::CursorMoved { position, .. }, .. } =>
+                        self.input.handle_mouse_input(position, &mut self.uniform),
 
                     Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => * control_flow = ControlFlow::Exit,
                     Event::MainEventsCleared =>

@@ -7,15 +7,15 @@ use crate::octree::Octree;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
-pub struct VecFour { x: f32, y: f32, z: f32, w: f32 }
+pub struct VecFour { pub x: f32, pub y: f32, pub z: f32, pub w: f32 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
-pub struct VecThree { x: f32, y: f32, z: f32 }
+pub struct VecThree { pub x: f32, pub y: f32, pub z: f32 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
-pub struct VecTwo { x: f32, y: f32 }
+pub struct VecTwo { pub x: f32, pub y: f32 }
 
 
 #[repr(C)]
@@ -31,6 +31,7 @@ pub struct Uniform {
     pub rot: VecTwo,
 
     pub root_span: f32,
+    pub root_center: VecThree,
     pub max_recursion: u32,
 
     pub node_at_pos: u32,
@@ -77,12 +78,13 @@ impl Uniform {
             rot: VecTwo::new(0.0, 0.0),
 
             root_span: 64.0,
-            max_recursion: 10,
+            root_center: VecThree::from_float(0.0),
+            max_recursion: 100,
 
             node_at_pos: 0,
             node_at_pos_span: 64.0,
 
-            pos: VecThree::new(0.1, 0.1, 0.1),
+            pos: VecThree::from_float(- 20.0),
         }
     }
 

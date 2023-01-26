@@ -1,5 +1,5 @@
-use cgmath::Vector3;
-use winit::{event::{VirtualKeyCode, ElementState}, window::Fullscreen};
+use cgmath::{Vector3, Vector2};
+use winit::{event::{VirtualKeyCode, ElementState}, window::Fullscreen, dpi::{PhysicalPosition}};
 
 use crate::{uniform::Uniform, interface::Interface};
 
@@ -53,5 +53,9 @@ impl Input {
                 Action::ESCAPE => interface.window.set_fullscreen(None), _ => (),
             }
         }
+    }
+
+    pub fn handle_mouse_input(&self, position: PhysicalPosition<f64>, uniform: &mut Uniform, ) {
+        uniform.apply_rotation(Vector2::new(position.x as f32, position.y as f32, ))
     }
 }

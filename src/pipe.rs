@@ -269,7 +269,7 @@ impl Pipe {
                 .unwrap();
 
             let uniform_buffer_descriptor = vk::DescriptorBufferInfo { buffer: uniform_buffer, offset: 0, range: mem::size_of_val(&uniform_buffer_data) as u64, };
-            let octree_buffer_descriptor = vk::DescriptorBufferInfo { buffer: octree_buffer, offset: 0, range: mem::size_of_val(&octree_buffer_data) as u64, };
+            let octree_buffer_descriptor = vk::DescriptorBufferInfo { buffer: octree_buffer, offset: 0, range: vk::WHOLE_SIZE, };
 
             let write_desc_set_list = [
                 vk::WriteDescriptorSet { dst_set: descriptor_set_list[0], descriptor_count: 1, descriptor_type: vk::DescriptorType::UNIFORM_BUFFER, p_buffer_info: &uniform_buffer_descriptor, ..Default::default() },

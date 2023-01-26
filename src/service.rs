@@ -21,7 +21,7 @@ impl Service {
                 && Self::check_number_in_range([first.z, sec.z], check.z, )
     }
 
-    pub fn convert_index_to_pos(index: u32, side_len: u32, ) -> Vector3<f32> { 
+    pub fn index_to_pos(index: u32, side_len: u32, ) -> Vector3<f32> { 
         Vector3::new(((index % (side_len * side_len)) % side_len) as f32, (index / (side_len * side_len)) as f32, ((index % (side_len * side_len)) / side_len) as f32)
     }
 }
