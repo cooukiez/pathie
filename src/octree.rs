@@ -1,6 +1,6 @@
 use cgmath::Vector3;
 
-use crate::{service::Service, uniform::{VecThree, Uniform}};
+use crate::{uniform::{VecThree, Uniform}, service::{pos_to_index}};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -15,7 +15,7 @@ pub struct TreeNode {
 pub struct Octree {
     // RootIndex = 0
     pub root_span: f32,
-    pub root_center: VecThree,
+    pub root_center: Vector3<f32>,
     pub max_recursion: u32,
     // Octree as List
     pub data: Vec<TreeNode>,
@@ -30,45 +30,35 @@ impl TreeNode {
         TreeNode { node_type, parent, children: [0; 8]}
     }
 
-    pub fn get_outer_pos(center: &VecThree, sign: &Vector3<f32>, diameter: f32, ) -> Vector3<f32> {
-        center.to_vec() + (sign * (diameter as f32))
+    pub fn get_bottom_left(center: Vector3<f32>, span: f32, ) -> Vector3<f32> {
+        center - VecThree::from_float(span / 2.0).to_vec()
     }
 
-    pub fn get_bottom_left(center: &VecThree, span: f32, ) -> Vector3<f32> {
-        center.to_vec() - VecThree::from_float(span / 2.0).to_vec()
+    pub fn get_top_right(center: Vector3<f32>, span: f32, ) -> Vector3<f32> {
+        center + VecThree::from_float(span / 2.0).to_vec()
     }
 
-    pub fn get_top_right(center: &VecThree, span: f32, ) -> Vector3<f32> {
-        center.to_vec() + VecThree::from_float(span / 2.0).to_vec()
-    }
-
-    pub fn get_child_mask(center: &VecThree, top_right: Vector3<f32>, cur_pos: Vector3<f32>,  ) -> VecThree {
-        // log::info!("{:?} {:?} {:?}", center, top_right, cur_pos);
-        VecThree { 
-            x: Service::check_number_in_range([center.x, top_right.x], cur_pos.x, ) as u32 as f32,
-                y: Service::check_number_in_range([center.y, top_right.y], cur_pos.y, ) as u32 as f32,
-                    z: Service::check_number_in_range([center.z, top_right.z], cur_pos.z, ) as u32 as f32
+    pub fn get_child_mask(parent_center: Vector3<f32>, parent_span: f32, cur_pos: Vector3<f32>,  ) -> Vector3<u32> {
+        let top_right = Self::get_top_right(parent_center, parent_span, );
+        Vector3 {
+            x: (parent_center.x .. top_right.x).contains(&cur_pos.x) as u32,
+                y: (parent_center.y .. top_right.y).contains(&cur_pos.y) as u32,
+                    z: (parent_center.z .. top_right.z).contains(&cur_pos.z) as u32
         }
     }
 
-    pub fn get_child_pos(child_mask: &VecThree, parent_center: &VecThree, parent_span: f32, ) -> VecThree {
-        let parent_bottom_left = Self::get_bottom_left(parent_center, parent_span, );
-        let local_pos = child_mask.to_vec() * parent_span / 2.0;
-
-        VecThree::from_vec(parent_bottom_left + VecThree::from_float(parent_span / 4.0).to_vec() + local_pos)
+    pub fn get_child_pos(child_mask: Vector3<f32>, parent_center: Vector3<f32>, parent_span: f32, ) -> Vector3<f32> {
+        let bottom_left = Self::get_bottom_left(parent_center, parent_span, );
+        bottom_left + Vector3::from([parent_span / 4.0; 3]) + child_mask * parent_span / 2.0
     }
 
-    pub fn choose_child_node(&self, parent_center: &VecThree, parent_span: f32, cur_pos: Vector3<f32>, ) -> (u32, VecThree, f32) {
-        let top_right = Self::get_top_right(parent_center, parent_span, );
+    pub fn choose_child_node(&self, parent_center: Vector3<f32>, parent_span: f32, cur_pos: Vector3<f32>, ) -> (u32, Vector3<f32>, f32) {
+        let child_mask: Vector3<f32> = Self::get_child_mask(parent_center, parent_span, cur_pos, ).cast::<f32>().unwrap();
 
-        let child_mask = Self::get_child_mask(parent_center, top_right, cur_pos, );
+        let child_index = self.children[pos_to_index(child_mask, 2, ) as usize];
+        let child_pos = Self::get_child_pos(child_mask, parent_center, parent_span, );
 
-        // log::info!("{:?}", Self::get_child_mask(parent_center, top_right, cur_pos, ));
-        let child_index = self.children[Service::pos_to_index(&child_mask.to_vec(), 2, ) as usize];
-        let child_pos = Self::get_child_pos(&child_mask, parent_center, parent_span, );
-        let child_span = parent_span / 0.5;
-
-        (child_index, child_pos, child_span, )
+        (child_index, child_pos, parent_span * 0.5, )
     }
 }
 
@@ -77,32 +67,27 @@ impl Octree {
         let data: Vec<TreeNode> = vec![TreeNode::empty()];
         Octree { 
             root_span: uniform.root_span,
-            root_center: uniform.root_center,
+            root_center: uniform.root_center.to_vec(),
             max_recursion: uniform.max_recursion,
             data
         }
     }
 
-    pub fn node_at_pos(&mut self, pos_to_find: Vector3<f32>, ) -> (u32, f32, ) {
+    pub fn node_at_pos(&mut self, pos_to_find: Vector3<f32>, ) -> (u32, f32, u32, ) {
         let mut cur_index = 0;
         let mut cur_node_center = self.root_center;
         let mut cur_span = self.root_span;
 
-        log::info!("");
-
-        for _  in 0 .. self.max_recursion {
+        for cur_recursion in 0 .. self.max_recursion {
             if self.data[cur_index as usize].node_type == 1 {
                 (cur_index, cur_node_center, cur_span, ) = self.data[cur_index as usize]
-                    .choose_child_node(&mut cur_node_center, cur_span, pos_to_find, );
+                    .choose_child_node(cur_node_center, cur_span, pos_to_find, );
             } else {
-                // Case -> At Leaf -> Return current LeafNode
-                return (cur_index, cur_span, )
+                return (cur_index, cur_span, cur_recursion, )
             }
         }
 
-        log::info!("{}", self.data[cur_index as usize].node_type);
-
-        (cur_index, cur_span, )
+        (cur_index, cur_span, self.max_recursion, )
     }
 
     pub fn insert_node(&mut self, insert_pos: Vector3<f32>, ) {
@@ -111,7 +96,7 @@ impl Octree {
         let mut cur_span = self.root_span;
 
         for _  in 0 .. self.max_recursion {
-            // If not Subdivide then change into -> Create children
+            // If not Subdivide -> Create children
             if self.data[cur_index as usize].node_type == 0 {
                 self.data[cur_index as usize].node_type = 1;
 
@@ -123,7 +108,11 @@ impl Octree {
             }
 
             (cur_index, cur_node_center, cur_span, ) = self.data[cur_index as usize]
-                    .choose_child_node(&mut cur_node_center, cur_span, insert_pos, );
+                .choose_child_node(cur_node_center, cur_span, insert_pos, );
+        }
+
+        if cur_index == 472 {
+              log::info!("");
         }
 
         // Set CurNode to full

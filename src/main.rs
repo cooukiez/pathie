@@ -54,7 +54,7 @@ pub struct Pref {
     pub img_scale_filter: vk::Filter,
     pub img_scale: f32,
 }
-    
+
 fn main() {
     let log_format = | buf: &mut Formatter, record: &Record | {
         let mut buf_style = buf.style();

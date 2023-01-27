@@ -13,6 +13,7 @@ pub enum Action {
     RIGHT,
 
     JUMP,
+    SHIFT,
 
     FULLSCREEN,
     ESCAPE,
@@ -32,6 +33,7 @@ impl Input {
         binding_list[VirtualKeyCode::D as usize] = Action::RIGHT;
 
         binding_list[VirtualKeyCode::Space as usize] = Action::JUMP;
+        binding_list[VirtualKeyCode::LShift as usize] = Action::SHIFT;
 
         binding_list[VirtualKeyCode::F as usize] = Action::FULLSCREEN;
         binding_list[VirtualKeyCode::Escape as usize] = Action::ESCAPE;
@@ -42,12 +44,13 @@ impl Input {
     pub fn handle_key_input(&self, keycode: &VirtualKeyCode, state: &ElementState, interface: &Interface, uniform: &mut Uniform, ) {
         if state == &ElementState::Pressed {
             match self.binding_list[* keycode as usize] {
-                Action::FORWARD => uniform.apply_velocity(Vector3::new(0.0, 0.0, 0.01)),
-                Action::BACKWARD => uniform.apply_velocity(Vector3::new(0.0, 0.0, - 0.01)),
-                Action::LEFT => uniform.apply_velocity(Vector3::new(- 0.01, 0.0, 0.0)),
-                Action::RIGHT => uniform.apply_velocity(Vector3::new(0.01, 0.0, 0.0)),
+                Action::FORWARD => uniform.apply_velocity(Vector3::new(0.0, 0.0, 1.0)),
+                Action::BACKWARD => uniform.apply_velocity(Vector3::new(0.0, 0.0, - 1.0)),
+                Action::LEFT => uniform.apply_velocity(Vector3::new(- 1.0, 0.0, 0.0)),
+                Action::RIGHT => uniform.apply_velocity(Vector3::new(1.0, 0.0, 0.0)),
 
-                Action::JUMP => uniform.apply_velocity(Vector3::new(0.0, 0.01, 0.0)),
+                Action::JUMP => uniform.apply_velocity(Vector3::new(0.0, - 1.0, 0.0)),
+                Action::SHIFT => uniform.apply_velocity(Vector3::new(0.0, 1.0, 0.0)),
                 
                 Action::FULLSCREEN => interface.window.set_fullscreen(Some(Fullscreen::Exclusive(interface.monitor.video_modes().next().expect("ERR_NO_MONITOR_MODE").clone()))),
                 Action::ESCAPE => interface.window.set_fullscreen(None), _ => (),
