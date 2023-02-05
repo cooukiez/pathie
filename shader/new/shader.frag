@@ -17,11 +17,6 @@ layout (set = 0, binding = 0) uniform Uniform {
 	float rotVertical;
 
 	float rootSpan;
-
-    float RX;
-    float RY;
-    float RZ;
-
     uint maxRecursion;
 	
 	uint nodeAtPos;
