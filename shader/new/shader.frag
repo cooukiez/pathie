@@ -66,7 +66,7 @@ void main() {
     int curStep;
 	
     vec3 rayOrigin = vec3(255);
-    vec3 rayDir = normalize(vec3(screenPos, 1.0)) * vec3(1);
+    vec3 rayDir = normalize(vec3(screenPos, 1.0)) * vec3(1, - 1, 1);
 
     uint curIndex = 0; // octreeData[].parent;
     TreeNode curVox = octreeData[curIndex];
@@ -84,7 +84,7 @@ void main() {
     // Should move up one Layer
     bool exitOctree = false;
     // = Depth
-    int recursionAmount = 1;
+    int recursionAmount = 0;
 
     // Travelled Distance
     float dist = 0.0;
@@ -100,7 +100,7 @@ void main() {
     // ... If Node / Cell is empty -> Go one step forward
 
     if (fragCoord.x < 1 && fragCoord.y < 1) {
-        debugPrintfEXT("\nStart %d", curIndex);
+        debugPrintfEXT("\nStart %d %v3f %v3f", curIndex, rayDir, sign(rayDir));
     }
 
     for (curStep = 0; curStep < uniformBuffer.maxRayLen; curStep += 1) {
@@ -126,7 +126,7 @@ void main() {
             }
 
             // ?
-            exitOctree = (recursionAmount > 0) && (abs(dot(mod(originOnEdge / curVoxSpan + 0.5, 2.0) - 1.0 + mask * sign(rayDir) * 0.5, mask)) < 0.1);
+            exitOctree = (abs(dot(mod((originOnEdge + 0.25) / curVoxSpan + 0.5, 2.0) - 1.0 + mask * sign(rayDir) * 0.5, mask)) < 0.1) && (recursionAmount > 0);
         } else {
             // Getting Node Type
             uint state = curVox.nodeType;
@@ -177,7 +177,8 @@ void main() {
                 localRayOrigin += rayDir * len - mask * sign(rayDir) * curVoxSpan;
                 vec3 newOriginOnEdge = originOnEdge + mask * sign(rayDir) * curVoxSpan;
 
-                vec3 curTestPos = newOriginOnEdge + localRayOrigin;
+                curIndex = octreeData[curVox.parent].children[posToIndex(mask, 2.0)];
+                curVox = octreeData[curIndex];
 
                 if (fragCoord.x < 1 && fragCoord.y < 1) {
                     debugPrintfEXT("\nForward %d %v3f %v3f", curIndex, newOriginOnEdge, localRayOrigin);
@@ -185,10 +186,6 @@ void main() {
 
                 // ? Check if need to move up
                 exitOctree = (floor(newOriginOnEdge / curVoxSpan * 0.5 + 0.25) != floor(originOnEdge / curVoxSpan * 0.5 + 0.25)) && (recursionAmount > 0);
-                if (!exitOctree) {
-                    curIndex = octreeData[curVox.parent].children[posToIndex(mask, 2.0)];
-                    curVox = octreeData[curIndex];
-                }
 
                 originOnEdge = newOriginOnEdge;
                 lastMask = mask;
