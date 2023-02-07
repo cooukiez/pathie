@@ -75,8 +75,8 @@ impl Octree {
                 origin_on_edge += child_mask * cur_span;
                 local_origin -= child_mask * cur_span;
 
-                log::info!("{:?} {:?} {:?}", local_origin, origin_on_edge, child_mask);
-                log::info!("{:?}", cur_index);
+                // log::info!("{:?} {:?} {:?}", local_origin, origin_on_edge, child_mask);
+                // log::info!("{:?}", cur_index);
 
                 cur_index = self.data[cur_index as usize]
                     .children[pos_to_index(child_mask, 2, ) as usize];
@@ -85,7 +85,7 @@ impl Octree {
             }
         }
 
-        log::info!("{}", cur_index);
+        // log::info!("{}", cur_index);
 
         (cur_index, cur_span, cur_recursion, )
     }

@@ -170,8 +170,21 @@ void main() {
                 localRayOrigin += rayDir * len - mask * sign(rayDir) * curVoxSpan;
                 vec3 newOriginOnEdge = originOnEdge + mask * sign(rayDir) * curVoxSpan;
 
+                vec3 curTestPos = newOriginOnEdge + localRayOrigin;
+
+                if (
+                    curTestPos.x < 0 ||
+                    curTestPos.y < 0 ||
+                    curTestPos.z < 0 ||
+                    curTestPos.x > uniformBuffer.rootSpan ||
+                    curTestPos.y > uniformBuffer.rootSpan ||
+                    curTestPos.z > uniformBuffer.rootSpan
+                    ) {
+                        break;
+                    }
+
                 if (fragCoord.x < 1 && fragCoord.y < 1) {
-                    debugPrintfEXT("\nForward %d", curIndex);
+                    debugPrintfEXT("\nForward %d %v3f", curIndex, curTestPos);
                 }
 
                 // ? Check if need to move up
@@ -184,6 +197,7 @@ void main() {
                     debugPrintfEXT("\nHit %d", curIndex);
                 }
 
+                fragColor = vec4(0, 1 - dist / uniformBuffer.maxDist, 0, 0);
                 break;
             }
         }
@@ -193,6 +207,4 @@ void main() {
         debugPrintfEXT("\nFinished %d", curIndex);
         debugPrintfEXT("\n");
     }
-
-    fragColor = vec4(0, 1 - dist / uniformBuffer.maxDist, 0, 0);
 }

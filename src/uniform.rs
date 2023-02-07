@@ -77,14 +77,14 @@ impl Uniform {
 
             rot: VecTwo::new(0.0, 0.0),
 
-            root_span: 1024.0,
+            root_span: 512.0,
             max_recursion: 6,
 
             node_at_pos: 0,
             node_at_pos_recursion: 0,
             node_at_pos_span: 64.0,
 
-            pos: VecThree::new(0.1, 0.1, 0.1, ),
+            pos: VecThree::new(300.1, 300.1, 300.1, ),
         }
     }
 
@@ -93,11 +93,12 @@ impl Uniform {
     }
     
     pub fn apply_velocity(&mut self, velocity: Vector3<f32>, ) {
-        self.pos = VecThree::from_vec(velocity + self.pos.to_vec())
+        self.pos = VecThree::from_vec(velocity + self.pos.to_vec());
+        log::info!("{:?}", self.pos);
     }
 
     pub fn apply_rotation(&mut self, rotation: Vector2<f32>, ) {
-        self.rot = VecTwo::from_vec(rotation + self.rot.to_vec())
+        self.rot = VecTwo::from_vec(rotation + self.rot.to_vec());
     }
 
     pub fn update_uniform(&mut self, cur_time: Duration, octree: &mut Octree, ) {
