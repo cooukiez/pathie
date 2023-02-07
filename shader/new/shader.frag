@@ -65,12 +65,12 @@ void main() {
     vec2 screenPos = (fragCoord * 2.0 - curRes) / curRes.y;
     int curStep;
 	
-    vec3 rayOrigin = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
-    vec3 rayDir = normalize(vec3(screenPos, 1.0));
+    vec3 rayOrigin = vec3(255);
+    vec3 rayDir = normalize(vec3(screenPos, 1.0)) * vec3(1);
 
-    uint curIndex = uniformBuffer.nodeAtPos; // octreeData[].parent;
+    uint curIndex = 0; // octreeData[].parent;
     TreeNode curVox = octreeData[curIndex];
-    float curVoxSpan = uniformBuffer.nodeAtPosSpan;
+    float curVoxSpan = uniformBuffer.rootSpan;
 
     // Position within current Cell / Node
     vec3 localRayOrigin = mod(rayOrigin, curVoxSpan);
@@ -84,7 +84,7 @@ void main() {
     // Should move up one Layer
     bool exitOctree = false;
     // = Depth
-    int recursionAmount = int(uniformBuffer.nodeAtPosRecursion);
+    int recursionAmount = 1;
 
     // Travelled Distance
     float dist = 0.0;
@@ -121,7 +121,8 @@ void main() {
             curVox = octreeData[curIndex];
 
             if (fragCoord.x < 1 && fragCoord.y < 1) {
-                debugPrintfEXT("\nUp %d", curIndex);
+                vec3 curTestPos = originOnEdge + localRayOrigin;
+                debugPrintfEXT("\nUp %d %f %v3f %v3f", curIndex, curVoxSpan, originOnEdge, localRayOrigin);
             }
 
             // ?
@@ -142,15 +143,19 @@ void main() {
                 // Select specific Child
                 vec3 childMask = step(vec3(curVoxSpan), localRayOrigin);
 
+                if (fragCoord.x < 1 && fragCoord.y < 1) {
+                    debugPrintfEXT("\nchildMask %v3f", mask);
+                }
+
                 curIndex = curVox.children[posToIndex(childMask, 2.0)];
                 curVox = octreeData[curIndex];
 
-                if (fragCoord.x < 1 && fragCoord.y < 1) {
-                    debugPrintfEXT("\nDown %d", curIndex);
-                }
-
                 originOnEdge += childMask * curVoxSpan;
                 localRayOrigin -= childMask * curVoxSpan;
+
+                if (fragCoord.x < 1 && fragCoord.y < 1) {
+                    debugPrintfEXT("\nDown %d %v3f %v3f", curIndex, originOnEdge, localRayOrigin);
+                }
 
             // Move forward or stop -> 0 = Empty , 2 = Full
             } else if (state == 0) {
@@ -158,9 +163,11 @@ void main() {
                 // No need to call everytime
                 vec3 hit = rayCubeIntersect(localRayOrigin, rayDir, inverseRayDir, curVoxSpan);
 
-                mask = vec3(lessThan(hit,min(hit.yzx, hit.zxy)));
-                curIndex = octreeData[curVox.parent].children[posToIndex(mask, 2.0)];
-                curVox = octreeData[curIndex];
+                mask = vec3(lessThan(hit, min(hit.yzx, hit.zxy)));
+                if (fragCoord.x < 1 && fragCoord.y < 1) {
+                    debugPrintfEXT("\nmask %v3f", mask);
+                }
+                
                 float len = dot(hit, mask);
 
                 // Moving forward in direciton of Ray
@@ -172,23 +179,16 @@ void main() {
 
                 vec3 curTestPos = newOriginOnEdge + localRayOrigin;
 
-                if (
-                    curTestPos.x < 0 ||
-                    curTestPos.y < 0 ||
-                    curTestPos.z < 0 ||
-                    curTestPos.x > uniformBuffer.rootSpan ||
-                    curTestPos.y > uniformBuffer.rootSpan ||
-                    curTestPos.z > uniformBuffer.rootSpan
-                    ) {
-                        break;
-                    }
-
                 if (fragCoord.x < 1 && fragCoord.y < 1) {
-                    debugPrintfEXT("\nForward %d %v3f", curIndex, curTestPos);
+                    debugPrintfEXT("\nForward %d %v3f %v3f", curIndex, newOriginOnEdge, localRayOrigin);
                 }
 
                 // ? Check if need to move up
                 exitOctree = (floor(newOriginOnEdge / curVoxSpan * 0.5 + 0.25) != floor(originOnEdge / curVoxSpan * 0.5 + 0.25)) && (recursionAmount > 0);
+                if (!exitOctree) {
+                    curIndex = octreeData[curVox.parent].children[posToIndex(mask, 2.0)];
+                    curVox = octreeData[curIndex];
+                }
 
                 originOnEdge = newOriginOnEdge;
                 lastMask = mask;

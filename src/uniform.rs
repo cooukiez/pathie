@@ -72,19 +72,19 @@ impl Uniform {
             resolution: VecTwo::new(0.0, 0.0),
             
             raw_field_of_view: 60.0,
-            max_ray_length: 1024,
-            max_distance: 1024.0,
+            max_ray_length: 512,
+            max_distance: 512.0,
 
             rot: VecTwo::new(0.0, 0.0),
 
             root_span: 512.0,
-            max_recursion: 6,
+            max_recursion: 2,
 
             node_at_pos: 0,
             node_at_pos_recursion: 0,
-            node_at_pos_span: 64.0,
+            node_at_pos_span: 0.0,
 
-            pos: VecThree::new(300.1, 300.1, 300.1, ),
+            pos: VecThree::new(50.1, 50.1, 50.1, ),
         }
     }
 
@@ -103,6 +103,9 @@ impl Uniform {
 
     pub fn update_uniform(&mut self, cur_time: Duration, octree: &mut Octree, ) {
         self.time = cur_time.as_millis() as u32;
-        (self.node_at_pos, self.node_at_pos_span, self.node_at_pos_recursion ) = octree.node_at_pos(self.pos.to_vec());
+        // (self.node_at_pos, self.node_at_pos_span, self.node_at_pos_recursion ) = octree.node_at_pos(self.pos.to_vec());
+        self.node_at_pos = 1;
+        self.node_at_pos_span = self.root_span / 2.0;
+        self.node_at_pos_recursion = 1;
     }
 }
