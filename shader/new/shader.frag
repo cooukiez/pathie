@@ -3,6 +3,9 @@
 # extension GL_ARB_shading_language_420pack : enable
 # extension GL_EXT_debug_printf : enable
 
+# define internMaxRecursion 32
+# define rot(spin) mat2(cos(spin), sin(spin), - sin(spin), cos(spin))
+
 layout (set = 0, binding = 0) uniform Uniform {
     uint time;
 
@@ -18,14 +21,13 @@ layout (set = 0, binding = 0) uniform Uniform {
 
 	float rootSpan;
     uint maxRecursion;
-	
-	uint nodeAtPos;
-    uint nodeAtPosRecursion;
-    float nodeAtPosSpan;
 
 	float X;
 	float Y;
 	float Z;
+
+    float t1;
+    float t2;
 } uniformBuffer;
 
 struct TreeNode {
@@ -48,8 +50,13 @@ vec3 rayCubeIntersect(vec3 rayOrigin, vec3 rayDir, vec3 inverseRayDir, float cur
     return - (sign(rayDir) * (rayOrigin - curVoxSpan * 0.5) - curVoxSpan * 0.5) * inverseRayDir;
 }
 
-uint posToIndex(vec3 pos, float sideLen) {
-    return uint(pos.x + pos.y * sqr(sideLen) + pos.z * sideLen);
+// Simple Hashing Scheme
+uint maskToIndex(vec3 mask) {
+    return uint(mask.x + mask.y * 4.0 + mask.z * 2.0);
+}
+
+vec3 addDirToMask(vec3 mask, vec3 dirMask) {
+    return abs(mask - dirMask);
 }
 
 layout (location = 0) in vec2 localPos;
@@ -57,6 +64,7 @@ layout (location = 0) out vec4 fragColor;
 
 void main() {
 	vec2 curRes = vec2(uniformBuffer.width, uniformBuffer.height);
+    vec2 curRot = vec2(uniformBuffer.rotHorizontal, uniformBuffer.rotVertical) * - 1;
 	vec2 fragCoord = gl_FragCoord.xy;
 	float curTime = float(uniformBuffer.time) / 1000.0 * 0.5;
 
@@ -65,8 +73,11 @@ void main() {
     vec2 screenPos = (fragCoord * 2.0 - curRes) / curRes.y;
     int curStep;
 	
-    vec3 rayOrigin = vec3(255);
+    vec3 rayOrigin = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
     vec3 rayDir = normalize(vec3(screenPos, 1.0)) * vec3(1, - 1, 1);
+
+    rayDir.yz *= rot(curRot.y / curRes.y * 3.14 - 3.14 * 0.5);
+    rayDir.xz *= rot(curRot.x / curRes.x * 3.14 * 2.0 - 3.14);
 
     uint curIndex = 0; // octreeData[].parent;
     TreeNode curVox = octreeData[curIndex];
@@ -78,8 +89,6 @@ void main() {
     vec3 originOnEdge = rayOrigin - localRayOrigin;
     // ? Used for RayCube Intersection
     vec3 inverseRayDir = 1.0 / max(abs(rayDir), 0.001);
-    // ? Mask -> Which Node to choose
-    vec3 mask;
 
     // Should move up one Layer
     bool exitOctree = false;
@@ -89,8 +98,10 @@ void main() {
     // Travelled Distance
     float dist = 0.0;
 
-    vec3 lastMask;
-    vec3 normal = vec3(0.0);
+    vec3 dirMask;
+    vec3 lastDirMask;
+
+    vec3 maskInParentList[internMaxRecursion];
     
     // The Octree TraverseLoop
     // Each Iteration either check ...
@@ -108,6 +119,10 @@ void main() {
 
         // Should go up
         if (exitOctree) {
+            if (curVox.parent == 0) {
+                break;
+            }
+
             vec3 newOriginOnEdge = floor(originOnEdge / (curVoxSpan * 2.0)) * (curVoxSpan * 2.0);
             
             localRayOrigin += originOnEdge - newOriginOnEdge;
@@ -116,8 +131,15 @@ void main() {
             // Moving one Layer up -> Decrease RecursionAmount & Double curVoxSpan
             recursionAmount -= 1;
             curVoxSpan *= 2.0;
+
+            if (fragCoord.x < 1 && fragCoord.y < 1) {
+                debugPrintfEXT("\ndirMask %v3f PIPM %v3f", dirMask, maskInParentList[recursionAmount]);
+            }
             
-            curIndex = curVox.parent;
+            TreeNode parentOfParent = octreeData[octreeData[curVox.parent].parent];
+            maskInParentList[recursionAmount] = addDirToMask(maskInParentList[recursionAmount], dirMask);
+
+            curIndex = parentOfParent.children[maskToIndex(maskInParentList[recursionAmount])];
             curVox = octreeData[curIndex];
 
             if (fragCoord.x < 1 && fragCoord.y < 1) {
@@ -125,8 +147,7 @@ void main() {
                 debugPrintfEXT("\nUp %d %f %v3f %v3f", curIndex, curVoxSpan, originOnEdge, localRayOrigin);
             }
 
-            // ?
-            exitOctree = (abs(dot(mod((originOnEdge + 0.25) / curVoxSpan + 0.5, 2.0) - 1.0 + mask * sign(rayDir) * 0.5, mask)) < 0.1) && (recursionAmount > 0);
+            exitOctree = (abs(dot(mod((originOnEdge + 0.25) / curVoxSpan + 0.5, 2.0) - 1.0 + dirMask * sign(rayDir) * 0.5, dirMask)) < 0.1) && (recursionAmount > 0);
         } else {
             // Getting Node Type
             uint state = curVox.nodeType;
@@ -143,15 +164,13 @@ void main() {
                 // Select specific Child
                 vec3 childMask = step(vec3(curVoxSpan), localRayOrigin);
 
-                if (fragCoord.x < 1 && fragCoord.y < 1) {
-                    debugPrintfEXT("\nchildMask %v3f", mask);
-                }
-
-                curIndex = curVox.children[posToIndex(childMask, 2.0)];
-                curVox = octreeData[curIndex];
-
                 originOnEdge += childMask * curVoxSpan;
                 localRayOrigin -= childMask * curVoxSpan;
+
+                curIndex = curVox.children[maskToIndex(childMask)];
+                curVox = octreeData[curIndex];
+                
+                maskInParentList[recursionAmount] = childMask;
 
                 if (fragCoord.x < 1 && fragCoord.y < 1) {
                     debugPrintfEXT("\nDown %d %v3f %v3f", curIndex, originOnEdge, localRayOrigin);
@@ -163,21 +182,22 @@ void main() {
                 // No need to call everytime
                 vec3 hit = rayCubeIntersect(localRayOrigin, rayDir, inverseRayDir, curVoxSpan);
 
-                mask = vec3(lessThan(hit, min(hit.yzx, hit.zxy)));
+                dirMask = vec3(lessThan(hit, min(hit.yzx, hit.zxy)));
                 if (fragCoord.x < 1 && fragCoord.y < 1) {
-                    debugPrintfEXT("\nmask %v3f", mask);
+                    debugPrintfEXT("\nmask %v3f", dirMask);
                 }
                 
-                float len = dot(hit, mask);
+                float len = dot(hit, dirMask);
 
                 // Moving forward in direciton of Ray
                 dist += len;
 
                 // ?
-                localRayOrigin += rayDir * len - mask * sign(rayDir) * curVoxSpan;
-                vec3 newOriginOnEdge = originOnEdge + mask * sign(rayDir) * curVoxSpan;
+                localRayOrigin += rayDir * len - dirMask * sign(rayDir) * curVoxSpan;
+                vec3 newOriginOnEdge = originOnEdge + dirMask * sign(rayDir) * curVoxSpan;
 
-                curIndex = octreeData[curVox.parent].children[posToIndex(mask, 2.0)];
+                maskInParentList[recursionAmount] = addDirToMask(maskInParentList[recursionAmount], dirMask);
+                curIndex = octreeData[curVox.parent].children[maskToIndex(maskInParentList[recursionAmount])];
                 curVox = octreeData[curIndex];
 
                 if (fragCoord.x < 1 && fragCoord.y < 1) {
@@ -188,13 +208,14 @@ void main() {
                 exitOctree = (floor(newOriginOnEdge / curVoxSpan * 0.5 + 0.25) != floor(originOnEdge / curVoxSpan * 0.5 + 0.25)) && (recursionAmount > 0);
 
                 originOnEdge = newOriginOnEdge;
-                lastMask = mask;
+                lastDirMask = dirMask;
             } else if (state == 2) {
                 if (fragCoord.x < 1 && fragCoord.y < 1) {
                     debugPrintfEXT("\nHit %d", curIndex);
                 }
-
-                fragColor = vec4(0, 1 - dist / uniformBuffer.maxDist, 0, 0);
+                
+                fragColor = vec4(0, 1 - dist / uniformBuffer.maxDist * 2, 0, 0);
+                
                 break;
             }
         }
@@ -204,4 +225,6 @@ void main() {
         debugPrintfEXT("\nFinished %d", curIndex);
         debugPrintfEXT("\n");
     }
+
+    
 }

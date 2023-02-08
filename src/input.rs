@@ -17,6 +17,8 @@ pub enum Action {
 
     FULLSCREEN,
     ESCAPE,
+
+    RESET,
 }
 
 pub struct Input {
@@ -38,6 +40,8 @@ impl Input {
         binding_list[VirtualKeyCode::F as usize] = Action::FULLSCREEN;
         binding_list[VirtualKeyCode::Escape as usize] = Action::ESCAPE;
 
+        binding_list[VirtualKeyCode::R as usize] = Action::RESET;
+
         Input { binding_list }
     }
 
@@ -49,16 +53,21 @@ impl Input {
                 Action::LEFT => uniform.apply_velocity(Vector3::new(- 1.0, 0.0, 0.0)),
                 Action::RIGHT => uniform.apply_velocity(Vector3::new(1.0, 0.0, 0.0)),
 
-                Action::JUMP => uniform.apply_velocity(Vector3::new(0.0, - 1.0, 0.0)),
-                Action::SHIFT => uniform.apply_velocity(Vector3::new(0.0, 1.0, 0.0)),
+                Action::JUMP => uniform.apply_velocity(Vector3::new(0.0, 1.0, 0.0)),
+                Action::SHIFT => uniform.apply_velocity(Vector3::new(0.0, - 1.0, 0.0)),
                 
                 Action::FULLSCREEN => interface.window.set_fullscreen(Some(Fullscreen::Exclusive(interface.monitor.video_modes().next().expect("ERR_NO_MONITOR_MODE").clone()))),
-                Action::ESCAPE => interface.window.set_fullscreen(None), _ => (),
+                Action::ESCAPE => interface.window.set_fullscreen(None),
+                Action::RESET => interface.window.set_cursor_position(PhysicalPosition::new(uniform.resolution.x / 2.0, uniform.resolution.x / 2.0)).unwrap(),
+                
+                _ => (),
             }
         }
     }
 
     pub fn handle_mouse_input(&self, position: PhysicalPosition<f64>, uniform: &mut Uniform, ) {
-        uniform.apply_rotation(Vector2::new(position.x as f32, position.y as f32, ))
+        let relative_mouse_pos = Vector2::new(position.x as f32, position.y as f32, );
+        let absolute_mouse_pos = relative_mouse_pos - uniform.resolution / 2.0;
+        uniform.move_mouse(absolute_mouse_pos);
     }
 }

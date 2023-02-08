@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use ash::vk;
-use cgmath::{Vector3, Vector2, Vector4};
+use cgmath::{Vector3, Vector2};
 
 use crate::octree::Octree;
 
@@ -22,46 +22,20 @@ pub struct VecTwo { pub x: f32, pub y: f32 }
 #[derive(Clone, Debug, Copy)]
 pub struct Uniform {
     pub time: u32,
-    pub resolution: VecTwo,
+    pub resolution: Vector2<f32>,
 
     pub raw_field_of_view: f32,
     pub max_ray_length: u32,
     pub max_distance: f32,
 
-    pub rot: VecTwo,
+    pub mouse_pos: Vector2<f32>,
 
     pub root_span: f32,
     pub max_recursion: u32,
 
-    pub node_at_pos: u32,
-    pub node_at_pos_recursion: u32,
-    pub node_at_pos_span: f32,
+    pub pos: Vector3<f32>,
 
-    pub pos: VecThree,
-}
-
-// DataTransport Type
-impl VecFour {
-    pub fn new(x: f32, y: f32, z: f32, w: f32, ) -> VecFour { VecFour { x, y, z, w } }
-    pub fn from_vec(vec: Vector4<f32>) -> VecFour { VecFour::new(vec.x, vec.y, vec.z, vec.w, ) }
-    pub fn from_float(in_float: f32) -> VecFour { VecFour::new(in_float, in_float, in_float, in_float, ) }
-    pub fn to_vec(&self) -> Vector4<f32> { Vector4::new(self.x, self.y, self.z, self.w, ) }
-}
-
-// DataTransport Type
-impl VecThree {
-    pub fn new(x: f32, y: f32, z: f32, ) -> VecThree { VecThree { x, y, z } }
-    pub fn from_vec(vec: Vector3<f32>) -> VecThree { VecThree::new(vec.x, vec.y, vec.z, ) }
-    pub fn from_float(in_float: f32) -> VecThree { VecThree::new(in_float, in_float, in_float, ) }
-    pub fn to_vec(&self) -> Vector3<f32> { Vector3::new(self.x, self.y, self.z, ) }
-}
-
-// DataTransport Type
-impl VecTwo {
-    pub fn new(x: f32, y: f32, ) -> VecTwo { VecTwo { x, y } }
-    pub fn from_vec(vec: Vector2<f32>) -> VecTwo { VecTwo::new(vec.x, vec.y, ) }
-    pub fn from_float(in_float: f32) -> VecTwo { VecTwo::new(in_float, in_float, ) }
-    pub fn to_vec(&self) -> Vector2<f32> { Vector2::new(self.x, self.y, ) }
+    pub test: Vector2<f32>,
 }
 
 // Simple Data storage
@@ -69,43 +43,36 @@ impl Uniform {
     pub fn empty() -> Uniform {
         Uniform {
             time: 0,
-            resolution: VecTwo::new(0.0, 0.0),
+            resolution: Vector2::new(0.0, 0.0),
             
             raw_field_of_view: 60.0,
-            max_ray_length: 512,
-            max_distance: 512.0,
+            max_ray_length: 4096,
+            max_distance: 4096.0,
 
-            rot: VecTwo::new(0.0, 0.0),
+            mouse_pos: Vector2::new(0.0, 0.0),
 
-            root_span: 512.0,
-            max_recursion: 2,
+            root_span: 4096.0,
+            max_recursion: 10,
 
-            node_at_pos: 0,
-            node_at_pos_recursion: 0,
-            node_at_pos_span: 0.0,
+            pos: Vector3::new(255.1, 255.1, 0.1, ),
 
-            pos: VecThree::new(50.1, 50.1, 50.1, ),
+            test: Vector2::new(123.0, 123.0, ),
         }
     }
 
-    pub fn apply_resolution(&mut self, in_res: vk::Extent2D) {
-        self.resolution = VecTwo::new(in_res.width as f32, in_res.height as f32);
+    pub fn apply_resolution(&mut self, resolution: vk::Extent2D) {
+        self.resolution = Vector2::new(resolution.width as f32, resolution.height as f32, );
     }
     
     pub fn apply_velocity(&mut self, velocity: Vector3<f32>, ) {
-        self.pos = VecThree::from_vec(velocity + self.pos.to_vec());
-        log::info!("{:?}", self.pos);
+        self.pos += velocity;
     }
 
-    pub fn apply_rotation(&mut self, rotation: Vector2<f32>, ) {
-        self.rot = VecTwo::from_vec(rotation + self.rot.to_vec());
+    pub fn move_mouse(&mut self, mouse_velocity: Vector2<f32>, ) {
+        self.mouse_pos += mouse_velocity;
     }
 
     pub fn update_uniform(&mut self, cur_time: Duration, octree: &mut Octree, ) {
         self.time = cur_time.as_millis() as u32;
-        // (self.node_at_pos, self.node_at_pos_span, self.node_at_pos_recursion ) = octree.node_at_pos(self.pos.to_vec());
-        self.node_at_pos = 1;
-        self.node_at_pos_span = self.root_span / 2.0;
-        self.node_at_pos_recursion = 1;
     }
 }

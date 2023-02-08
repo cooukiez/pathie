@@ -8,7 +8,7 @@ use log::Record;
 use octree::Octree;
 use pipe::Pipe;
 use uniform::Uniform;
-use winit::{event_loop::{EventLoop, ControlFlow}, event::{WindowEvent, KeyboardInput, Event}, platform::run_return::EventLoopExtRunReturn};
+use winit::{event_loop::{EventLoop, ControlFlow}, event::{WindowEvent, KeyboardInput, Event}, platform::run_return::EventLoopExtRunReturn, dpi::PhysicalPosition};
 
 mod pipe;
 mod interface;
@@ -83,7 +83,7 @@ impl Render {
     pub fn get_render() -> Render {
         let event_loop = EventLoop::new();
 
-        let pref = Pref { pref_present_mode: vk::PresentModeKHR::IMMEDIATE, img_scale_filter: vk::Filter::LINEAR, img_scale: 1.0, };
+        let pref = Pref { pref_present_mode: vk::PresentModeKHR::IMMEDIATE, img_scale_filter: vk::Filter::LINEAR, img_scale: 1.5, };
         let state = RenderState { out_of_date: false, idle: false, frame_time: Duration::ZERO };
 
         let input = Input::new();
@@ -116,8 +116,11 @@ impl Render {
                         // Handle KeyboardInput
                         self.input.handle_key_input(&keycode, &state, &self.interface, &mut self.uniform, ),
 
-                    Event::WindowEvent { event: WindowEvent::CursorMoved { position, .. }, .. } =>
-                        self.input.handle_mouse_input(position, &mut self.uniform),
+                    Event::WindowEvent { event: WindowEvent::CursorMoved { position, .. }, .. } => {
+                        self.input.handle_mouse_input(position, &mut self.uniform);
+                        self.interface.window.set_cursor_visible(false);
+                        self.interface.window.set_cursor_position(PhysicalPosition::new(self.uniform.resolution.x / 2.0, self.uniform.resolution.y / 2.0, )).unwrap();
+                    },
 
                     Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => * control_flow = ControlFlow::Exit,
                     Event::MainEventsCleared =>
