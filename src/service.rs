@@ -23,3 +23,27 @@ pub fn step_vec_three(edge: Vector3<f32>, input: Vector3<f32>, ) -> Vector3<u32>
                     z: (edge.z < input.z) as u32
     }
 }
+
+pub fn floor_vec_three(vec: Vector3<f32>) -> Vector3<f32> {
+    Vector3 {
+        x: vec.x.floor(),
+                y: vec.y.floor(),
+                    z: vec.z.floor()
+    }
+}
+
+pub fn add_dir_to_mask(mask: Vector3<f32>, dir_mask: Vector3<f32>, ) -> Vector3<f32> {
+    Vector3 {
+        x: (mask.x - dir_mask.x).abs(),
+                y: (mask.y - dir_mask.y).abs(),
+                    z: (mask.z - dir_mask.z).abs()
+    }
+}
+
+pub fn sign_vec_three(vec: Vector3<f32>) -> Vector3<f32> {
+    Vector3 {
+        x: vec.x.signum(),
+                y: vec.y.signum(),
+                    z: vec.z.signum()
+    }
+}

@@ -1,10 +1,12 @@
 use cgmath::Vector3;
 use rand::Rng;
 
-use crate::{uniform::Uniform, service::{pos_to_index, step_vec_three}};
+use crate::{service::{pos_to_index, step_vec_three, floor_vec_three, add_dir_to_mask}};
 
 const MAX_RECURSION: usize = 10;
 const MAX_SEARCH_DEPTH: usize = 4096;
+
+const ROOT_SPAN: f32 = 4096.0;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -22,6 +24,9 @@ pub struct Traverse {
     pub cur_span: f32,
     pub cur_recursion: usize,
 
+    pub ray_origin: Vector3<f32>,
+    pub ray_dir: Vector3<f32>,
+
     // Origin in CurNode
     pub local_origin: Vector3<f32>,
     // Origin on first edge of CurNode
@@ -31,20 +36,14 @@ pub struct Traverse {
 }
 
 pub struct Octree {
-    // RootIndex = 0
-    pub root_span: f32,
-    pub max_recursion: u32,
     // Octree as List
     pub data: Vec<TreeNode>,
+    // RootIndex = 0
 }
 
 impl TreeNode {
-    pub fn empty() -> TreeNode {
-        TreeNode { node_type: 0, parent: 0, children: [0; 8] }
-    }
-
     pub fn new(node_type: u32, parent: usize, ) -> TreeNode {
-        TreeNode { node_type, parent: parent as u32, children: [0; 8]}
+        TreeNode { node_type, parent: parent as u32, .. Default::default() }
     }
 
     pub fn get_center(node_pos: Vector3<f32>, span: f32, ) -> Vector3<f32> {
@@ -63,15 +62,6 @@ impl TreeNode {
 }
 
 impl Octree {
-    pub fn empty(uniform: &Uniform) -> Octree {
-        let data: Vec<TreeNode> = vec![TreeNode::empty()];
-        Octree { 
-            root_span: uniform.root_span,
-            max_recursion: uniform.max_recursion,
-            data
-        }
-    }
-
     // If not subdivide -> Create children
     pub fn try_child_creation(data: &mut Vec<TreeNode>, parent_index: usize, ) {
         if data[parent_index].node_type == 0 {
@@ -84,23 +74,21 @@ impl Octree {
         }
     }
 
-    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, ) {
+    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, ) -> Traverse {
         let mut traverse = Traverse {
-            cur_index: 0,
-            cur_span: self.root_span,
-            cur_recursion: 0,
+            ray_origin: insert_pos,
 
-            local_origin: insert_pos % self.root_span,
-            origin_on_edge: insert_pos - (insert_pos % self.root_span),
+            local_origin: insert_pos % ROOT_SPAN,
+            origin_on_edge: insert_pos - (insert_pos % ROOT_SPAN),
 
-            mask_in_parent: [Vector3::from([0.0; 3]); MAX_RECURSION],
+            .. Default::default()
         };
         
         // 1. Create children if not present
         // 2. Select child based on insert position
         // 3. Repeat
         // Finally -> Set current Node to full
-        for _  in 0 .. self.max_recursion {
+        for _  in 0 .. MAX_RECURSION {
             Self::try_child_creation(&mut self.data, traverse.cur_index);
             // Select next Child
             traverse.move_into_child(&self.data);
@@ -108,24 +96,34 @@ impl Octree {
 
         // CurNode = full
         self.data[traverse.cur_index].node_type = 2;
+
+        traverse
     }
 
-    // Not diagonal
-    pub fn insert_neighbour(&mut self, traverse: &mut Traverse, dir: Vector3<f32>) {
-        let exitOctree = false;
-        for _ in 0 .. self.max_recursion {
-            if exitOctree {
-                if self.data[traverse.cur_index].parent == 0 {
-                    break;
-                }
+    pub fn insert_neighbour(&mut self, origin: Traverse, dir: Vector3<f32>, ) -> Traverse {
+        // Select new Pos based on old OriginOnEdge
+        // Has to be 1.5 x the span because directly in center of neighbour
+        let insert_pos = 
+            origin.origin_on_edge + dir * origin.cur_span * 1.5;
 
-                traverse.move_into_parent(&mut self.data);
-            } else {
-                // Move forward
-                let new_origin_on_edge = 
-                    traverse.origin_on_edge + dir * traverse.cur_span;
-            }
+        let mut traverse = Traverse {
+            ray_origin: insert_pos,
+
+            local_origin: insert_pos % ROOT_SPAN,
+            origin_on_edge: insert_pos - (insert_pos % ROOT_SPAN),
+
+            .. Default::default()
+        };
+        
+        // Process described above
+        for _  in 0 .. MAX_RECURSION {
+            Self::try_child_creation(&mut self.data, traverse.cur_index);
+            traverse.move_into_child(&self.data);
         }
+
+        self.data[traverse.cur_index].node_type = 2;
+
+        traverse
     }
 
     pub fn test_scene(&mut self) {
@@ -143,14 +141,10 @@ impl Octree {
 }
 
 impl Traverse {
-    pub fn move_into_parent(&mut self, data: &Vec<TreeNode>, ) {
-        let new_origin_on_edge = math::round::floor(self.origin_on_edge / (self.cur_span / 2.0)) *I(self.cur_span * 2.0);
-    }
-
     // Return SpaceIndex
     pub fn move_into_child(&mut self, data: &Vec<TreeNode>, ) {
-        self.cur_span *= 0.5;
         self.cur_recursion += 1;
+        self.cur_span *= 0.5;
 
         let child_mask = TreeNode::get_child_mask(self.cur_span, self.local_origin, );
 
@@ -163,5 +157,63 @@ impl Traverse {
         let space_index = pos_to_index(child_mask, 2, );
         // Get global index of selected child
         self.cur_index = data[self.cur_index].children[space_index] as usize;
+    }
+
+    pub fn move_layer_up(&mut self, data: &Vec<TreeNode>, dir_mask: Vector3<f32>, ) {
+        // Compute the rest ( because of moving up ) into LocalOrigin
+        let new_origin_on_edge = 
+            floor_vec_three(self.origin_on_edge / (self.cur_span / 2.0)) * (self.cur_span * 2.0);
+        
+        self.local_origin += self.origin_on_edge - new_origin_on_edge;
+        self.origin_on_edge = new_origin_on_edge;
+
+        self.cur_recursion -= 1;
+        self.cur_span *= 2.0;
+
+        // Use earlier saved mask and move in dir
+        self.mask_in_parent[self.cur_recursion] = 
+            add_dir_to_mask(self.mask_in_parent[self.cur_recursion], dir_mask, );
+
+        // Temp save parent of parent of CurNode
+        let parent_of_parent = 
+            data[data[self.cur_index].parent as usize];
+        
+        // Moved mask into SpaceIndex and get global index of Child
+        let next_space_index = 
+            pos_to_index(self.mask_in_parent[self.cur_recursion], 2, );
+        self.cur_index = parent_of_parent
+            .children[next_space_index] as usize;
+    }
+
+    // Add move forward function
+}
+
+impl Default for TreeNode {
+    fn default() -> Self {
+        Self { node_type: 0, parent: 0, children: [0; 8] }
+    }
+}
+
+impl Default for Traverse {
+    fn default() -> Self {
+        Self { 
+            cur_index: 0,
+            cur_span: ROOT_SPAN,
+            cur_recursion: 0,
+
+            ray_origin: Vector3::from([0.0; 3]),
+            ray_dir: Vector3::from([0.0; 3]),
+
+            local_origin: Vector3::from([0.0; 3]),
+            origin_on_edge: Vector3::from([0.0; 3]),
+
+            mask_in_parent: [Vector3::from([0.0; 3]); MAX_RECURSION]
+        }
+    }
+}
+
+impl Default for Octree {
+    fn default() -> Self {
+        Self { data: vec![TreeNode::default()] }
     }
 }

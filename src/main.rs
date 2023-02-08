@@ -88,7 +88,7 @@ impl Render {
 
         let input = Input::new();
         let mut uniform = Uniform::empty();
-        let mut octree = Octree::empty(&uniform);
+        let mut octree = Octree::default();
         octree.test_scene();
 
         let interface = Interface::init(&event_loop, &pref, );

@@ -40,7 +40,7 @@ pub struct Pipe {
 }
 
 impl Pipe {
-    pub fn init(interface: &Interface, pref: &Pref, uniform: &mut Uniform, octree: &Octree, ) -> Pipe {
+    pub fn init(interface: &Interface, pref: &Pref, uniform: &mut Uniform, octree: &Octree, ) -> Self {
         unsafe {
             let scaled_extent = vk::Extent2D { 
                 width: (interface.surface_resolution.width as f32 / pref.img_scale) as u32,
