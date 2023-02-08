@@ -128,7 +128,7 @@ void main() {
             localRayOrigin += originOnEdge - newOriginOnEdge;
             originOnEdge = newOriginOnEdge;
             
-            // Moving one Layer up -> Decrease RecursionAmount & Double curVoxSpan
+            // Moving one Layer upward -> Decrease RecursionAmount & Double curVoxSpan
             recursionAmount -= 1;
             curVoxSpan *= 2.0;
 
