@@ -74,7 +74,7 @@ void main() {
     int curStep;
 	
     vec3 rayOrigin = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
-    vec3 rayDir = normalize(vec3(screenPos, 1.0)) * vec3(1, - 1, 1);
+    vec3 rayDir = normalize(vec3(screenPos, 1.0));
 
     rayDir.yz *= rot(curRot.y / curRes.y * 3.14 - 3.14 * 0.5);
     rayDir.xz *= rot(curRot.x / curRes.x * 3.14 * 2.0 - 3.14);

@@ -5,18 +5,6 @@ use cgmath::{Vector3, Vector2};
 
 use crate::octree::Octree;
 
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct VecFour { pub x: f32, pub y: f32, pub z: f32, pub w: f32 }
-
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct VecThree { pub x: f32, pub y: f32, pub z: f32 }
-
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct VecTwo { pub x: f32, pub y: f32 }
-
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
