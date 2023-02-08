@@ -4,6 +4,7 @@ use rand::Rng;
 use crate::{uniform::Uniform, service::{pos_to_index, step_vec_three}};
 
 const MAX_RECURSION: usize = 10;
+const MAX_SEARCH_DEPTH: usize = 4096;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -112,9 +113,13 @@ impl Octree {
     // Not diagonal
     pub fn insert_neighbour(&mut self, traverse: &mut Traverse, dir: Vector3<f32>) {
         let exitOctree = false;
-        for _ in 0 .. self.max_recursion -  {
+        for _ in 0 .. self.max_recursion {
             if exitOctree {
+                if self.data[traverse.cur_index].parent == 0 {
+                    break;
+                }
 
+                traverse.move_into_parent(&mut self.data);
             } else {
                 // Move forward
                 let new_origin_on_edge = 
@@ -138,6 +143,10 @@ impl Octree {
 }
 
 impl Traverse {
+    pub fn move_into_parent(&mut self, data: &Vec<TreeNode>, ) {
+        let new_origin_on_edge = math::round::floor(self.origin_on_edge / (self.cur_span / 2.0)) *I(self.cur_span * 2.0);
+    }
+
     // Return SpaceIndex
     pub fn move_into_child(&mut self, data: &Vec<TreeNode>, ) {
         self.cur_span *= 0.5;
