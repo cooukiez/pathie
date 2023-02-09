@@ -23,6 +23,8 @@ pub struct Pipe {
     pub vertex_input_buffer_memory: vk::DeviceMemory,
     pub uniform_buffer: vk::Buffer,
     pub uniform_buffer_memory: vk::DeviceMemory,
+    pub octree_buffer: vk::Buffer,
+    pub octree_buffer_memory: vk::DeviceMemory,
 
     pub descriptor_pool: vk::DescriptorPool,
     pub desc_set_layout_list: Vec<DescriptorSetLayout>,
@@ -407,6 +409,8 @@ impl Pipe {
                 vertex_input_buffer_memory,
                 uniform_buffer,
                 uniform_buffer_memory,
+                octree_buffer,
+                octree_buffer_memory,
                 descriptor_pool,
                 desc_set_layout_list,
                 descriptor_set_list,
@@ -709,12 +713,12 @@ impl Pipe {
 
     pub fn update_buffer<Type : Copy>(&mut self, interface: &Interface, buffer_mem: vk::DeviceMemory, data: &[Type]) {
         unsafe {
-            let octree_buffer_ptr = interface.device
+            let buffer_ptr = interface.device
                     .map_memory(buffer_mem, 0, std::mem::size_of_val(data) as u64, vk::MemoryMapFlags::empty(), )
                     .unwrap();
-            let mut octree_aligned_slice = 
-                Align::new(octree_buffer_ptr, align_of::<Type>() as u64, std::mem::size_of_val(data) as u64, );
-            octree_aligned_slice.copy_from_slice(&data.clone()[ .. ]);
+            let mut aligned_slice = 
+                Align::new(buffer_ptr, align_of::<Type>() as u64, std::mem::size_of_val(data) as u64, );
+                aligned_slice.copy_from_slice(&data.clone()[ .. ]);
             interface.device.unmap_memory(buffer_mem);
         }
     }

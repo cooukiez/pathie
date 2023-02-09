@@ -1,12 +1,13 @@
-use cgmath::Vector3;
+use cgmath::{Vector3};
 use rand::Rng;
 
 use crate::{service::{pos_to_index, step_vec_three, floor_vec_three, add_dir_to_mask}};
 
-const MAX_RECURSION: usize = 10;
-const MAX_SEARCH_DEPTH: usize = 4096;
+pub const MAX_RECURSION: usize = 10;
+pub const ROOT_SPAN: f32 = (1 << MAX_RECURSION) as f32;
 
-const ROOT_SPAN: f32 = 4096.0;
+pub const MAX_DISTANCE: f32 = ROOT_SPAN;
+pub const MAX_SEARCH_DEPTH: usize = 1024;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -88,7 +89,7 @@ impl Octree {
         // 2. Select child based on insert position
         // 3. Repeat
         // Finally -> Set current Node to full
-        for _  in 0 .. MAX_RECURSION {
+        for _  in 1 .. MAX_RECURSION {
             Self::try_child_creation(&mut self.data, traverse.cur_index);
             // Select next Child
             traverse.move_into_child(&self.data);
@@ -127,15 +128,16 @@ impl Octree {
     }
 
     pub fn test_scene(&mut self) {
-        self.insert_node(Vector3::new(120.3, 321.2, 213.1));
-        self.insert_node(Vector3::new(10.3, 230.4, 60.0));
-        self.insert_node(Vector3::new(10.1, 210.0, 46.7));
-        self.insert_node(Vector3::new(400.1, 10.0, 100.7));
-        // self.insert_node(Vector3::new(255.1, 255.0, 2.7));
-
         let mut rng = rand::thread_rng();
-        for _ in 0 .. 2000 {
-            self.insert_node(Vector3::new(rng.gen_range(0.0 .. 4000.0), rng.gen_range(0.0 .. 4000.0), rng.gen_range(0.0 .. 4000.0)));
+        let y = rng.gen_range(0.0 .. ROOT_SPAN);
+        for x in 0 .. 1000 {
+            for z in 0 .. 1000 {
+                // self.insert_node(Vector3::new(100.0 + x as f32, y, 100.0 + z as f32, ));
+            }
+        }
+
+        for _ in 0 .. 100000 {
+            self.insert_node(Vector3::new(rng.gen_range(0.0 .. ROOT_SPAN), rng.gen_range(0.0 .. ROOT_SPAN), rng.gen_range(0.0 .. ROOT_SPAN)));
         }
     }
 }

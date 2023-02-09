@@ -25,9 +25,6 @@ layout (set = 0, binding = 0) uniform Uniform {
 	float X;
 	float Y;
 	float Z;
-
-    float t1;
-    float t2;
 } uniformBuffer;
 
 struct TreeNode {
@@ -110,18 +107,12 @@ void main() {
     // ... If hit -> Break
     // ... If Node / Cell is empty -> Go one step forward
 
-    if (fragCoord.x < 1 && fragCoord.y < 1) {
-        debugPrintfEXT("\nStart %d %v3f %v3f", curIndex, rayDir, sign(rayDir));
-    }
-
     for (curStep = 0; curStep < uniformBuffer.maxRayLen; curStep += 1) {
         if (dist > uniformBuffer.maxDist) break;
 
         // Should go up
         if (exitOctree) {
-            if (curVox.parent == 0) {
-                break;
-            }
+            if (curVox.parent == 0) { break; }
 
             vec3 newOriginOnEdge = floor(originOnEdge / (curVoxSpan * 2.0)) * (curVoxSpan * 2.0);
             
@@ -131,10 +122,6 @@ void main() {
             // Moving one Layer upward -> Decrease RecursionAmount & Double curVoxSpan
             recursionAmount -= 1;
             curVoxSpan *= 2.0;
-
-            if (fragCoord.x < 1 && fragCoord.y < 1) {
-                debugPrintfEXT("\ndirMask %v3f PIPM %v3f", dirMask, maskInParentList[recursionAmount]);
-            }
             
             TreeNode parentOfParent = octreeData[octreeData[curVox.parent].parent];
             maskInParentList[recursionAmount] = addDirToMask(maskInParentList[recursionAmount], dirMask);
@@ -142,12 +129,7 @@ void main() {
             curIndex = parentOfParent.children[maskToIndex(maskInParentList[recursionAmount])];
             curVox = octreeData[curIndex];
 
-            if (fragCoord.x < 1 && fragCoord.y < 1) {
-                vec3 curTestPos = originOnEdge + localRayOrigin;
-                debugPrintfEXT("\nUp %d %f %v3f %v3f", curIndex, curVoxSpan, originOnEdge, localRayOrigin);
-            }
-
-            exitOctree = (abs(dot(mod((originOnEdge + 0.25) / curVoxSpan + 0.5, 2.0) - 1.0 + dirMask * sign(rayDir) * 0.5, dirMask)) < 0.1) && (recursionAmount > 0);
+            exitOctree = (abs(dot(mod((originOnEdge + 0.25) / curVoxSpan + 0.5, 2.0) - 1.0 + dirMask * sign(rayDir) * 0.5, dirMask)) < 0.1);
         } else {
             // Getting Node Type
             uint state = curVox.nodeType;
@@ -172,10 +154,6 @@ void main() {
                 
                 maskInParentList[recursionAmount] = childMask;
 
-                if (fragCoord.x < 1 && fragCoord.y < 1) {
-                    debugPrintfEXT("\nDown %d %v3f %v3f", curIndex, originOnEdge, localRayOrigin);
-                }
-
             // Move forward or stop -> 0 = Empty , 2 = Full
             } else if (state == 0) {
                 // Raycast and find distance to NearestVoxSurface in direction of Ray
@@ -183,10 +161,7 @@ void main() {
                 vec3 hit = rayCubeIntersect(localRayOrigin, rayDir, inverseRayDir, curVoxSpan);
 
                 dirMask = vec3(lessThan(hit, min(hit.yzx, hit.zxy)));
-                if (fragCoord.x < 1 && fragCoord.y < 1) {
-                    debugPrintfEXT("\nmask %v3f", dirMask);
-                }
-                
+
                 float len = dot(hit, dirMask);
 
                 // Moving forward in direciton of Ray
@@ -200,31 +175,16 @@ void main() {
                 curIndex = octreeData[curVox.parent].children[maskToIndex(maskInParentList[recursionAmount])];
                 curVox = octreeData[curIndex];
 
-                if (fragCoord.x < 1 && fragCoord.y < 1) {
-                    debugPrintfEXT("\nForward %d %v3f %v3f", curIndex, newOriginOnEdge, localRayOrigin);
-                }
-
                 // ? Check if need to move up
-                exitOctree = (floor(newOriginOnEdge / curVoxSpan * 0.5 + 0.25) != floor(originOnEdge / curVoxSpan * 0.5 + 0.25)) && (recursionAmount > 0);
+                exitOctree = (floor(newOriginOnEdge / curVoxSpan * 0.5 + 0.25) != floor(originOnEdge / curVoxSpan * 0.5 + 0.25));
 
                 originOnEdge = newOriginOnEdge;
                 lastDirMask = dirMask;
-            } else if (state == 2) {
-                if (fragCoord.x < 1 && fragCoord.y < 1) {
-                    debugPrintfEXT("\nHit %d", curIndex);
-                }
-                
+            } else if (state == 2) {          
                 fragColor = vec4(0, 1 - dist / uniformBuffer.maxDist * 2, 0, 0);
                 
                 break;
             }
         }
-    }
-
-    if (fragCoord.x < 1 && fragCoord.y < 1) {
-        debugPrintfEXT("\nFinished %d", curIndex);
-        debugPrintfEXT("\n");
-    }
-
-    
+    }    
 }

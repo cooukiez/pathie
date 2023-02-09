@@ -23,7 +23,7 @@ const ENGINE_NAME: &str = "VulkanEngine";
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
-const DEFAULT_STORAGE_BUFFER_SIZE: u64 = 10485760;
+const DEFAULT_STORAGE_BUFFER_SIZE: u64 = 134217728;
 const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 
 pub struct RenderState {
@@ -87,7 +87,7 @@ impl Render {
         let state = RenderState { out_of_date: false, idle: false, frame_time: Duration::ZERO };
 
         let input = Input::new();
-        let mut uniform = Uniform::empty();
+        let mut uniform = Uniform::default();
         let mut octree = Octree::default();
         octree.test_scene();
 
@@ -138,9 +138,16 @@ impl Render {
                                 self.state.idle = true;
                             }
                         } else {
+                            // Update Octree
+                            // self.octree = Octree::default();
+                            // self.octree.test_scene();
+                            // self.graphic_pipe.update_buffer(&self.interface, self.graphic_pipe.octree_buffer_memory, &self.octree.data.clone(), );
+
                             // Update Uniform
-                            self.uniform.update_uniform(app_start.elapsed(), &mut self.octree, );
-                            self.graphic_pipe.update_buffer(&self.interface, self.graphic_pipe.uniform_buffer_memory, &[self.uniform]);
+                            self.uniform
+                                .update_uniform(app_start.elapsed(), &mut self.octree, );
+                            self.graphic_pipe
+                                .update_buffer(&self.interface, self.graphic_pipe.uniform_buffer_memory, &[self.uniform], );
                             
                             // Draw and capture FrameTime
                             let start = Instant::now();
