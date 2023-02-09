@@ -33,10 +33,12 @@ struct TreeNode {
 	uint parent;
 
 	uint children[8];
+
+    float baseColor[3];
 };
 
 layout (set = 1, binding = 0) readonly buffer OctreeData {
-	TreeNode octreeData[2000];
+	TreeNode octreeData[2000000];
 };
 
 # define detail 1.0
@@ -61,7 +63,7 @@ layout (location = 0) out vec4 fragColor;
 
 void main() {
 	vec2 curRes = vec2(uniformBuffer.width, uniformBuffer.height);
-    vec2 curRot = vec2(uniformBuffer.rotHorizontal, uniformBuffer.rotVertical) * - 1;
+    vec2 curRot = vec2(uniformBuffer.rotHorizontal, uniformBuffer.rotVertical);
 	vec2 fragCoord = gl_FragCoord.xy;
 	float curTime = float(uniformBuffer.time) / 1000.0 * 0.5;
 
@@ -73,8 +75,14 @@ void main() {
     vec3 rayOrigin = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
     vec3 rayDir = normalize(vec3(screenPos, 1.0));
 
-    rayDir.yz *= rot(curRot.y / curRes.y * 3.14 - 3.14 * 0.5);
-    rayDir.xz *= rot(curRot.x / curRes.x * 3.14 * 2.0 - 3.14);
+    if (fragCoord.x > curRes.x - 1 && fragCoord.y > curRes.y - 1) {
+        debugPrintfEXT("\n%v3f", curRot.y / curRes.y, curRot.y / curRes.y * 3.14);
+    }
+
+    float offset = 3.14 * 0.5;
+
+    rayDir.yz *= rot(curRot.y / curRes.y * 3.14 - offset);
+    rayDir.xz *= rot(curRot.x / curRes.x * 3.14 - offset);
 
     uint curIndex = 0; // octreeData[].parent;
     TreeNode curVox = octreeData[curIndex];
@@ -167,7 +175,6 @@ void main() {
                 // Moving forward in direciton of Ray
                 dist += len;
 
-                // ?
                 localRayOrigin += rayDir * len - dirMask * sign(rayDir) * curVoxSpan;
                 vec3 newOriginOnEdge = originOnEdge + dirMask * sign(rayDir) * curVoxSpan;
 
@@ -175,13 +182,14 @@ void main() {
                 curIndex = octreeData[curVox.parent].children[maskToIndex(maskInParentList[recursionAmount])];
                 curVox = octreeData[curIndex];
 
-                // ? Check if need to move up
                 exitOctree = (floor(newOriginOnEdge / curVoxSpan * 0.5 + 0.25) != floor(originOnEdge / curVoxSpan * 0.5 + 0.25));
 
                 originOnEdge = newOriginOnEdge;
                 lastDirMask = dirMask;
-            } else if (state == 2) {          
-                fragColor = vec4(0, 1 - dist / uniformBuffer.maxDist * 2, 0, 0);
+            } else if (state == 2) {
+                fragColor = vec4(curVox.baseColor[0], curVox.baseColor[1], curVox.baseColor[2], 0);
+                fragColor.x -= dist / uniformBuffer.maxDist * 2;
+                // fragColor = vec4(1, 1, 1, 0);
                 
                 break;
             }

@@ -1,13 +1,13 @@
 use cgmath::{Vector3};
 use rand::Rng;
 
-use crate::{service::{pos_to_index, step_vec_three, floor_vec_three, add_dir_to_mask}};
+use crate::{service::{pos_to_index, step_vec_three}};
 
-pub const MAX_RECURSION: usize = 10;
+pub const MAX_RECURSION: usize = 12;
 pub const ROOT_SPAN: f32 = (1 << MAX_RECURSION) as f32;
 
-pub const MAX_DISTANCE: f32 = ROOT_SPAN;
-pub const MAX_SEARCH_DEPTH: usize = 1024;
+pub const MAX_DISTANCE: f32 = ROOT_SPAN * 1.41;
+pub const MAX_SEARCH_DEPTH: usize = ROOT_SPAN as usize;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -17,6 +17,7 @@ pub struct TreeNode {
     pub parent: u32,
     
     pub children: [u32; 8],
+    pub base_color: Vector3<f32>,
 }
 
 // Store Info about OctreeTraverse
@@ -47,6 +48,11 @@ impl TreeNode {
         TreeNode { node_type, parent: parent as u32, .. Default::default() }
     }
 
+    pub fn set_full(&mut self, base_color: Vector3<f32>) {
+        self.node_type = 2;
+        self.base_color = base_color;
+    }
+
     pub fn get_center(node_pos: Vector3<f32>, span: f32, ) -> Vector3<f32> {
         node_pos + Vector3::from([span * 0.5; 3])
     }
@@ -75,7 +81,7 @@ impl Octree {
         }
     }
 
-    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, ) -> Traverse {
+    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, base_color: Vector3<f32>, ) -> Traverse {
         let mut traverse = Traverse {
             ray_origin: insert_pos,
 
@@ -96,33 +102,7 @@ impl Octree {
         }
 
         // CurNode = full
-        self.data[traverse.cur_index].node_type = 2;
-
-        traverse
-    }
-
-    pub fn insert_neighbour(&mut self, origin: Traverse, dir: Vector3<f32>, ) -> Traverse {
-        // Select new Pos based on old OriginOnEdge
-        // Has to be 1.5 x the span because directly in center of neighbour
-        let insert_pos = 
-            origin.origin_on_edge + dir * origin.cur_span * 1.5;
-
-        let mut traverse = Traverse {
-            ray_origin: insert_pos,
-
-            local_origin: insert_pos % ROOT_SPAN,
-            origin_on_edge: insert_pos - (insert_pos % ROOT_SPAN),
-
-            .. Default::default()
-        };
-        
-        // Process described above
-        for _  in 0 .. MAX_RECURSION {
-            Self::try_child_creation(&mut self.data, traverse.cur_index);
-            traverse.move_into_child(&self.data);
-        }
-
-        self.data[traverse.cur_index].node_type = 2;
+        self.data[traverse.cur_index].set_full(base_color);
 
         traverse
     }
@@ -132,12 +112,17 @@ impl Octree {
         let y = rng.gen_range(0.0 .. ROOT_SPAN);
         for x in 0 .. 1000 {
             for z in 0 .. 1000 {
-                // self.insert_node(Vector3::new(100.0 + x as f32, y, 100.0 + z as f32, ));
+                let base_color = Vector3::new(rng.gen_range(0.0 .. 1.0), rng.gen_range(0.0 .. 1.0), rng.gen_range(0.0 .. 1.0));
+                self.insert_node(Vector3::new(100.0 + x as f32, y, 100.0 + z as f32, ), base_color);
             }
         }
 
-        for _ in 0 .. 100000 {
-            self.insert_node(Vector3::new(rng.gen_range(0.0 .. ROOT_SPAN), rng.gen_range(0.0 .. ROOT_SPAN), rng.gen_range(0.0 .. ROOT_SPAN)));
+        self.insert_node(Vector3::new(100.0, 100.0, 100.0, ), Vector3::new(1.0, 1.0, 1.0, ), );
+
+        for _ in 0 .. 5000 {
+            let base_color = Vector3::new(rng.gen_range(0.0 .. 1.0), rng.gen_range(0.0 .. 1.0), rng.gen_range(0.0 .. 1.0));
+            let pos = Vector3::new(rng.gen_range(0.0 .. ROOT_SPAN), rng.gen_range(0.0 .. ROOT_SPAN), rng.gen_range(0.0 .. ROOT_SPAN));
+            self.insert_node(pos, base_color, );
         }
     }
 }
@@ -160,39 +145,16 @@ impl Traverse {
         // Get global index of selected child
         self.cur_index = data[self.cur_index].children[space_index] as usize;
     }
-
-    pub fn move_layer_up(&mut self, data: &Vec<TreeNode>, dir_mask: Vector3<f32>, ) {
-        // Compute the rest ( because of moving up ) into LocalOrigin
-        let new_origin_on_edge = 
-            floor_vec_three(self.origin_on_edge / (self.cur_span / 2.0)) * (self.cur_span * 2.0);
-        
-        self.local_origin += self.origin_on_edge - new_origin_on_edge;
-        self.origin_on_edge = new_origin_on_edge;
-
-        self.cur_recursion -= 1;
-        self.cur_span *= 2.0;
-
-        // Use earlier saved mask and move in dir
-        self.mask_in_parent[self.cur_recursion] = 
-            add_dir_to_mask(self.mask_in_parent[self.cur_recursion], dir_mask, );
-
-        // Temp save parent of parent of CurNode
-        let parent_of_parent = 
-            data[data[self.cur_index].parent as usize];
-        
-        // Moved mask into SpaceIndex and get global index of Child
-        let next_space_index = 
-            pos_to_index(self.mask_in_parent[self.cur_recursion], 2, );
-        self.cur_index = parent_of_parent
-            .children[next_space_index] as usize;
-    }
-
-    // Add move forward function
 }
 
 impl Default for TreeNode {
     fn default() -> Self {
-        Self { node_type: 0, parent: 0, children: [0; 8] }
+        Self { 
+            node_type: 0,
+            parent: 0,
+            children: [0; 8],
+            base_color: Vector3::from([0.0; 3])
+        }
     }
 }
 

@@ -3,8 +3,7 @@ use std::time::Duration;
 use ash::vk;
 use cgmath::{Vector3, Vector2};
 
-use crate::octree::{Octree, ROOT_SPAN, MAX_DISTANCE, MAX_SEARCH_DEPTH, MAX_RECURSION};
-
+use crate::{octree::{Octree, ROOT_SPAN, MAX_DISTANCE, MAX_SEARCH_DEPTH, MAX_RECURSION}, service::vector_two_boundary};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -36,6 +35,7 @@ impl Uniform {
 
     pub fn move_mouse(&mut self, mouse_velocity: Vector2<f32>, ) {
         self.mouse_pos += mouse_velocity;
+        vector_two_boundary(Vector2::new(0.0, 0.0, ), self.resolution, &mut self.mouse_pos, )
     }
 
     pub fn update_uniform(&mut self, cur_time: Duration, octree: &mut Octree, ) {
@@ -58,7 +58,7 @@ impl Default for Uniform {
             root_span: ROOT_SPAN,
             max_recursion: MAX_RECURSION as u32,
 
-            pos: Vector3::new(0.0, 0.0, 0.0, )
+            pos: Vector3::new(ROOT_SPAN / 8.0, ROOT_SPAN / 8.0, ROOT_SPAN / 8.0, )
         }
     }
 }
