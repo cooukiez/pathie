@@ -47,8 +47,8 @@ layout (set = 1, binding = 0) readonly buffer OctreeData {
 # define sqr(number) (number * number)
 
 // RayCube Intersection on inside of Cube
-vec3 rayCubeIntersect(vec3 rayOrigin, vec3 rayDir, vec3 inverseRayDir, float curVoxSpan) {
-    return - (sign(rayDir) * (rayOrigin - curVoxSpan * 0.5) - curVoxSpan * 0.5) * inverseRayDir;
+vec3 rayCubeIntersect(vec3 rayOrigin, vec3 rayDir, vec3 inverseRayDir, float curSpan) {
+    return - (sign(rayDir) * (rayOrigin - curSpan * 0.5) - curSpan * 0.5) * inverseRayDir;
 }
 
 // Simple Hashing Scheme
@@ -77,8 +77,14 @@ void main() {
     vec3 rayOrigin = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
     vec3 rayDir = normalize(vec3(screenPos, 1.0));
 
+    vec2 first = vec2(2, 0) / curRes.y;
+    vec2 sec = vec2(- 2, 0) / curRes.y;
+    vec3 firstTest = normalize(vec3(first, 1.0));
+    vec3 secTest = normalize(vec3(sec, 1.0));
+
     // if (fragCoord.x > curRes.x - 2.0 && fragCoord.y > curRes.y - 2.0) {
-        // debugPrintfEXT("\n%v3f", fragCoord);
+        // debugPrintfEXT("\n%v3f %v3f", firstTest, secTest);
+        // debugPrintfEXT("\n%f", tReq);
     // }
 
     // dir(rad(vec2(30, 30)))
@@ -89,11 +95,11 @@ void main() {
     rayDir.xz *= rot(curRot.x / curRes.x * 3.14 - offset);
 
     uint curIndex = 0; // octreeData[].parent;
-    TreeNode curVox = octreeData[curIndex];
-    float curVoxSpan = uniformBuffer.rootSpan;
+    TreeNode curNode = octreeData[curIndex];
+    float curSpan = uniformBuffer.rootSpan;
 
     // Position within current Cell / Node
-    vec3 localRayOrigin = mod(rayOrigin, curVoxSpan);
+    vec3 localRayOrigin = mod(rayOrigin, curSpan);
     // RayOrigin on the Edge of the Node
     vec3 originOnEdge = rayOrigin - localRayOrigin;
     // ? Used for RayCube Intersection
@@ -124,45 +130,55 @@ void main() {
 
         // Should go up
         if (exitOctree) {
-            if (curVox.parent == 0) { break; }
+            if (curNode.parent == 0) { break; }
 
-            vec3 newOriginOnEdge = floor(originOnEdge / (curVoxSpan * 2.0)) * (curVoxSpan * 2.0);
+            vec3 newOriginOnEdge = floor(originOnEdge / (curSpan * 2.0)) * (curSpan * 2.0);
             
             localRayOrigin += originOnEdge - newOriginOnEdge;
             originOnEdge = newOriginOnEdge;
             
-            // Moving one Layer upward -> Decrease RecursionAmount & Double curVoxSpan
+            // Moving one Layer upward -> Decrease RecursionAmount & Double curSpan
             recursionAmount -= 1;
-            curVoxSpan *= 2.0;
+            curSpan *= 2.0;
             
-            TreeNode parentOfParent = octreeData[octreeData[curVox.parent].parent];
+            TreeNode parentOfParent = octreeData[octreeData[curNode.parent].parent];
             maskInParentList[recursionAmount] = addDirToMask(maskInParentList[recursionAmount], dirMask);
 
             curIndex = parentOfParent.children[maskToIndex(maskInParentList[recursionAmount])];
-            curVox = octreeData[curIndex];
+            curNode = octreeData[curIndex];
 
-            exitOctree = (abs(dot(mod((originOnEdge + 0.25) / curVoxSpan + 0.5, 2.0) - 1.0 + dirMask * sign(rayDir) * 0.5, dirMask)) < 0.1);
+            exitOctree = (abs(dot(mod((originOnEdge + 0.25) / curSpan + 0.5, 2.0) - 1.0 + dirMask * sign(rayDir) * 0.5, dirMask)) < 0.1);
         } else {
             // Getting Node Type
-            uint state = curVox.nodeType;
+            uint state = curNode.nodeType;
+
+            // If full return
+            if (state == 2) {
+                fragColor = vec4(curNode.baseColor[0], curNode.baseColor[1], curNode.baseColor[2], 0);
+                fragColor.x -= dist / uniformBuffer.maxDist * 2;
+                // fragColor = vec4(1, 1, 1, 0);
+                
+                break;
+            }
 
             // If State == Subdivide && too much Detail -> State = Empty
-            if (state == 1 && recursionAmount > uniformBuffer.maxRecursion) { state = 0; }
+            if (recursionAmount > uniformBuffer.maxRecursion) { state = 0; }
+            if (curSpan < abs(secTest.x * dist - firstTest.x * dist)) { state = 0; }
             
             // If State = Subdivide && no Limit of Detail reached -> Select Child
             if (state == 1 && recursionAmount <= uniformBuffer.maxRecursion) {
-                // Moving one Layer down -> Increase RecursionAmount & Half curVoxSpan
+                // Moving one Layer down -> Increase RecursionAmount & Half curSpan
                 recursionAmount += 1;
-                curVoxSpan *= 0.5;
+                curSpan *= 0.5;
 
                 // Select specific Child
-                vec3 childMask = step(vec3(curVoxSpan), localRayOrigin);
+                vec3 childMask = step(vec3(curSpan), localRayOrigin);
 
-                originOnEdge += childMask * curVoxSpan;
-                localRayOrigin -= childMask * curVoxSpan;
+                originOnEdge += childMask * curSpan;
+                localRayOrigin -= childMask * curSpan;
 
-                curIndex = curVox.children[maskToIndex(childMask)];
-                curVox = octreeData[curIndex];
+                curIndex = curNode.children[maskToIndex(childMask)];
+                curNode = octreeData[curIndex];
                 
                 maskInParentList[recursionAmount] = childMask;
 
@@ -170,7 +186,7 @@ void main() {
             } else if (state == 0) {
                 // Raycast and find distance to NearestVoxSurface in direction of Ray
                 // No need to call everytime
-                vec3 hit = rayCubeIntersect(localRayOrigin, rayDir, inverseRayDir, curVoxSpan);
+                vec3 hit = rayCubeIntersect(localRayOrigin, rayDir, inverseRayDir, curSpan);
 
                 dirMask = vec3(lessThan(hit, min(hit.yzx, hit.zxy)));
 
@@ -179,23 +195,17 @@ void main() {
                 // Moving forward in direciton of Ray
                 dist += len;
 
-                localRayOrigin += rayDir * len - dirMask * sign(rayDir) * curVoxSpan;
-                vec3 newOriginOnEdge = originOnEdge + dirMask * sign(rayDir) * curVoxSpan;
+                localRayOrigin += rayDir * len - dirMask * sign(rayDir) * curSpan;
+                vec3 newOriginOnEdge = originOnEdge + dirMask * sign(rayDir) * curSpan;
 
                 maskInParentList[recursionAmount] = addDirToMask(maskInParentList[recursionAmount], dirMask);
-                curIndex = octreeData[curVox.parent].children[maskToIndex(maskInParentList[recursionAmount])];
-                curVox = octreeData[curIndex];
+                curIndex = octreeData[curNode.parent].children[maskToIndex(maskInParentList[recursionAmount])];
+                curNode = octreeData[curIndex];
 
-                exitOctree = (floor(newOriginOnEdge / curVoxSpan * 0.5 + 0.25) != floor(originOnEdge / curVoxSpan * 0.5 + 0.25));
+                exitOctree = (floor(newOriginOnEdge / curSpan * 0.5 + 0.25) != floor(originOnEdge / curSpan * 0.5 + 0.25));
 
                 originOnEdge = newOriginOnEdge;
                 lastDirMask = dirMask;
-            } else if (state == 2) {
-                fragColor = vec4(curVox.baseColor[0], curVox.baseColor[1], curVox.baseColor[2], 0);
-                fragColor.x -= dist / uniformBuffer.maxDist * 2;
-                // fragColor = vec4(1, 1, 1, 0);
-                
-                break;
             }
         }
     }    
