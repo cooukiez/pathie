@@ -58,7 +58,7 @@ impl Default for Uniform {
             root_span: ROOT_SPAN,
             max_recursion: MAX_RECURSION as u32,
 
-            pos: Vector3::new(ROOT_SPAN / 8.0, ROOT_SPAN / 8.0, ROOT_SPAN / 8.0, )
+            pos: Vector3::new(ROOT_SPAN / 2.0, ROOT_SPAN / 2.0, ROOT_SPAN / 2.0, )
         }
     }
 }

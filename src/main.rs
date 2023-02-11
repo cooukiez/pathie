@@ -51,8 +51,11 @@ pub struct Render {
 // General Setting
 pub struct Pref {
     pub pref_present_mode: vk::PresentModeKHR,
-    pub img_scale_filter: vk::Filter,
+    pub img_filter: vk::Filter,
     pub img_scale: f32,
+
+    pub use_render_res: bool,
+    pub render_res: vk::Extent2D,
 }
   
 fn main() {
@@ -83,7 +86,15 @@ impl Render {
     pub fn get_render() -> Render {
         let event_loop = EventLoop::new();
 
-        let pref = Pref { pref_present_mode: vk::PresentModeKHR::IMMEDIATE, img_scale_filter: vk::Filter::LINEAR, img_scale: 1.0, };
+        let pref = Pref { 
+            pref_present_mode: vk::PresentModeKHR::IMMEDIATE,
+            img_filter: vk::Filter::LINEAR,
+            img_scale: 1.0,
+
+            use_render_res: true,
+            render_res: vk::Extent2D { width: 1920, height: 1080 },
+        };
+
         let state = RenderState { out_of_date: false, idle: false, frame_time: Duration::ZERO };
 
         let input = Input::new();
@@ -146,8 +157,8 @@ impl Render {
                             // Update Uniform
                             self.uniform
                                 .update_uniform(app_start.elapsed(), &mut self.octree, );
-                            self.graphic_pipe
-                                .update_buffer(&self.interface, self.graphic_pipe.uniform_buffer_memory, &[self.uniform], );
+                            self.graphic_pipe.uniform_buffer
+                                .update(&self.interface, &[self.uniform], );
                             
                             // Draw and capture FrameTime
                             let start = Instant::now();

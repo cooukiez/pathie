@@ -5,6 +5,8 @@
 
 # define internMaxRecursion 32
 # define rot(spin) mat2(cos(spin), sin(spin), - sin(spin), cos(spin))
+# define dir(rot) vec3(cos(rot.x) * cos(rot.y), sin(rot.y), sin(rot.x) * cos(rot.y))
+# define rad(degree) vec2(3.14 * degree / 180.0)
 
 layout (set = 0, binding = 0) uniform Uniform {
     uint time;
@@ -75,9 +77,11 @@ void main() {
     vec3 rayOrigin = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
     vec3 rayDir = normalize(vec3(screenPos, 1.0));
 
-    if (fragCoord.x > curRes.x - 1 && fragCoord.y > curRes.y - 1) {
-        debugPrintfEXT("\n%v3f", curRot.y / curRes.y, curRot.y / curRes.y * 3.14);
-    }
+    // if (fragCoord.x > curRes.x - 2.0 && fragCoord.y > curRes.y - 2.0) {
+        // debugPrintfEXT("\n%v3f", fragCoord);
+    // }
+
+    // dir(rad(vec2(30, 30)))
 
     float offset = 3.14 * 0.5;
 

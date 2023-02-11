@@ -10,21 +10,26 @@ struct Vertex {
     uv: [f32; 2],
 }
 
-pub struct Pipe {
-    pub scaled_extent: vk::Extent2D,
-    pub image_target_list: Vec<vk::Image>,
-    pub image_target_mem_list: Vec<vk::DeviceMemory>,
-    pub image_target_view_list: Vec<vk::ImageView>,
+pub struct ImageTarget {
+    image_target: vk::Image,
+    image_mem: vk::DeviceMemory,
+    image_view: vk::ImageView,
+}
 
-    pub index_buffer_data: Vec<u32>,
-    pub index_buffer: vk::Buffer,
-    pub index_buffer_memory: vk::DeviceMemory,
-    pub vertex_input_buffer: vk::Buffer,
-    pub vertex_input_buffer_memory: vk::DeviceMemory,
-    pub uniform_buffer: vk::Buffer,
-    pub uniform_buffer_memory: vk::DeviceMemory,
-    pub octree_buffer: vk::Buffer,
-    pub octree_buffer_memory: vk::DeviceMemory,
+pub struct BufferSet {
+    pub buffer: vk::Buffer,
+    pub buffer_mem: vk::DeviceMemory,
+}
+
+pub struct Pipe {
+    pub render_res: vk::Extent2D,
+    pub image_target_list: Vec<ImageTarget>,
+
+    pub index_data: Vec<u32>,
+    pub index_buffer: BufferSet,
+    pub vertex_buffer: BufferSet,
+    pub uniform_buffer: BufferSet,
+    pub octree_buffer: BufferSet,
 
     pub descriptor_pool: vk::DescriptorPool,
     pub desc_set_layout_list: Vec<DescriptorSetLayout>,
@@ -44,192 +49,73 @@ pub struct Pipe {
 impl Pipe {
     pub fn init(interface: &Interface, pref: &Pref, uniform: &mut Uniform, octree: &Octree, ) -> Self {
         unsafe {
-            let scaled_extent = vk::Extent2D { 
-                width: (interface.surface_resolution.width as f32 / pref.img_scale) as u32,
-                height: (interface.surface_resolution.height as f32 / pref.img_scale) as u32
-            };
-
-            uniform.apply_resolution(scaled_extent);
+            let render_res = interface.surface_resolution;
+            uniform.apply_resolution(render_res);
 
             log::info!("Getting ImageTarget List ...");
-            let image_target_list: Vec<vk::Image> = interface.present_img_view_list
+            let image_target_list = interface.present_img_view_list
                 .iter()
-                .map(| _ | {
-                    // Create ImgInfo with Dimension -> Scaled Variant
-                    let image_info = vk::ImageCreateInfo::builder()
-                        .format(interface.surface_format.format)
-                        .extent(vk::Extent3D { width: scaled_extent.width, height: scaled_extent.height, depth: 1 })
-                        .mip_levels(1).array_layers(1).samples(vk::SampleCountFlags::TYPE_1)
-                        .tiling(vk::ImageTiling::OPTIMAL).usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC)
-                        .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                        .initial_layout(vk::ImageLayout::UNDEFINED)
-                        .image_type(vk::ImageType::TYPE_2D)
-                        .build();
-                    // Create Image on Device
-                    interface.device
-                        .create_image(&image_info, None, )
-                        .unwrap()
-                })
+                .map(| _ | { ImageTarget::new(interface, render_res, ) })
                 .collect();
             
-            log::info!("Getting ImageTargetMemory List ...");
-            let image_target_mem_list: Vec<vk::DeviceMemory> = image_target_list
-                .iter()
-                .map(| &image_target | {
-                    // Get Memory Requirement for Image and the MemoryTypeIndex
-                    let img_mem_requirement = interface.device.get_image_memory_requirements(image_target);
-                    let img_mem_index = interface
-                        .find_memorytype_index(&img_mem_requirement, vk::MemoryPropertyFlags::DEVICE_LOCAL, )
-                        .expect("NO_SUITABLE_MEM_TYPE_INDEX");
-                    // Prepare MemoryAllocation
-                    let allocate_info = vk::MemoryAllocateInfo::builder()
-                        .allocation_size(img_mem_requirement.size)
-                        .memory_type_index(img_mem_index).build();
-                    // Allocate Memory therefore create DeviceMemory
-                    let image_mem = interface.device
-                        .allocate_memory(&allocate_info, None, )
-                        .unwrap();
-                    // To Finish -> Bind Memory
-                    interface.device
-                        .bind_image_memory(image_target, image_mem, 0, )
-                        .expect("UNABLE_TO_BIND_MEM");
-                    image_mem
-                })
-                .collect();
-            
-            log::info!("Getting ImageTargetView List ...");
-            let image_target_view_list: Vec<vk::ImageView> = image_target_list
-                .iter()
-                .map(| &image_target | {
-                    // Prepare ImageView Creation and bind Image
-                    let image_view_info = vk::ImageViewCreateInfo::builder()
-                        .view_type(vk::ImageViewType::TYPE_2D)
-                        .format(interface.surface_format.format)
-                        .subresource_range(vk::ImageSubresourceRange { aspect_mask: vk::ImageAspectFlags::COLOR, base_mip_level: 0, level_count: 1, base_array_layer: 0, layer_count: 1, })
-                        .image(image_target)
-                        .components(vk::ComponentMapping { r: vk::ComponentSwizzle::R, g: vk::ComponentSwizzle::G, b: vk::ComponentSwizzle::B, a: vk::ComponentSwizzle::A, })
-                        .build();
-                    // Build Image View
-                    interface.device
-                        .create_image_view(&image_view_info, None, )
-                        .unwrap()
-                })
-                .collect();
-
-            // Create Index Buffer
             log::info!("Creating IndexBuffer ...");
-            let index_buffer_data: Vec<u32> = vec![0u32, 1, 2, 2, 3, 0];
-            let index_buffer_info = vk::BufferCreateInfo { size: std::mem::size_of_val(&index_buffer_data) as u64, usage: vk::BufferUsageFlags::INDEX_BUFFER, sharing_mode: vk::SharingMode::EXCLUSIVE, ..Default::default() };
-
-            let index_buffer = interface.device.create_buffer(&index_buffer_info, None).unwrap();
-            let index_buffer_memory_req = interface.device.get_buffer_memory_requirements(index_buffer);
-            let index_buffer_memory_index = 
-                interface.find_memorytype_index(&index_buffer_memory_req, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT, )
-                .expect("ERR_INDEX_BUFFER_MEM_INDEX");
+            let index_data = vec![0u32, 1, 2, 2, 3, 0];
+            let index_buffer_info =
+                vk::BufferCreateInfo {
+                    size: std::mem::size_of_val(&index_data) as u64,
+                    usage: vk::BufferUsageFlags::INDEX_BUFFER,
+                    sharing_mode: vk::SharingMode::EXCLUSIVE,
+                    
+                    .. Default::default()
+                };
             
-            let index_allocate_info = vk::MemoryAllocateInfo { allocation_size: index_buffer_memory_req.size, memory_type_index: index_buffer_memory_index, ..Default::default() };
-            let index_buffer_memory = interface.device
-                .allocate_memory(&index_allocate_info, None, )
-                .unwrap();
-            let index_ptr: *mut c_void = interface.device
-                .map_memory(index_buffer_memory, 0, index_buffer_memory_req.size, vk::MemoryMapFlags::empty(), )
-                .unwrap();
-            let mut index_slice = Align::new(index_ptr, align_of::<u32>() as u64, index_buffer_memory_req.size, );
+            let index_buffer = BufferSet::new(interface, index_buffer_info, &index_data, );
 
-            index_slice.copy_from_slice(&index_buffer_data);
-            interface.device.unmap_memory(index_buffer_memory);
-
-            interface.device
-                .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
-                .unwrap();
-
-            // Create Vertex Buffer
             log::info!("Creating VertexBuffer ...");
-            let vertex_list = [
+            let vertex_data = [
                 Vertex { pos: [-1.0, -1.0, 0.0, 1.0], uv: [0.0, 0.0], },
                 Vertex { pos: [-1.0, 1.0, 0.0, 1.0], uv: [0.0, 1.0], },
                 Vertex { pos: [1.0, 1.0, 0.0, 1.0], uv: [1.0, 1.0], },
                 Vertex { pos: [1.0, -1.0, 0.0, 1.0], uv: [1.0, 0.0], },
             ];
 
-            let vertex_input_buffer_info = vk::BufferCreateInfo { size: std::mem::size_of_val(&vertex_list) as u64, usage: vk::BufferUsageFlags::VERTEX_BUFFER, sharing_mode: vk::SharingMode::EXCLUSIVE, ..Default::default() };
-            let vertex_input_buffer = interface.device
-                .create_buffer(&vertex_input_buffer_info, None, )
-                .unwrap();
-            let vertex_input_buffer_memory_req = interface.device
-                .get_buffer_memory_requirements(vertex_input_buffer);
-            let vertex_input_buffer_memory_index = 
-                interface.find_memorytype_index(&vertex_input_buffer_memory_req, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT, )
-                .expect("ERR_VERTEX_MEM_INDEX");
-            let vertex_buffer_allocate_info = vk::MemoryAllocateInfo { allocation_size: vertex_input_buffer_memory_req.size, memory_type_index: vertex_input_buffer_memory_index, ..Default::default() };
-            let vertex_input_buffer_memory = interface.device
-                .allocate_memory(&vertex_buffer_allocate_info, None, )
-                .unwrap();
+            let vertex_buffer_info =
+                vk::BufferCreateInfo {
+                    size: std::mem::size_of_val(&vertex_data) as u64,
+                    usage: vk::BufferUsageFlags::VERTEX_BUFFER,
+                    sharing_mode: vk::SharingMode::EXCLUSIVE,
+                    
+                    .. Default::default()
+                };
             
-            let vert_ptr = interface.device
-                .map_memory(vertex_input_buffer_memory, 0, vertex_input_buffer_memory_req.size, vk::MemoryMapFlags::empty(), )
-                .unwrap();
-            let mut slice = Align::new(vert_ptr, align_of::<Vertex>() as u64, vertex_input_buffer_memory_req.size, );
-            slice.copy_from_slice(&vertex_list);
-            interface.device.unmap_memory(vertex_input_buffer_memory);
-            interface.device
-                .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0, )
-                .unwrap();
+            let vertex_buffer = BufferSet::new(interface, vertex_buffer_info, &vertex_data, );
             
-            // Create Uniform Buffer
             log::info!("Creating UniformBuffer ...");
-            let uniform_buffer_data = uniform.clone();
-            let uniform_buffer_info = vk::BufferCreateInfo { size: DEFAULT_UNIFORM_BUFFER_SIZE, usage: vk::BufferUsageFlags::UNIFORM_BUFFER, sharing_mode: vk::SharingMode::EXCLUSIVE, ..Default::default() };
-            
-            let uniform_buffer = interface.device
-                .create_buffer(&uniform_buffer_info, None, )
-                .unwrap();
-            let uniform_buffer_memory_req = interface.device
-                .get_buffer_memory_requirements(uniform_buffer);
-            let uniform_buffer_memory_index = interface.find_memorytype_index(&uniform_buffer_memory_req, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT, )
-                .expect("ERR_UNIFORM_MEM_INDEX");
-            let uniform_buffer_allocate_info = vk::MemoryAllocateInfo { allocation_size: uniform_buffer_memory_req.size, memory_type_index: uniform_buffer_memory_index, ..Default::default() };
-            let uniform_buffer_memory = interface.device
-                .allocate_memory(&uniform_buffer_allocate_info, None, )
-                .unwrap();
-            let uniform_ptr = interface.device
-                .map_memory(uniform_buffer_memory, 0, uniform_buffer_memory_req.size, vk::MemoryMapFlags::empty(), )
-                .unwrap();
-            let mut uniform_aligned_slice = Align::new(uniform_ptr, align_of::<Uniform>() as u64, uniform_buffer_memory_req.size, );
-            uniform_aligned_slice.copy_from_slice(&[uniform_buffer_data]);
-            interface.device.unmap_memory(uniform_buffer_memory);
-            interface.device
-                .bind_buffer_memory(uniform_buffer, uniform_buffer_memory, 0, )
-                .unwrap();
+            let uniform_data = uniform.clone();
+            let uniform_buffer_info =
+                vk::BufferCreateInfo {
+                    size: DEFAULT_UNIFORM_BUFFER_SIZE,
+                    usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+                    sharing_mode: vk::SharingMode::EXCLUSIVE,
+                    
+                    .. Default::default()
+                };
 
-            // Create Octree Buffer
+            let uniform_buffer = BufferSet::new(interface, uniform_buffer_info, &[uniform_data], );
+
             log::info!("Creating OctreeBuffer ...");
-            let octree_buffer_data = octree.data.clone();
+            let octree_data = octree.data.clone();
+            let octree_buffer_info =
+                vk::BufferCreateInfo {
+                    size: DEFAULT_STORAGE_BUFFER_SIZE,
+                    usage: vk::BufferUsageFlags::STORAGE_BUFFER,
+                    sharing_mode: vk::SharingMode::EXCLUSIVE,
+                    
+                    .. Default::default()
+                };
             
-            let octree_buffer_info = vk::BufferCreateInfo { size: DEFAULT_STORAGE_BUFFER_SIZE, usage: vk::BufferUsageFlags::STORAGE_BUFFER, sharing_mode: vk::SharingMode::EXCLUSIVE, ..Default::default() };
+            let octree_buffer = BufferSet::new(interface, octree_buffer_info, &octree_data, );
             
-            let octree_buffer = interface.device
-                .create_buffer(&octree_buffer_info, None, )
-                .unwrap();
-            let octree_buffer_memory_req = interface.device
-                .get_buffer_memory_requirements(octree_buffer);
-            let octree_buffer_memory_index = interface.find_memorytype_index(&octree_buffer_memory_req, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT, )
-                .expect("ERR_OCTREE_MEM_INDEX");
-            let octree_buffer_allocate_info = vk::MemoryAllocateInfo { allocation_size: octree_buffer_memory_req.size, memory_type_index: octree_buffer_memory_index, ..Default::default() };
-            let octree_buffer_memory = interface.device
-                .allocate_memory(&octree_buffer_allocate_info, None, )
-                .unwrap();
-            let octree_buffer_ptr = interface.device
-                .map_memory(octree_buffer_memory, 0, octree_buffer_memory_req.size, vk::MemoryMapFlags::empty(), )
-                .unwrap();
-            let mut octree_aligned_slice = Align::new(octree_buffer_ptr, align_of::<TreeNode>() as u64, octree_buffer_memory_req.size, );
-            octree_aligned_slice.copy_from_slice(&octree_buffer_data[ .. ]);
-            interface.device.unmap_memory(octree_buffer_memory);
-            interface.device
-                .bind_buffer_memory(octree_buffer, octree_buffer_memory, 0, )
-                .unwrap();
-
-            // Create DescriptorSet
             log::info!("Creating DescriptorPool ...");
             let descriptor_size_list = [
                 vk::DescriptorPoolSize { ty: vk::DescriptorType::UNIFORM_BUFFER, descriptor_count: 1, },
@@ -243,10 +129,12 @@ impl Pipe {
                 .create_descriptor_pool(&descriptor_pool_info, None, )
                 .unwrap();
             
+            log::info!("Creating UniformSet ...");
             let uniform_set_binding_list = [
                 vk::DescriptorSetLayoutBinding { descriptor_type: vk::DescriptorType::UNIFORM_BUFFER, descriptor_count: 1, stage_flags: vk::ShaderStageFlags::FRAGMENT, ..Default::default() },
             ];
 
+            log::info!("Creating OctreeSet ...");
             let octree_set_binding_list = [
                 vk::DescriptorSetLayoutBinding { descriptor_type: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: 1, stage_flags: vk::ShaderStageFlags::FRAGMENT, ..Default::default() },
             ];
@@ -254,6 +142,7 @@ impl Pipe {
             let uniform_desc_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&uniform_set_binding_list);
             let octree_dec_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&octree_set_binding_list);
 
+            log::info!("Allocating whole DescriptorPool ...");
             let desc_set_layout_list: Vec<vk::DescriptorSetLayout> = vec![
                 interface.device
                     .create_descriptor_set_layout(&uniform_desc_info, None, )
@@ -270,9 +159,10 @@ impl Pipe {
                 .allocate_descriptor_sets(&desc_alloc_info)
                 .unwrap();
 
-            let uniform_buffer_descriptor = vk::DescriptorBufferInfo { buffer: uniform_buffer, offset: 0, range: mem::size_of_val(&uniform_buffer_data) as u64, };
-            let octree_buffer_descriptor = vk::DescriptorBufferInfo { buffer: octree_buffer, offset: 0, range: vk::WHOLE_SIZE, };
+            let uniform_buffer_descriptor = vk::DescriptorBufferInfo { buffer: uniform_buffer.buffer, offset: 0, range: mem::size_of_val(&uniform_data) as u64, };
+            let octree_buffer_descriptor = vk::DescriptorBufferInfo { buffer: octree_buffer.buffer, offset: 0, range: vk::WHOLE_SIZE, };
 
+            log::info!("Writing whole DescriptorPool ...");
             let write_desc_set_list = [
                 vk::WriteDescriptorSet { dst_set: descriptor_set_list[0], descriptor_count: 1, descriptor_type: vk::DescriptorType::UNIFORM_BUFFER, p_buffer_info: &uniform_buffer_descriptor, ..Default::default() },
                 vk::WriteDescriptorSet { dst_set: descriptor_set_list[1], descriptor_count: 1, descriptor_type: vk::DescriptorType::STORAGE_BUFFER, p_buffer_info: &octree_buffer_descriptor, ..Default::default() },
@@ -331,14 +221,15 @@ impl Pipe {
             log::info!("Viewport and Scissor ...");
             let viewport = vec![
                 vk::Viewport { 
-                    x: 0.0, y: 0.0,
-                    width: scaled_extent.width as f32,
-                    height: scaled_extent.height as f32,
-                    min_depth: 0.0, max_depth: 1.0,
+                    width: render_res.width as f32,
+                    height: render_res.height as f32,
+                    max_depth: 1.0,
+
+                    .. Default::default()
                 }
             ];
 
-            let scissor: Vec<vk::Rect2D> = vec![scaled_extent.into()];
+            let scissor = vec![render_res.into()];
             let viewport_state_info = vk::PipelineViewportStateCreateInfo::builder()
                 .scissors(&scissor)
                 .viewports(&viewport);
@@ -398,19 +289,13 @@ impl Pipe {
 
             log::info!("Rendering initialisation finished ...");
             Pipe {
-                scaled_extent,
+                render_res,
                 image_target_list,
-                image_target_mem_list,
-                image_target_view_list,
-                index_buffer_data,
+                index_data,
                 index_buffer,
-                index_buffer_memory,
-                vertex_input_buffer,
-                vertex_input_buffer_memory,
+                vertex_buffer,
                 uniform_buffer,
-                uniform_buffer_memory,
                 octree_buffer,
-                octree_buffer_memory,
                 descriptor_pool,
                 desc_set_layout_list,
                 descriptor_set_list,
@@ -460,7 +345,7 @@ impl Pipe {
                 .expect("ERR_BEGIN_CMD_BUFFER");
 
             let color_attachment_info = vk::RenderingAttachmentInfoKHR::builder()
-                .image_view(self.image_target_view_list[present_index as usize])
+                .image_view(self.image_target_list[present_index as usize].image_view)
                 .load_op(vk::AttachmentLoadOp::CLEAR)
                 .store_op(vk::AttachmentStoreOp::STORE)
                 .clear_value(clear_value[0])
@@ -470,7 +355,7 @@ impl Pipe {
 
             // Begin Draw
             let rendering_info = vk::RenderingInfoKHR::builder()
-                .render_area(vk::Rect2D { offset: vk::Offset2D { x: 0, y: 0 }, extent: self.scaled_extent })
+                .render_area(vk::Rect2D { offset: vk::Offset2D { x: 0, y: 0 }, extent: self.render_res })
                 .layer_count(1)
                 .color_attachments(&color_attachment_list);
 
@@ -486,11 +371,11 @@ impl Pipe {
             interface.device
                 .cmd_set_scissor(interface.draw_command_buffer, 0, &self.scissor, );
             interface.device
-                .cmd_bind_vertex_buffers(interface.draw_command_buffer, 0, &[self.vertex_input_buffer], &[0], );
+                .cmd_bind_vertex_buffers(interface.draw_command_buffer, 0, &[self.vertex_buffer.buffer], &[0], );
             interface.device
-                .cmd_bind_index_buffer(interface.draw_command_buffer, self.index_buffer, 0, vk::IndexType::UINT32, );
+                .cmd_bind_index_buffer(interface.draw_command_buffer, self.index_buffer.buffer, 0, vk::IndexType::UINT32, );
             interface.device
-                .cmd_draw_indexed(interface.draw_command_buffer, self.index_buffer_data.len() as u32, 1, 0, 0, 1, );
+                .cmd_draw_indexed(interface.draw_command_buffer, self.index_data.len() as u32, 1, 0, 0, 1, );
             interface.device
                 .cmd_end_rendering(interface.draw_command_buffer);
 
@@ -499,12 +384,12 @@ impl Pipe {
             
             let blit = vk::ImageBlit { 
                 src_subresource: src, 
-                src_offsets: [vk::Offset3D { x: 0, y: 0, z: 0 }, vk::Offset3D { x: self.scaled_extent.width as i32, y: self.scaled_extent.height as i32, z: 1 }], 
+                src_offsets: [vk::Offset3D { x: 0, y: 0, z: 0 }, vk::Offset3D { x: self.render_res.width as i32, y: self.render_res.height as i32, z: 1 }], 
                 dst_subresource: dst, 
                 dst_offsets: [vk::Offset3D { x: 0, y: 0, z: 0 }, vk::Offset3D { x: interface.surface_resolution.width as i32, y: interface.surface_resolution.height as i32, z: 1 }] };
             
             interface.device
-                .cmd_blit_image(interface.draw_command_buffer, self.image_target_list[present_index as usize], vk::ImageLayout::UNDEFINED, interface.present_img_list[present_index as usize], vk::ImageLayout::UNDEFINED, &[blit], pref.img_scale_filter, );
+                .cmd_blit_image(interface.draw_command_buffer, self.image_target_list[present_index as usize].image_target, vk::ImageLayout::UNDEFINED, interface.present_img_list[present_index as usize], vk::ImageLayout::UNDEFINED, &[blit], pref.img_filter, );
                 
             // Finish Draw
             interface.device
@@ -544,42 +429,41 @@ impl Pipe {
             interface.wait_for_gpu().expect("DEVICE_LOST");
 
             log::info!("Recreating Swapchain ...");
-
-            // Destroy ImageTargetViewList
-            self.image_target_view_list
-            .iter()
-            .for_each(| &image_target_view | {
-                interface.device
-                    .destroy_image_view(image_target_view, None, );
-            });
-
-            // Destroy ImageTargetList
             self.image_target_list
                 .iter()
-                .for_each(| &image_target | {
-                    interface.device
-                        .destroy_image(image_target, None, );
-                });
+                .for_each(| target | { target.destroy(interface); });
             
-            // Destroy PresentImgViewList
             interface.present_img_view_list
                 .iter()
                 .for_each(| view | interface.device.destroy_image_view(* view, None, ));
-            // Destroy Swapchain
             interface.swapchain_loader
                 .destroy_swapchain(interface.swapchain, None, );
             
-            // Get new SurfaceCapability
+            // New SurfaceCapability
             interface.surface_capability = interface.surface_loader
                 .get_physical_device_surface_capabilities(interface.phy_device, interface.surface, )
                 .unwrap();
 
-            // Get new Dimension and check
+            // Select new Dimension
             let dim = interface.window.inner_size();
-            interface.surface_resolution = match interface.surface_capability.current_extent.width {
-                std::u32::MAX => vk::Extent2D { width: dim.width, height: dim.height },
-                _ => interface.surface_capability.current_extent,
-            };
+            interface.surface_resolution =
+                match interface.surface_capability.current_extent.width {
+                    std::u32::MAX => vk::Extent2D { width: dim.width, height: dim.height },
+                    _ => interface.surface_capability.current_extent,
+                };
+            
+            // Select new RenderResolution
+            self.render_res = 
+                if pref.use_render_res && interface.window.fullscreen() != None {
+                    pref.render_res
+                } else {
+                    vk::Extent2D {
+                        width: (interface.surface_resolution.width as f32 / pref.img_scale) as u32,
+                        height: (interface.surface_resolution.height as f32 / pref.img_scale) as u32
+                    }
+                };
+
+            uniform.apply_resolution(self.render_res);
 
             // Select PresentMode -> PreferredPresentMode is selected in Pref
             let present_mode = interface.present_mode_list
@@ -587,8 +471,7 @@ impl Pipe {
                 .cloned()
                 .find(| &mode | mode == pref.pref_present_mode)
                 .unwrap_or(vk::PresentModeKHR::FIFO);
-
-            // Create Info for new Swapchain with different Surface
+            
             let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
                 .surface(interface.surface)
                 .min_image_count(interface.desired_image_count)
@@ -602,17 +485,13 @@ impl Pipe {
                 .present_mode(present_mode)
                 .clipped(true)
                 .image_array_layers(1);
-
-            // Create Swapchain
             interface.swapchain = interface.swapchain_loader
                 .create_swapchain(&swapchain_create_info, None, )
                 .unwrap();
 
-            // Get the new PresentImgList
             interface.present_img_list = interface.swapchain_loader
                 .get_swapchain_images(interface.swapchain)
                 .unwrap();
-            // Create new PresentImgViewList for PresentImgList
             interface.present_img_view_list = interface.present_img_list
                 .iter()
                 .map(| &image | {
@@ -628,98 +507,154 @@ impl Pipe {
                 })
                 .collect();
 
-            // Apply Scale
-            self.scaled_extent = vk::Extent2D { 
-                width: (interface.surface_resolution.width as f32 / pref.img_scale) as u32,
-                height: (interface.surface_resolution.height as f32 / pref.img_scale) as u32
-            };
-
-            uniform.apply_resolution(self.scaled_extent);
-
             self.image_target_list = interface.present_img_view_list
                 .iter()
-                .map(| _ | {
-                    // Create ImgInfo with Dimension -> Scaled Variant
-                    let image_info = vk::ImageCreateInfo::builder()
-                        .format(interface.surface_format.format)
-                        .extent(vk::Extent3D { width: self.scaled_extent.width, height: self.scaled_extent.height, depth: 1 })
-                        .mip_levels(1).array_layers(1).samples(vk::SampleCountFlags::TYPE_1)
-                        .tiling(vk::ImageTiling::OPTIMAL).usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC)
-                        .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                        .initial_layout(vk::ImageLayout::UNDEFINED)
-                        .image_type(vk::ImageType::TYPE_2D)
-                        .build();
-                    // Create Image on Device
-                    interface.device
-                        .create_image(&image_info, None, )
-                        .unwrap()
-                })
-                .collect();
-            
-            self.image_target_mem_list = self.image_target_list
-                .iter()
-                .map(| &image_target | {
-                    // Get Memory Requirement for Image and the MemoryTypeIndex
-                    let img_mem_requirement = interface.device.get_image_memory_requirements(image_target);
-                    let img_mem_index = interface
-                        .find_memorytype_index(&img_mem_requirement, vk::MemoryPropertyFlags::DEVICE_LOCAL, )
-                        .expect("NO_SUITABLE_MEM_TYPE_INDEX");
-                    // Prepare MemoryAllocation
-                    let allocate_info = vk::MemoryAllocateInfo::builder()
-                        .allocation_size(img_mem_requirement.size)
-                        .memory_type_index(img_mem_index).build();
-                    // Allocate Memory therefore create DeviceMemory
-                    let image_mem = interface.device
-                        .allocate_memory(&allocate_info, None, )
-                        .unwrap();
-                    // To Finish -> Bind Memory
-                    interface.device
-                        .bind_image_memory(image_target, image_mem, 0, )
-                        .expect("UNABLE_TO_BIND_MEM");
-                    image_mem
-                })
-                .collect();
-            
-            self.image_target_view_list = self.image_target_list
-                .iter()
-                .map(| &image_target | {
-                    // Prepare ImageView Creation and bind Image
-                    let image_view_info = vk::ImageViewCreateInfo::builder()
-                        .view_type(vk::ImageViewType::TYPE_2D)
-                        .format(interface.surface_format.format)
-                        .subresource_range(vk::ImageSubresourceRange { aspect_mask: vk::ImageAspectFlags::COLOR, base_mip_level: 0, level_count: 1, base_array_layer: 0, layer_count: 1, })
-                        .image(image_target)
-                        .components(vk::ComponentMapping { r: vk::ComponentSwizzle::R, g: vk::ComponentSwizzle::G, b: vk::ComponentSwizzle::B, a: vk::ComponentSwizzle::A, })
-                        .build();
-                    // Build Image View
-                    interface.device
-                        .create_image_view(&image_view_info, None, )
-                        .unwrap()
-                })
+                .map(| _ | { ImageTarget::new(interface, self.render_res, ) })
                 .collect();
 
             self.viewport = vec![
                 vk::Viewport { 
-                    x: 0.0, y: 0.0,
-                    width: self.scaled_extent.width as f32,
-                    height: self.scaled_extent.height as f32,
-                    min_depth: 0.0, max_depth: 1.0,
+                    width: self.render_res.width as f32,
+                    height: self.render_res.height as f32,
+                    max_depth: 1.0,
+
+                    .. Default::default()
                 }
             ];
-    
-            self.scissor = vec![self.scaled_extent.into()];
+
+            self.scissor = vec![self.render_res.into()];
+        }
+    }
+}
+
+impl ImageTarget {
+    pub fn new(interface: &Interface, extent: vk::Extent2D, ) -> Self {
+        unsafe {
+            // Create ImgInfo with Dimension -> Scaled Variant
+            let image_info = vk::ImageCreateInfo::builder()
+                .format(interface.surface_format.format)
+                .extent(vk::Extent3D { width: extent.width, height: extent.height, depth: 1 })
+                .mip_levels(1).array_layers(1).samples(vk::SampleCountFlags::TYPE_1)
+                .tiling(vk::ImageTiling::OPTIMAL).usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .initial_layout(vk::ImageLayout::UNDEFINED)
+                .image_type(vk::ImageType::TYPE_2D)
+                .build();
+            
+            // Create Image on Device
+            let image_target = interface.device
+                .create_image(&image_info, None, )
+                .unwrap();
+            
+            // Get Memory Requirement for Image and the MemoryTypeIndex
+            let img_mem_requirement = interface.device.get_image_memory_requirements(image_target);
+            let img_mem_index = interface
+                .find_memorytype_index(&img_mem_requirement, vk::MemoryPropertyFlags::DEVICE_LOCAL, )
+                .expect("NO_SUITABLE_MEM_TYPE_INDEX");
+            
+            // Prepare MemoryAllocation
+            let allocate_info = vk::MemoryAllocateInfo::builder()
+                .allocation_size(img_mem_requirement.size)
+                .memory_type_index(img_mem_index).build();
+            
+            // Allocate Memory therefore create DeviceMemory
+            let image_mem = interface.device
+                .allocate_memory(&allocate_info, None, )
+                .unwrap();
+            
+            // To Finish -> Bind Memory
+            interface.device
+                .bind_image_memory(image_target, image_mem, 0, )
+                .expect("UNABLE_TO_BIND_MEM");
+            
+            // Prepare ImageView Creation and bind Image
+                let image_view_info = vk::ImageViewCreateInfo::builder()
+                .view_type(vk::ImageViewType::TYPE_2D)
+                .format(interface.surface_format.format)
+                .subresource_range(vk::ImageSubresourceRange { aspect_mask: vk::ImageAspectFlags::COLOR, base_mip_level: 0, level_count: 1, base_array_layer: 0, layer_count: 1, })
+                .image(image_target)
+                .components(vk::ComponentMapping { r: vk::ComponentSwizzle::R, g: vk::ComponentSwizzle::G, b: vk::ComponentSwizzle::B, a: vk::ComponentSwizzle::A, })
+                .build();
+
+            // Build Image View
+            let image_view = interface.device
+                .create_image_view(&image_view_info, None, )
+                .unwrap();
+
+            Self { image_target, image_mem, image_view }
         }
     }
 
-    pub fn update_buffer<Type : Copy>(&mut self, interface: &Interface, buffer_mem: vk::DeviceMemory, data: &[Type]) {
+    pub fn destroy(&self, interface: &Interface, ) {
+        unsafe {
+            interface.device
+                .destroy_image_view(self.image_view, None, );
+            interface.device
+                .destroy_image(self.image_target, None, );
+        }
+    }
+}
+
+impl BufferSet {
+    pub fn new<Type : Copy>(interface: &Interface, buffer_info: vk::BufferCreateInfo, data: &[Type], ) -> Self {
+        unsafe {
+            // Create BufferObject
+            let buffer = interface.device
+                .create_buffer(&buffer_info, None, ).unwrap();
+            
+            // Get MemoryRequirement
+            let memory_req = interface.device
+                .get_buffer_memory_requirements(buffer);
+            let memory_index = interface
+                .find_memorytype_index(&memory_req, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT, )
+                .expect("ERR_INDEX_BUFFER_MEM_INDEX");
+            
+            // Prepare Allocation
+            let allocate_info = 
+                vk::MemoryAllocateInfo {
+                    allocation_size: memory_req.size,
+                    memory_type_index: memory_index,
+                    
+                    ..Default::default()
+                };
+            
+            // Create MemoryObject
+            let buffer_mem = interface.device
+                .allocate_memory(&allocate_info, None, )
+                .unwrap();
+            
+            // Prepare MemoryCopy
+            let index_ptr: *mut c_void = interface.device
+                .map_memory(buffer_mem, 0, memory_req.size, vk::MemoryMapFlags::empty(), )
+                .unwrap();
+            let mut index_slice = 
+                Align::new(index_ptr, align_of::<u32>() as u64, memory_req.size, );
+
+            // Copy and finish Memory
+            index_slice.copy_from_slice(&data);
+            interface.device.unmap_memory(buffer_mem);
+
+            interface.device
+                .bind_buffer_memory(buffer, buffer_mem, 0, )
+                .unwrap();
+
+            Self { buffer, buffer_mem }
+        }
+        
+    }
+
+    pub fn update<Type : Copy>(&self, interface: &Interface, data: &[Type], ) {
         unsafe {
             let buffer_ptr = interface.device
-                    .map_memory(buffer_mem, 0, std::mem::size_of_val(data) as u64, vk::MemoryMapFlags::empty(), )
+                    .map_memory(self.buffer_mem, 0, std::mem::size_of_val(data) as u64, vk::MemoryMapFlags::empty(), )
                     .unwrap();
+            
             let mut aligned_slice = 
                 Align::new(buffer_ptr, align_of::<Type>() as u64, std::mem::size_of_val(data) as u64, );
-                aligned_slice.copy_from_slice(&data.clone()[ .. ]);
-            interface.device.unmap_memory(buffer_mem);
+            
+            aligned_slice.copy_from_slice(&data.clone()[ .. ]);
+
+            interface.device.unmap_memory(self.buffer_mem);
         }
     }
 }
