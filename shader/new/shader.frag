@@ -79,8 +79,8 @@ void main() {
 
     vec2 first = vec2(2, 0) / curRes.y;
     vec2 sec = vec2(- 2, 0) / curRes.y;
-    vec3 firstTest = normalize(vec3(first, 1.0));
-    vec3 secTest = normalize(vec3(sec, 1.0));
+    vec3 f = normalize(vec3(first, 1.0));
+    vec3 s = normalize(vec3(sec, 1.0));
 
     // if (fragCoord.x > curRes.x - 2.0 && fragCoord.y > curRes.y - 2.0) {
         // debugPrintfEXT("\n%v3f %v3f", firstTest, secTest);
@@ -152,19 +152,10 @@ void main() {
             // Getting Node Type
             uint state = curNode.nodeType;
 
-            // If full return
-            if (state == 2) {
-                fragColor = vec4(curNode.baseColor[0], curNode.baseColor[1], curNode.baseColor[2], 0);
-                fragColor.x -= dist / uniformBuffer.maxDist * 2;
-                // fragColor = vec4(1, 1, 1, 0);
-                
-                break;
-            }
-
             // If State == Subdivide && too much Detail -> State = Empty
-            if (recursionAmount > uniformBuffer.maxRecursion) { state = 0; }
-            if (curSpan < abs(secTest.x * dist - firstTest.x * dist)) { state = 0; }
-            
+            if (state == 1 && recursionAmount > uniformBuffer.maxRecursion) { state = 0; }
+            if (state == 1 && (curSpan * 0.3) < (abs(s.x * dist - f.x * dist))) { fragColor = vec4(1); break; }
+
             // If State = Subdivide && no Limit of Detail reached -> Select Child
             if (state == 1 && recursionAmount <= uniformBuffer.maxRecursion) {
                 // Moving one Layer down -> Increase RecursionAmount & Half curSpan
@@ -206,6 +197,9 @@ void main() {
 
                 originOnEdge = newOriginOnEdge;
                 lastDirMask = dirMask;
+            } else if (state == 2) {
+                fragColor = vec4(curNode.baseColor[0], curNode.baseColor[1], curNode.baseColor[2], 0);
+                break;
             }
         }
     }    

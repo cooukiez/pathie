@@ -6,8 +6,8 @@ use crate::{service::{pos_to_index, step_vec_three}};
 pub const MAX_RECURSION: usize = 12;
 pub const ROOT_SPAN: f32 = (1 << MAX_RECURSION) as f32;
 
-pub const MAX_DISTANCE: f32 = ROOT_SPAN * 1.41;
-pub const MAX_SEARCH_DEPTH: usize = ROOT_SPAN as usize;
+pub const MAX_DISTANCE: f32 = 4096.0;
+pub const MAX_SEARCH_DEPTH: usize = 4096;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -113,16 +113,16 @@ impl Octree {
         for x in 0 .. 1000 {
             for z in 0 .. 1000 {
                 let base_color = Vector3::new(rng.gen_range(0.0 .. 1.0), rng.gen_range(0.0 .. 1.0), rng.gen_range(0.0 .. 1.0));
-                self.insert_node(Vector3::new(100.0 + x as f32, y, 100.0 + z as f32, ), base_color);
+                self.insert_node(Vector3::new(100.0 + x as f32, rng.gen_range(90.0 .. 100.0), 100.0 + z as f32, ), base_color);
             }
         }
 
         self.insert_node(Vector3::new(100.0, 100.0, 100.0, ), Vector3::new(1.0, 1.0, 1.0, ), );
 
-        for _ in 0 .. 5000 {
+        for _ in 0 .. 1000 {
             let base_color = Vector3::new(rng.gen_range(0.0 .. 1.0), rng.gen_range(0.0 .. 1.0), rng.gen_range(0.0 .. 1.0));
             let pos = Vector3::new(rng.gen_range(0.0 .. ROOT_SPAN), rng.gen_range(0.0 .. ROOT_SPAN), rng.gen_range(0.0 .. ROOT_SPAN));
-            self.insert_node(pos, base_color, );
+            // self.insert_node(pos, base_color, );
         }
     }
 }
