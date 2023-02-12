@@ -3,11 +3,8 @@ use rand::Rng;
 
 use crate::{service::{pos_to_index, step_vec_three}};
 
-pub const MAX_RECURSION: usize = 12;
+pub const MAX_RECURSION: usize = 15;
 pub const ROOT_SPAN: f32 = (1 << MAX_RECURSION) as f32;
-
-pub const MAX_DISTANCE: f32 = 4096.0;
-pub const MAX_SEARCH_DEPTH: usize = 4096;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -23,6 +20,7 @@ pub struct TreeNode {
 // Store Info about OctreeTraverse
 pub struct Traverse {
     pub cur_index: usize,
+    pub parent: usize,
     pub cur_span: f32,
     pub cur_recursion: usize,
 
@@ -73,6 +71,7 @@ impl Octree {
     pub fn try_child_creation(data: &mut Vec<TreeNode>, parent_index: usize, ) {
         if data[parent_index].node_type == 0 {
             data[parent_index].node_type = 1;
+            data[parent_index].base_color = Vector3::from([0.5; 3]);
 
             for index in 0 .. 8 {
                 data[parent_index as usize].children[index] = data.len() as u32;
@@ -90,36 +89,42 @@ impl Octree {
 
             .. Default::default()
         };
-        
-        // 1. Create children if not present
-        // 2. Select child based on insert position
-        // 3. Repeat
-        // Finally -> Set current Node to full
+
         for _  in 1 .. MAX_RECURSION {
             Self::try_child_creation(&mut self.data, traverse.cur_index);
-            // Select next Child
             traverse.move_into_child(&self.data);
         }
 
-        // CurNode = full
         self.data[traverse.cur_index].set_full(base_color);
+
+        let backward = Traverse {
+            cur_index: traverse.cur_index,
+            parent: traverse.parent,
+
+            .. Default::default()
+        };
+
+        for _  in 1 .. MAX_RECURSION {
+            let cur_color = self.data[backward.cur_index].base_color;
+            self.data[backward.parent].base_color += cur_color;
+            self.data[backward.parent].base_color *= 0.5;
+            traverse.cur_index = traverse.parent;
+            traverse.parent = self.data[traverse.cur_index].parent as usize;
+        }
 
         traverse
     }
 
     pub fn test_scene(&mut self) {
         let mut rng = rand::thread_rng();
-        let y = rng.gen_range(0.0 .. ROOT_SPAN);
         for x in 0 .. 1000 {
             for z in 0 .. 1000 {
                 let base_color = Vector3::new(rng.gen_range(0.0 .. 1.0), rng.gen_range(0.0 .. 1.0), rng.gen_range(0.0 .. 1.0));
-                self.insert_node(Vector3::new(100.0 + x as f32, rng.gen_range(90.0 .. 100.0), 100.0 + z as f32, ), base_color);
+                self.insert_node(Vector3::new(100.0 + x as f32, 100.0, 100.0 + z as f32, ), base_color);
             }
         }
 
-        self.insert_node(Vector3::new(100.0, 100.0, 100.0, ), Vector3::new(1.0, 1.0, 1.0, ), );
-
-        for _ in 0 .. 1000 {
+        for _ in 0 .. 5000 {
             let base_color = Vector3::new(rng.gen_range(0.0 .. 1.0), rng.gen_range(0.0 .. 1.0), rng.gen_range(0.0 .. 1.0));
             let pos = Vector3::new(rng.gen_range(0.0 .. ROOT_SPAN), rng.gen_range(0.0 .. ROOT_SPAN), rng.gen_range(0.0 .. ROOT_SPAN));
             // self.insert_node(pos, base_color, );
@@ -142,8 +147,9 @@ impl Traverse {
         self.mask_in_parent[self.cur_recursion] = child_mask.clone();
         
         let space_index = pos_to_index(child_mask, 2, );
-        // Get global index of selected child
-        self.cur_index = data[self.cur_index].children[space_index] as usize;
+
+        self.parent = self.cur_index;
+        self.cur_index = data[self.parent].children[space_index] as usize;
     }
 }
 
@@ -162,6 +168,7 @@ impl Default for Traverse {
     fn default() -> Self {
         Self { 
             cur_index: 0,
+            parent: 0,
             cur_span: ROOT_SPAN,
             cur_recursion: 0,
 

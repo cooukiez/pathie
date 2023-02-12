@@ -3,7 +3,7 @@ use std::time::Duration;
 use ash::vk;
 use cgmath::{Vector3, Vector2};
 
-use crate::{octree::{Octree, ROOT_SPAN, MAX_DISTANCE, MAX_SEARCH_DEPTH, MAX_RECURSION}, service::vector_two_boundary};
+use crate::{octree::{Octree, ROOT_SPAN}, service::vector_two_boundary};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -11,14 +11,9 @@ pub struct Uniform {
     pub time: u32,
     pub resolution: Vector2<f32>,
 
-    pub raw_field_of_view: f32,
-    pub max_search_depth: u32,
-    pub max_distance: f32,
-
     pub mouse_pos: Vector2<f32>,
 
     pub root_span: f32,
-    pub max_recursion: u32,
 
     pub pos: Vector3<f32>,
 }
@@ -48,15 +43,10 @@ impl Default for Uniform {
         Self {
             time: 0,
             resolution: Vector2::new(0.0, 0.0),
-            
-            raw_field_of_view: 60.0,
-            max_search_depth: MAX_SEARCH_DEPTH as u32,
-            max_distance: MAX_DISTANCE,
 
             mouse_pos: Vector2::new(0.0, 0.0),
 
             root_span: ROOT_SPAN,
-            max_recursion: MAX_RECURSION as u32,
 
             pos: Vector3::new(5.0, 5.0, 5.0, )
         }

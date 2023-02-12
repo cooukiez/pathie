@@ -89,7 +89,7 @@ impl Render {
         let pref = Pref { 
             pref_present_mode: vk::PresentModeKHR::IMMEDIATE,
             img_filter: vk::Filter::LINEAR,
-            img_scale: 1.0,
+            img_scale: 2.0,
 
             use_render_res: true,
             render_res: vk::Extent2D { width: 1920, height: 1080 },
