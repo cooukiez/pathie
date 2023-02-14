@@ -92,7 +92,7 @@ impl Render {
             img_scale: 2.0,
 
             use_render_res: true,
-            render_res: vk::Extent2D { width: 1920, height: 1080 },
+            render_res: vk::Extent2D { width: 1280, height: 720 },
         };
 
         let state = RenderState { out_of_date: false, idle: false, frame_time: Duration::ZERO };

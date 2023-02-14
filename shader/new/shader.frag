@@ -3,7 +3,7 @@
 # extension GL_ARB_shading_language_420pack : enable
 # extension GL_EXT_debug_printf : enable
 
-# define maxDepth 15
+# define maxDepth 12
 # define maxDistance 4096.0
 # define maxSearchDepth 4096
 
@@ -96,7 +96,7 @@ Intersection traverseRay(Ray ray) {
     int curStep;
 
     vec3 dirMask;
-    vec3 maskInParentList[maxDepth];
+    vec3 maskInParentList[maxDepth + 1];
 
     TreeNode curNode = octreeData[curIndex];
     
@@ -135,10 +135,10 @@ Intersection traverseRay(Ray ray) {
             uint state = curNode.nodeType;
 
             // If State == Subdivide && too much Detail -> State = Empty
-            if (state == 1 && depth > maxDepth) state = 0;
+            if (state == 1 && depth == maxDepth) state = 2;
 
             // If State = Subdivide && no Limit of Detail reached -> Select Child
-            if (state == 1 && depth <= maxDepth) {
+            if (state == 1) {
                 // Moving one Layer down -> Increase RecursionAmount & Half curSpan
                 depth += 1;
                 curSpan *= 0.5;

@@ -3,7 +3,7 @@ use rand::Rng;
 
 use crate::{service::{pos_to_index, step_vec_three}};
 
-pub const MAX_RECURSION: usize = 15;
+pub const MAX_RECURSION: usize = 14;
 pub const ROOT_SPAN: f32 = (1 << MAX_RECURSION) as f32;
 
 #[repr(C)]
@@ -71,7 +71,7 @@ impl Octree {
     pub fn try_child_creation(data: &mut Vec<TreeNode>, parent_index: usize, ) {
         if data[parent_index].node_type == 0 {
             data[parent_index].node_type = 1;
-            data[parent_index].base_color = Vector3::from([0.5; 3]);
+            data[parent_index].base_color = Vector3::from([0.0; 3]);
 
             for index in 0 .. 8 {
                 data[parent_index as usize].children[index] = data.len() as u32;
@@ -185,6 +185,7 @@ impl Default for Traverse {
 
 impl Default for Octree {
     fn default() -> Self {
+        log::info!("Creating Octree with RootSpan [ {} ] -> VoxSpan is 1.0 ...", ROOT_SPAN);
         Self { data: vec![TreeNode::default()] }
     }
 }
