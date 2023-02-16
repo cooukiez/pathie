@@ -3,7 +3,7 @@
 # extension GL_ARB_shading_language_420pack : enable
 # extension GL_EXT_debug_printf : enable
 
-# define maxDepth 12
+# define maxDepth 15
 # define maxDistance 4096.0
 # define maxSearchDepth 4096
 
@@ -40,9 +40,34 @@ struct TreeNode {
     float baseColor[3]; // ToDo -> Add transparency
 };
 
-layout (set = 1, binding = 0) readonly buffer OctreeData {
-	TreeNode octreeData[2000000];
+struct Ray {
+    vec3 origin;
+    vec3 dir;
 };
+
+struct NodeInfo {
+    uint index;
+    float span;
+    int depth;
+};
+
+struct Intersection {
+    bool intersect;
+    float dist;
+
+    NodeInfo info;
+};
+
+struct TraverseProp {
+    uint locMaxDepth;
+    float locMaxDistance;
+    uint locMaxSearchDepth;
+};
+
+layout (set = 1, binding = 0) readonly buffer OctreeData { TreeNode octreeData[2000000]; };
+
+layout (location = 0) in vec2 localPos;
+layout (location = 0) out vec4 fragColor;
 
 // RayCube Intersection on inside of Cube
 vec3 rayCubeIntersect(vec3 rayOrigin, vec3 rayDir, vec3 inverseRayDir, float curSpan) {
@@ -58,29 +83,7 @@ vec3 addDirToMask(vec3 mask, vec3 dirMask) {
     return abs(mask - dirMask);
 }
 
-layout (location = 0) in vec2 localPos;
-layout (location = 0) out vec4 fragColor;
-
-struct Ray {
-    vec3 origin;
-    vec3 dir;
-};
-
-struct Intersection {
-    bool intersect;
-
-    vec3 localPos;
-    vec3 posOnEdge;
-    
-    uint curIndex;
-    float curSpan;
-    int depth;
-
-    float dist;
-    vec3 color;
-};
-
-Intersection traverseRay(Ray ray) {
+Intersection traverseRay(Ray ray, TraverseProp prop) {
     uint curIndex = 0;
     float curSpan = uniformBuffer.rootSpan;
     int depth = 0;
@@ -96,7 +99,7 @@ Intersection traverseRay(Ray ray) {
     int curStep;
 
     vec3 dirMask;
-    vec3 maskInParentList[maxDepth + 1];
+    vec3 maskInParentList[maxDepth];
 
     TreeNode curNode = octreeData[curIndex];
     
@@ -107,8 +110,8 @@ Intersection traverseRay(Ray ray) {
     // ... If hit -> Break
     // ... If Node / Cell is empty -> Go one step forward
 
-    for (curStep = 0; curStep < maxSearchDepth; curStep += 1) {
-        if (dist > maxDistance) break;
+    for (curStep = 0; curStep < prop.locMaxSearchDepth; curStep += 1) {
+        if (dist > prop.locMaxDistance) break;
 
         // Should go up
         if (exitOctree) {
@@ -135,7 +138,7 @@ Intersection traverseRay(Ray ray) {
             uint state = curNode.nodeType;
 
             // If State == Subdivide && too much Detail -> State = Empty
-            if (state == 1 && depth == maxDepth) state = 2;
+            if (state == 1 && depth > prop.locMaxDepth) state = 2;
 
             // If State = Subdivide && no Limit of Detail reached -> Select Child
             if (state == 1) {
@@ -184,8 +187,8 @@ Intersection traverseRay(Ray ray) {
         }
     }
 
-    vec3 color = vec3(curNode.baseColor[0], curNode.baseColor[1], curNode.baseColor[2]);
-    return Intersection(intersect, localPos, posOnEdge, curIndex, curSpan, depth, dist, color);
+    NodeInfo info = NodeInfo(curIndex, curSpan, depth);
+    return Intersection(intersect, dist, info);
 }
 
 void main() {
@@ -215,6 +218,9 @@ void main() {
     rayDir.xz *= rot(mousePos.x / res.x * 3.14 - offset);
     
     Ray ray = Ray(rayOrigin, rayDir);
-    Intersection intSec = traverseRay(ray);
-    if (intSec.intersect) fragColor = vec4(intSec.color, 1);
+    TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
+    Intersection intSec = traverseRay(ray, prop);
+    TreeNode node = octreeData[intSec.info.index];
+    vec3 color = vec3(node.baseColor[0], node.baseColor[1], node.baseColor[2]);
+    if (intSec.intersect) fragColor = vec4(color, 1);
 }

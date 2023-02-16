@@ -43,11 +43,8 @@ impl Default for Uniform {
         Self {
             time: 0,
             resolution: Vector2::new(0.0, 0.0),
-
             mouse_pos: Vector2::new(0.0, 0.0),
-
             root_span: ROOT_SPAN,
-
             pos: Vector3::new(5.0, 5.0, 5.0, )
         }
     }

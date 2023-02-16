@@ -91,7 +91,7 @@ impl Render {
             img_filter: vk::Filter::LINEAR,
             img_scale: 2.0,
 
-            use_render_res: true,
+            use_render_res: false,
             render_res: vk::Extent2D { width: 1280, height: 720 },
         };
 
