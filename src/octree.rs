@@ -1,7 +1,6 @@
-use cgmath::{Vector3};
-use rand::Rng;
+use cgmath::Vector3;
 
-use crate::{service::{pos_to_index, step_vec_three}};
+use crate::service::{pos_to_index, step_vec_three};
 
 pub const MAX_RECURSION: usize = 15;
 pub const ROOT_SPAN: f32 = (1 << MAX_RECURSION) as f32;
@@ -9,7 +8,7 @@ pub const ROOT_SPAN: f32 = (1 << MAX_RECURSION) as f32;
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct TreeNode {
-    // 0 = empty | 1 = subdivide | 2 = full
+    // 0 = empty | 1 = subdivide | 2 = full | 3 = light
     pub node_type: u32,
     pub parent: u32,
     
@@ -46,9 +45,9 @@ pub struct Traverse {
 }
 
 pub struct Octree {
-    // Octree as List
-    pub data: Vec<TreeNode>,
     // RootIndex = 0
+    pub data: Vec<TreeNode>, // Octree as List
+    pub light_data: Vec<u32>,
 }
 
 impl TreeNode {
@@ -56,8 +55,8 @@ impl TreeNode {
         TreeNode { node_type, parent: parent as u32, .. Default::default() }
     }
 
-    pub fn set_full(&mut self, base_color: Vector3<f32>) {
-        self.node_type = 2;
+    pub fn set_full(&mut self, base_color: Vector3<f32>, node_type: u32, ) {
+        self.node_type = node_type;
         self.base_color = base_color;
     }
 
@@ -77,21 +76,10 @@ impl TreeNode {
 }
 
 impl Octree {
-    // If not subdivide -> Create children
-    pub fn try_child_creation(data: &mut Vec<TreeNode>, parent_index: usize, ) {
-        if data[parent_index].node_type == 0 {
-            data[parent_index].node_type = 1;
-            data[parent_index].base_color = Vector3::from([0.0; 3]);
-
-            for index in 0 .. 8 {
-                data[parent_index as usize].children[index] = data.len() as u32;
-                data.push(TreeNode::new(0, parent_index, ));
-            }
-        }
-    }
-
-    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, base_color: Vector3<f32>, ) -> Traverse {
+    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, base_color: Vector3<f32>, node_type: u32, ) -> Traverse {
         let mut traverse = Traverse {
+            node_info: NodeInfo { span: ROOT_SPAN, .. Default::default() },
+
             local_origin: insert_pos % ROOT_SPAN,
             origin_on_edge: insert_pos - (insert_pos % ROOT_SPAN),
 
@@ -99,14 +87,19 @@ impl Octree {
         };
 
         for _  in 1 .. MAX_RECURSION {
-            Self::try_child_creation(&mut self.data, traverse.index());
+            traverse.try_child_creation(&mut self.data);
             traverse.move_into_child(&self.data);
-            // traverse.update_color(&mut self.data, base_color)
+            traverse.update_color(&mut self.data, base_color)
         }
 
-        self.data[traverse.index()].set_full(base_color.clone());
+        self.data[traverse.index()].set_full(base_color.clone(), node_type, );
 
         traverse
+    }
+
+    pub fn insert_light(&mut self, insert_pos: Vector3<f32>, light_color: Vector3<f32>, ) {
+        let traverse = self.insert_node(insert_pos, light_color, 3, );
+        self.light_data.push(traverse.node_info.index)
     }
 
     pub fn test_scene(&mut self) {
@@ -114,7 +107,7 @@ impl Octree {
         for x in 0 .. 100 {
             for z in 0 .. 100 {
                 let base_color = Vector3::new(1.0, 1.0, 1.0, );
-                self.insert_node(Vector3::new(100.0 + x as f32, 100.0, 100.0 + z as f32, ), base_color);
+                self.insert_node(Vector3::new(100.0 + x as f32, 100.0, 100.0 + z as f32, ), base_color, 2);
             }
         }
 
@@ -122,7 +115,7 @@ impl Octree {
         for z in 0 .. 100 {
             for y in 0 .. 100 {
                 let base_color = Vector3::new(0.0, 1.0, 0.0, );
-                self.insert_node(Vector3::new(100.0, 100.0 + y as f32, 100.0 + z as f32, ), base_color);
+                self.insert_node(Vector3::new(100.0, 100.0 + y as f32, 100.0 + z as f32, ), base_color, 2);
             }
         }
 
@@ -130,7 +123,7 @@ impl Octree {
         for z in 0 .. 100 {
             for y in 0 .. 100 {
                 let base_color = Vector3::new(1.0, 0.0, 0.0, );
-                self.insert_node(Vector3::new(200.0, 100.0 + y as f32, 100.0 + z as f32, ), base_color);
+                self.insert_node(Vector3::new(200.0, 100.0 + y as f32, 100.0 + z as f32, ), base_color, 2);
             }
         }
 
@@ -138,7 +131,7 @@ impl Octree {
         for x in 0 .. 100 {
             for y in 0 .. 100 {
                 let base_color = Vector3::new(1.0, 1.0, 1.0, );
-                self.insert_node(Vector3::new(100.0 + x as f32, 100.0 + y as f32, 200.0, ), base_color);
+                self.insert_node(Vector3::new(100.0 + x as f32, 100.0 + y as f32, 200.0, ), base_color, 2);
             }
         }
 
@@ -146,7 +139,7 @@ impl Octree {
         for x in 0 .. 100 {
             for z in 0 .. 100 {
                 let base_color = Vector3::new(1.0, 1.0, 1.0, );
-                self.insert_node(Vector3::new(100.0 + x as f32, 200.0, 100.0 + z as f32, ), base_color);
+                self.insert_node(Vector3::new(100.0 + x as f32, 200.0, 100.0 + z as f32, ), base_color, 2);
             }
         }
 
@@ -155,10 +148,14 @@ impl Octree {
             for z in 0 .. 20 {
                 for y in 0 .. 20 {
                     let base_color = Vector3::new(0.0, 0.0, 1.0, );
-                    self.insert_node(Vector3::new(140.0 + x as f32, 100.0 + y as f32, 140.0 + z as f32, ), base_color);
+                    self.insert_node(Vector3::new(140.0 + x as f32, 100.0 + y as f32, 140.0 + z as f32, ), base_color, 2);
                 }
             }
         }
+
+        // Light
+        let light_color = Vector3::new(1.0, 1.0, 0.0, );
+        self.insert_light(Vector3::new(150.0, 180.0, 150.0, ), light_color, );
     }
 }
 
@@ -168,7 +165,18 @@ impl Traverse {
     pub fn depth(&self) -> usize { self.node_info.depth as usize }
 
     pub fn update_color(&mut self, data: &mut Vec<TreeNode>, color: Vector3<f32>, ) {
-        data[self.index()].base_color += color;
+        data[self.index()].base_color += color / self.span();
+    }
+
+    pub fn try_child_creation(&mut self, data: &mut Vec<TreeNode>, ) {
+        if data[self.index()].node_type == 0 {
+            data[self.index()].node_type = 1;
+
+            for index in 0 .. 8 {
+                data[self.index()].children[index] = data.len() as u32;
+                data.push(TreeNode::new(0, self.index(), ));
+            }
+        }
     }
 
     pub fn move_into_child(&mut self, data: &Vec<TreeNode>, ) {
@@ -238,6 +246,6 @@ impl Default for Traverse {
 impl Default for Octree {
     fn default() -> Self {
         log::info!("Creating Octree with RootSpan [ {} ] -> VoxSpan is 1.0 ...", ROOT_SPAN);
-        Self { data: vec![TreeNode::default()] }
+        Self { data: vec![TreeNode::default()], light_data: vec![] }
     }
 }

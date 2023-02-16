@@ -2,7 +2,7 @@ use std::{ffi::{c_void, CString}, mem::{align_of, self}, io::Cursor, error::Erro
 
 use ash::{vk::{self, DescriptorSetLayout, DescriptorSet, ImageAspectFlags}, util::{Align, read_spv}};
 
-use crate::{interface::Interface, offset_of, octree::{Octree, TreeNode}, uniform::Uniform, Pref, DEFAULT_STORAGE_BUFFER_SIZE, DEFAULT_UNIFORM_BUFFER_SIZE};
+use crate::{interface::Interface, offset_of, octree::Octree, uniform::Uniform, Pref, DEFAULT_STORAGE_BUFFER_SIZE, DEFAULT_UNIFORM_BUFFER_SIZE};
 
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
@@ -47,7 +47,7 @@ pub struct Pipe {
 }
 
 impl Pipe {
-    pub fn init(interface: &Interface, pref: &Pref, uniform: &mut Uniform, octree: &Octree, ) -> Self {
+    pub fn init(interface: &Interface, uniform: &mut Uniform, octree: &Octree, ) -> Self {
         unsafe {
             let render_res = interface.surface_resolution;
             uniform.apply_resolution(render_res);

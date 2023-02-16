@@ -218,7 +218,7 @@ void main() {
     rayDir.xz *= rot(mousePos.x / res.x * 3.14 - offset);
     
     Ray ray = Ray(rayOrigin, rayDir);
-    TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
+    TraverseProp prop = TraverseProp(15, maxDistance, maxSearchDepth);
     Intersection intSec = traverseRay(ray, prop);
     TreeNode node = octreeData[intSec.info.index];
     vec3 color = vec3(node.baseColor[0], node.baseColor[1], node.baseColor[2]);

@@ -103,7 +103,7 @@ impl Render {
         octree.test_scene();
 
         let interface = Interface::init(&event_loop, &pref, );
-        let graphic_pipe = Pipe::init(&interface, &pref, &mut uniform, &octree, );
+        let graphic_pipe = Pipe::init(&interface, &mut uniform, &octree, );
 
         Render {
             state,
