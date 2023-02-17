@@ -12,6 +12,30 @@
 # define dir(rot) vec3(cos(rot.x) * cos(rot.y), sin(rot.y), sin(rot.x) * cos(rot.y))
 # define rad(degree) vec2(3.14 * degree / 180.0)
 
+struct Ray {
+    vec3 origin;
+    vec3 dir;
+};
+
+struct NodeInfo {
+    uint index;
+    float span;
+    int depth;
+};
+
+struct Intersection {
+    bool intersect;
+    float dist;
+
+    NodeInfo info;
+};
+
+struct TraverseProp {
+    uint locMaxDepth;
+    float locMaxDistance;
+    uint locMaxSearchDepth;
+};
+
 layout (set = 0, binding = 0) uniform Uniform {
     uint time;
 
@@ -38,30 +62,6 @@ struct TreeNode {
 
 	uint children[8];
     float baseColor[3]; // ToDo -> Add transparency
-};
-
-struct Ray {
-    vec3 origin;
-    vec3 dir;
-};
-
-struct NodeInfo {
-    uint index;
-    float span;
-    int depth;
-};
-
-struct Intersection {
-    bool intersect;
-    float dist;
-
-    NodeInfo info;
-};
-
-struct TraverseProp {
-    uint locMaxDepth;
-    float locMaxDistance;
-    uint locMaxSearchDepth;
 };
 
 layout (set = 1, binding = 0) readonly buffer OctreeData { TreeNode octreeData[2000000]; };
