@@ -180,7 +180,7 @@ Intersection traverseRay(Ray ray, TraverseProp prop) {
                 exitOctree = (floor(newPosOnEdge / curSpan * 0.5 + 0.25) != floor(posOnEdge / curSpan * 0.5 + 0.25));
 
                 posOnEdge = newPosOnEdge;
-            } else if (state == 2) {
+            } else if (state > 1) {
                 intersect = true;
                 break;
             }

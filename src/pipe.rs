@@ -30,6 +30,7 @@ pub struct Pipe {
     pub vertex_buffer: BufferSet,
     pub uniform_buffer: BufferSet,
     pub octree_buffer: BufferSet,
+    pub light_buffer: BufferSet,
 
     pub descriptor_pool: vk::DescriptorPool,
     pub desc_set_layout_list: Vec<DescriptorSetLayout>,
@@ -115,10 +116,24 @@ impl Pipe {
                 };
             
             let octree_buffer = BufferSet::new(interface, octree_buffer_info, &octree_data, );
+
+            log::info!("Creating LightingBuffer ...");
+            let light_data = octree.light_data.clone();
+            let light_buffer_info =
+                vk::BufferCreateInfo {
+                    size: DEFAULT_UNIFORM_BUFFER_SIZE,
+                    usage: vk::BufferUsageFlags::STORAGE_BUFFER,
+                    sharing_mode: vk::SharingMode::EXCLUSIVE,
+                    
+                    .. Default::default()
+                };
+            
+            let light_buffer = BufferSet::new(interface, light_buffer_info, &light_data, );
             
             log::info!("Creating DescriptorPool ...");
             let descriptor_size_list = [
                 vk::DescriptorPoolSize { ty: vk::DescriptorType::UNIFORM_BUFFER, descriptor_count: 1, },
+                vk::DescriptorPoolSize { ty: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: 1, },
                 vk::DescriptorPoolSize { ty: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: 1, },
             ];
 
@@ -139,8 +154,14 @@ impl Pipe {
                 vk::DescriptorSetLayoutBinding { descriptor_type: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: 1, stage_flags: vk::ShaderStageFlags::FRAGMENT, ..Default::default() },
             ];
 
+            log::info!("Creating LightingSet ...");
+            let light_set_binding_list = [
+                vk::DescriptorSetLayoutBinding { descriptor_type: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: 1, stage_flags: vk::ShaderStageFlags::FRAGMENT, ..Default::default() },
+            ];
+
             let uniform_desc_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&uniform_set_binding_list);
-            let octree_dec_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&octree_set_binding_list);
+            let octree_desc_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&octree_set_binding_list);
+            let light_desc_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&light_set_binding_list);
 
             log::info!("Allocating whole DescriptorPool ...");
             let desc_set_layout_list: Vec<vk::DescriptorSetLayout> = vec![
@@ -148,7 +169,10 @@ impl Pipe {
                     .create_descriptor_set_layout(&uniform_desc_info, None, )
                     .unwrap(),
                 interface.device
-                    .create_descriptor_set_layout(&octree_dec_info, None, )
+                    .create_descriptor_set_layout(&octree_desc_info, None, )
+                    .unwrap(),
+                interface.device
+                    .create_descriptor_set_layout(&light_desc_info, None, )
                     .unwrap(),
             ];
 
@@ -160,12 +184,14 @@ impl Pipe {
                 .unwrap();
 
             let uniform_buffer_descriptor = vk::DescriptorBufferInfo { buffer: uniform_buffer.buffer, offset: 0, range: mem::size_of_val(&uniform_data) as u64, };
-            let octree_buffer_descriptor = vk::DescriptorBufferInfo { buffer: octree_buffer.buffer, offset: 0, range: vk::WHOLE_SIZE, };
+            let octree_buffer_descriptor = vk::DescriptorBufferInfo { buffer: octree_buffer.buffer, offset: 0, range: (mem::size_of_val(&octree_data[0]) * octree_data.len()) as u64, };
+            let light_buffer_descriptor = vk::DescriptorBufferInfo { buffer: light_buffer.buffer, offset: 0, range: (mem::size_of_val(&(0 as u32)) * light_data.len()) as u64, };
 
             log::info!("Writing whole DescriptorPool ...");
             let write_desc_set_list = [
                 vk::WriteDescriptorSet { dst_set: descriptor_set_list[0], descriptor_count: 1, descriptor_type: vk::DescriptorType::UNIFORM_BUFFER, p_buffer_info: &uniform_buffer_descriptor, ..Default::default() },
                 vk::WriteDescriptorSet { dst_set: descriptor_set_list[1], descriptor_count: 1, descriptor_type: vk::DescriptorType::STORAGE_BUFFER, p_buffer_info: &octree_buffer_descriptor, ..Default::default() },
+                vk::WriteDescriptorSet { dst_set: descriptor_set_list[2], descriptor_count: 1, descriptor_type: vk::DescriptorType::STORAGE_BUFFER, p_buffer_info: &light_buffer_descriptor, ..Default::default() },
             ];
 
             interface.device.update_descriptor_sets(&write_desc_set_list, &[], );
@@ -296,6 +322,7 @@ impl Pipe {
                 vertex_buffer,
                 uniform_buffer,
                 octree_buffer,
+                light_buffer,
                 descriptor_pool,
                 desc_set_layout_list,
                 descriptor_set_list,

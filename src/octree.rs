@@ -31,6 +31,8 @@ pub struct NodeInfo {
     pub depth: i32,
 }
 
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
 // Store Info about OctreeTraverse
 pub struct Traverse {
     pub parent: usize,
@@ -76,6 +78,27 @@ impl TreeNode {
 }
 
 impl Octree {
+    pub fn node_at_pos(&mut self, pos: Vector3<f32>, ) -> Traverse {
+        let mut traverse = Traverse {
+            node_info: NodeInfo { span: ROOT_SPAN, .. Default::default() },
+
+            local_origin: pos % ROOT_SPAN,
+            origin_on_edge: pos - (pos % ROOT_SPAN),
+
+            .. Default::default()
+        };
+
+        for _  in 1 .. MAX_RECURSION {
+            if traverse.node_type(&self.data) == 1 {
+                traverse.move_into_child(&self.data);
+            } else {
+                break;
+            }
+        }
+
+        traverse
+    }
+
     pub fn insert_node(&mut self, insert_pos: Vector3<f32>, base_color: Vector3<f32>, node_type: u32, ) -> Traverse {
         let mut traverse = Traverse {
             node_info: NodeInfo { span: ROOT_SPAN, .. Default::default() },
@@ -99,7 +122,7 @@ impl Octree {
 
     pub fn insert_light(&mut self, insert_pos: Vector3<f32>, light_color: Vector3<f32>, ) {
         let traverse = self.insert_node(insert_pos, light_color, 3, );
-        self.light_data.push(traverse.node_info.index)
+        self.light_data.push(traverse.node_info.index);
     }
 
     pub fn test_scene(&mut self) {
@@ -163,6 +186,7 @@ impl Traverse {
     pub fn index(&self) -> usize { self.node_info.index as usize }
     pub fn span(&self) -> f32 { self.node_info.span }
     pub fn depth(&self) -> usize { self.node_info.depth as usize }
+    pub fn node_type(&self, data: &Vec<TreeNode>, ) -> u32 { data[self.index()].node_type }
 
     pub fn update_color(&mut self, data: &mut Vec<TreeNode>, color: Vector3<f32>, ) {
         data[self.index()].base_color += color / self.span();
