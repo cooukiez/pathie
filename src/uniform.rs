@@ -10,8 +10,10 @@ use crate::{octree::{Octree, ROOT_SPAN}, service::vector_two_boundary};
 pub struct Uniform {
     pub time: u32,
     pub resolution: Vector2<f32>,
+    
     pub mouse_pos: Vector2<f32>,
     pub root_span: f32,
+
     pub pos: Vector3<f32>,
 }
 
@@ -42,7 +44,7 @@ impl Default for Uniform {
             resolution: Vector2::new(0.0, 0.0),
             mouse_pos: Vector2::new(0.0, 0.0),
             root_span: ROOT_SPAN,
-            pos: Vector3::new(5.0, 5.0, 5.0, )
+            pos: Vector3::new(5.0, 5.0, 5.0, ),
         }
     }
 }

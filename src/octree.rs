@@ -16,8 +16,6 @@ pub struct TreeNode {
     pub base_color: Vector3<f32>,
 }
 
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
 pub struct Ray {
     pub origin: Vector3<f32>,
     pub dir: Vector3<f32>,
@@ -29,10 +27,9 @@ pub struct NodeInfo {
     pub index: u32,
     pub span: f32,
     pub depth: i32,
+    pub pos: Vector3<f32>,
 }
 
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
 // Store Info about OctreeTraverse
 pub struct Traverse {
     pub parent: usize,
@@ -49,7 +46,7 @@ pub struct Traverse {
 pub struct Octree {
     // RootIndex = 0
     pub data: Vec<TreeNode>, // Octree as List
-    pub light_data: Vec<u32>,
+    pub light_data: Vec<NodeInfo>,
 }
 
 impl TreeNode {
@@ -101,7 +98,7 @@ impl Octree {
 
     pub fn insert_node(&mut self, insert_pos: Vector3<f32>, base_color: Vector3<f32>, node_type: u32, ) -> Traverse {
         let mut traverse = Traverse {
-            node_info: NodeInfo { span: ROOT_SPAN, .. Default::default() },
+            node_info: NodeInfo { span: ROOT_SPAN, pos: insert_pos, .. Default::default() },
 
             local_origin: insert_pos % ROOT_SPAN,
             origin_on_edge: insert_pos - (insert_pos % ROOT_SPAN),
@@ -122,7 +119,7 @@ impl Octree {
 
     pub fn insert_light(&mut self, insert_pos: Vector3<f32>, light_color: Vector3<f32>, ) {
         let traverse = self.insert_node(insert_pos, light_color, 3, );
-        self.light_data.push(traverse.node_info.index);
+        self.light_data.push(traverse.node_info.clone());
     }
 
     pub fn test_scene(&mut self) {
@@ -237,7 +234,8 @@ impl Default for NodeInfo {
         Self {
             index: 0,
             span: 0.0,
-            depth: 0
+            depth: 0,
+            pos: Vector3::from([0.0; 3])
         }
     }
 }

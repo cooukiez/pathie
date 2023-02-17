@@ -2,7 +2,7 @@ use std::{ffi::{c_void, CString}, mem::{align_of, self}, io::Cursor, error::Erro
 
 use ash::{vk::{self, DescriptorSetLayout, DescriptorSet, ImageAspectFlags}, util::{Align, read_spv}};
 
-use crate::{interface::Interface, offset_of, octree::Octree, uniform::Uniform, Pref, DEFAULT_STORAGE_BUFFER_SIZE, DEFAULT_UNIFORM_BUFFER_SIZE};
+use crate::{interface::Interface, offset_of, octree::{Octree, TreeNode, NodeInfo}, uniform::Uniform, Pref, DEFAULT_STORAGE_BUFFER_SIZE, DEFAULT_UNIFORM_BUFFER_SIZE};
 
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
@@ -184,8 +184,8 @@ impl Pipe {
                 .unwrap();
 
             let uniform_buffer_descriptor = vk::DescriptorBufferInfo { buffer: uniform_buffer.buffer, offset: 0, range: mem::size_of_val(&uniform_data) as u64, };
-            let octree_buffer_descriptor = vk::DescriptorBufferInfo { buffer: octree_buffer.buffer, offset: 0, range: (mem::size_of_val(&octree_data[0]) * octree_data.len()) as u64, };
-            let light_buffer_descriptor = vk::DescriptorBufferInfo { buffer: light_buffer.buffer, offset: 0, range: (mem::size_of_val(&(0 as u32)) * light_data.len()) as u64, };
+            let octree_buffer_descriptor = vk::DescriptorBufferInfo { buffer: octree_buffer.buffer, offset: 0, range: ( mem::size_of::<TreeNode>() * octree_data.len()) as u64, };
+            let light_buffer_descriptor = vk::DescriptorBufferInfo { buffer: light_buffer.buffer, offset: 0, range: ( mem::size_of::<NodeInfo>() * light_data.len()) as u64, };
 
             log::info!("Writing whole DescriptorPool ...");
             let write_desc_set_list = [
