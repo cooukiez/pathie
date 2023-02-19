@@ -5,6 +5,14 @@ use cgmath::{Vector3, Vector2};
 
 use crate::{octree::{Octree, ROOT_SPAN}, service::vector_two_boundary};
 
+#[derive(Clone, Debug, Copy)]
+pub struct vector3 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub _pad: f32,
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Uniform {
@@ -15,6 +23,7 @@ pub struct Uniform {
     pub root_span: f32,
 
     pub pos: Vector3<f32>,
+    pub t1: Vector3<f32>,
 }
 
 // Simple Data storage
@@ -45,6 +54,7 @@ impl Default for Uniform {
             mouse_pos: Vector2::new(0.0, 0.0),
             root_span: ROOT_SPAN,
             pos: Vector3::new(5.0, 5.0, 5.0, ),
+            t1: Vector3::new(5.0, 5.0, 5.0, ),
         }
     }
 }

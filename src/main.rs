@@ -91,8 +91,8 @@ impl Render {
             img_filter: vk::Filter::LINEAR,
             img_scale: 2.0,
 
-            use_render_res: false,
-            render_res: vk::Extent2D { width: 1280, height: 720 },
+            use_render_res: true,
+            render_res: vk::Extent2D { width: 1920, height: 1080 },
         };
 
         let state = RenderState { out_of_date: false, idle: false, frame_time: Duration::ZERO };

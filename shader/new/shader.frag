@@ -3,7 +3,7 @@
 # extension GL_ARB_shading_language_420pack : enable
 # extension GL_EXT_debug_printf : enable
 
-# define maxDepth 15
+# define maxDepth 17
 # define maxDistance 4096.0
 # define maxSearchDepth 4096
 
@@ -21,7 +21,7 @@ struct NodeInfo {
     uint index;
     float span;
     int depth;
-    vec3 pos;
+    float pos[3];
 };
 
 struct Intersection {
@@ -54,6 +54,8 @@ layout (set = 0, binding = 0) uniform Uniform {
 	float X;
 	float Y;
 	float Z;
+
+    layout(offset = 36) vec4 test;
 } uniformBuffer;
 
 struct TreeNode {
@@ -70,6 +72,9 @@ layout (set = 2, binding = 0) readonly buffer LightData { NodeInfo lightData[200
 
 layout (location = 0) in vec2 localPos;
 layout (location = 0) out vec4 fragColor;
+
+vec3 vec(float array[3]) { return vec3(array[0], array[1], array[2]); }
+float[3] array(vec3 vec) { float array[3] = { vec.x, vec.y, vec.z }; return array; }
 
 // RayCube Intersection on inside of Cube
 vec3 rayCubeIntersect(vec3 rayOrigin, vec3 rayDir, vec3 inverseRayDir, float curSpan) {
@@ -190,7 +195,7 @@ Intersection traverseRay(Ray ray, TraverseProp prop) {
         }
     }
 
-    NodeInfo info = NodeInfo(curIndex, curSpan, curDepth, posOnEdge + localPos);
+    NodeInfo info = NodeInfo(curIndex, curSpan, curDepth, array(posOnEdge + localPos));
     return Intersection(intersect, dist, info);
 }
 
@@ -210,8 +215,27 @@ Intersection traversePrimaryRay(vec2 coord, vec2 res, vec2 mouse) {
     return traverseRay(ray, prop);
 }
 
-uint selectLightSource(vec3 pos) {
-    return 1;
+Intersection genShadowRay(Intersection curIntSec) {
+    NodeInfo light = lightData[0];
+
+    vec3 rayOrigin = vec(curIntSec.info.pos);
+    vec3 rayDir = normalize(vec(curIntSec.info.pos) - vec(light.pos));
+
+    // rayOrigin += rayDir * curIntSec.info.span;
+
+    Ray ray = Ray(rayOrigin, rayDir);
+    TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
+
+    Intersection intSec = traverseRay(ray, prop);
+    if (octreeData[intSec.info.index].nodeType != 3) {
+        intSec.intersect = false;
+    }
+
+    if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
+        // debugPrintfEXT("\n%d", intSec.info.index);
+    }
+
+    return intSec;
 }
 
 void main() {
@@ -227,10 +251,26 @@ void main() {
         // debugPrintfEXT("");
     // }
 
+    if (coord.x < 1 && coord.y < 1) {
+        debugPrintfEXT("\n%v3f", uniformBuffer.test);
+    }
+
     // dir(rad(vec2(30, 30)))
     
     Intersection intSec = traversePrimaryRay(coord, res, mouse);
     TreeNode node = octreeData[intSec.info.index];
-    vec3 color = vec3(node.baseColor[0], node.baseColor[1], node.baseColor[2]);
-    if (intSec.intersect) fragColor = vec4(color, 1);
+    vec3 color = vec(node.baseColor);
+    if (intSec.intersect) {
+        if (octreeData[intSec.info.index].nodeType == 3) {
+            fragColor = vec4(color, 1);
+        } else {
+            Intersection shadowIntSec = genShadowRay(intSec);
+        
+            if (shadowIntSec.intersect) {
+                fragColor = vec4(shadowIntSec.dist / 100);
+            } else {
+                fragColor = vec4(0, 0.3, 0, 0);
+            }
+        }
+    }
 }

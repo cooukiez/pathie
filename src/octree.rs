@@ -2,7 +2,7 @@ use cgmath::Vector3;
 
 use crate::service::{pos_to_index, step_vec_three};
 
-pub const MAX_RECURSION: usize = 15;
+pub const MAX_RECURSION: usize = 17;
 pub const ROOT_SPAN: f32 = (1 << MAX_RECURSION) as f32;
 
 #[repr(C)]

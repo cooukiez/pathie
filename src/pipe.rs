@@ -70,7 +70,7 @@ impl Pipe {
                     .. Default::default()
                 };
             
-            let index_buffer = BufferSet::new(interface, index_buffer_info, &index_data, );
+            let index_buffer = BufferSet::new(interface, index_buffer_info, align_of::<u32>() as u64, &index_data, );
 
             log::info!("Creating VertexBuffer ...");
             let vertex_data = [
@@ -89,20 +89,21 @@ impl Pipe {
                     .. Default::default()
                 };
             
-            let vertex_buffer = BufferSet::new(interface, vertex_buffer_info, &vertex_data, );
+            let vertex_buffer = BufferSet::new(interface, vertex_buffer_info, align_of::<Vertex>() as u64, &vertex_data, );
             
             log::info!("Creating UniformBuffer ...");
             let uniform_data = uniform.clone();
             let uniform_buffer_info =
                 vk::BufferCreateInfo {
-                    size: DEFAULT_UNIFORM_BUFFER_SIZE,
+                    size: mem::size_of_val(&uniform_data) as u64,
                     usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
                     sharing_mode: vk::SharingMode::EXCLUSIVE,
                     
                     .. Default::default()
                 };
 
-            let uniform_buffer = BufferSet::new(interface, uniform_buffer_info, &[uniform_data], );
+            let uniform_buffer = BufferSet::new(interface, uniform_buffer_info, align_of::<Uniform>() as u64, &[uniform_data], );
+            let test = offset_of!(Uniform, t1);
 
             log::info!("Creating OctreeBuffer ...");
             let octree_data = octree.data.clone();
@@ -115,7 +116,7 @@ impl Pipe {
                     .. Default::default()
                 };
             
-            let octree_buffer = BufferSet::new(interface, octree_buffer_info, &octree_data, );
+            let octree_buffer = BufferSet::new(interface, octree_buffer_info, align_of::<TreeNode>() as u64, &octree_data, );
 
             log::info!("Creating LightingBuffer ...");
             let light_data = octree.light_data.clone();
@@ -128,7 +129,7 @@ impl Pipe {
                     .. Default::default()
                 };
             
-            let light_buffer = BufferSet::new(interface, light_buffer_info, &light_data, );
+            let light_buffer = BufferSet::new(interface, light_buffer_info, align_of::<NodeInfo>() as u64, &light_data, );
             
             log::info!("Creating DescriptorPool ...");
             let descriptor_size_list = [
@@ -623,7 +624,7 @@ impl ImageTarget {
 }
 
 impl BufferSet {
-    pub fn new<Type : Copy>(interface: &Interface, buffer_info: vk::BufferCreateInfo, data: &[Type], ) -> Self {
+    pub fn new<Type : Copy>(interface: &Interface, buffer_info: vk::BufferCreateInfo, alignment: u64, data: &[Type], ) -> Self {
         unsafe {
             // Create BufferObject
             let buffer = interface.device
@@ -655,7 +656,7 @@ impl BufferSet {
                 .map_memory(buffer_mem, 0, memory_req.size, vk::MemoryMapFlags::empty(), )
                 .unwrap();
             let mut index_slice = 
-                Align::new(index_ptr, align_of::<u32>() as u64, memory_req.size, );
+                Align::new(index_ptr, alignment, memory_req.size, );
 
             // Copy and finish Memory
             index_slice.copy_from_slice(&data);
