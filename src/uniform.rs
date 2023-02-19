@@ -1,29 +1,18 @@
 use std::time::Duration;
 
 use ash::vk;
-use cgmath::{Vector3, Vector2};
+use cgmath::{Vector3, Vector2, Vector4};
 
 use crate::{octree::{Octree, ROOT_SPAN}, service::vector_two_boundary};
-
-#[derive(Clone, Debug, Copy)]
-pub struct vector3 {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-    pub _pad: f32,
-}
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Uniform {
-    pub time: u32,
-    pub resolution: Vector2<f32>,
-    
+    pub pos: Vector4<f32>,
     pub mouse_pos: Vector2<f32>,
+    pub resolution: Vector2<f32>,
     pub root_span: f32,
-
-    pub pos: Vector3<f32>,
-    pub t1: Vector3<f32>,
+    pub time: u32,
 }
 
 // Simple Data storage
@@ -33,7 +22,7 @@ impl Uniform {
     }
     
     pub fn apply_velocity(&mut self, velocity: Vector3<f32>, ) {
-        self.pos += velocity;
+        self.pos += velocity.extend(0.0);
     }
 
     pub fn move_mouse(&mut self, mouse_velocity: Vector2<f32>, ) {
@@ -53,8 +42,7 @@ impl Default for Uniform {
             resolution: Vector2::new(0.0, 0.0),
             mouse_pos: Vector2::new(0.0, 0.0),
             root_span: ROOT_SPAN,
-            pos: Vector3::new(5.0, 5.0, 5.0, ),
-            t1: Vector3::new(5.0, 5.0, 5.0, ),
+            pos: Vector4::new(5.0, 5.0, 5.0, 0.0, ),
         }
     }
 }

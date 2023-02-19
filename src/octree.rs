@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use cgmath::{Vector3, Vector4};
 
 use crate::service::{pos_to_index, step_vec_three};
 
@@ -16,37 +16,34 @@ pub struct TreeNode {
     pub base_color: Vector3<f32>,
 }
 
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
 pub struct Ray {
-    pub origin: Vector3<f32>,
-    pub dir: Vector3<f32>,
+    pub origin: Vector4<f32>,
+    pub dir: Vector4<f32>,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
-pub struct NodeInfo {
-    pub index: u32,
-    pub span: f32,
-    pub depth: i32,
-    pub pos: Vector3<f32>,
-}
-
-// Store Info about OctreeTraverse
 pub struct Traverse {
-    pub parent: usize,
-    pub node_info: NodeInfo,
+    pub parent: u32,
+    pub index: u32,
+
+    pub span: f32,
+    
+    pub depth: i32,
+    pub mask_in_parent: [Vector4<f32>; MAX_RECURSION], // Position in parent at depth
 
     pub ray: Ray,
 
     pub local_origin: Vector3<f32>, // Origin in CurNode
     pub origin_on_edge: Vector3<f32>, // Origin on first edge of CurNode
-
-    pub mask_in_parent: [Vector3<f32>; MAX_RECURSION],
 }
 
 pub struct Octree {
     // RootIndex = 0
     pub data: Vec<TreeNode>, // Octree as List
-    pub light_data: Vec<NodeInfo>,
+    pub light_data: Vec<Traverse>,
 }
 
 impl TreeNode {

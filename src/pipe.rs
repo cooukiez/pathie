@@ -103,7 +103,6 @@ impl Pipe {
                 };
 
             let uniform_buffer = BufferSet::new(interface, uniform_buffer_info, align_of::<Uniform>() as u64, &[uniform_data], );
-            let test = offset_of!(Uniform, t1);
 
             log::info!("Creating OctreeBuffer ...");
             let octree_data = octree.data.clone();

@@ -38,24 +38,13 @@ struct TraverseProp {
 };
 
 layout (set = 0, binding = 0) uniform Uniform {
+    vec4 pos;
+
+	vec2 mouse;
+	vec2 res;
+
+    float rootSpan;
     uint time;
-
-    // CurrentResolution
-	float width;
-	float height;
-
-    // MousePosition
-	float MX;
-	float MY;
-
-	float rootSpan;
-
-    // PlayerPosition
-	float X;
-	float Y;
-	float Z;
-
-    layout(offset = 36) vec4 test;
 } uniformBuffer;
 
 struct TreeNode {
@@ -202,7 +191,7 @@ Intersection traverseRay(Ray ray, TraverseProp prop) {
 Intersection traversePrimaryRay(vec2 coord, vec2 res, vec2 mouse) {
     vec2 screenPos = (coord * 2.0 - res) / res.y;
 
-    vec3 rayOrigin = vec3(uniformBuffer.X, uniformBuffer.Y, uniformBuffer.Z);
+    vec3 rayOrigin = uniformBuffer.pos.xyz;
     vec3 rayDir = normalize(vec3(screenPos, 1.0));
 
     float offset = 3.14 * 0.5;
@@ -242,18 +231,14 @@ void main() {
     fragColor = vec4(0.0);
 
     vec2 coord = gl_FragCoord.xy;
-	vec2 res = vec2(uniformBuffer.width, uniformBuffer.height);
-    vec2 mouse = vec2(uniformBuffer.MX, uniformBuffer.MY);
+	vec2 res = uniformBuffer.res;
+    vec2 mouse = uniformBuffer.mouse;
 	
 	float time = float(uniformBuffer.time) / 1000.0 * 0.5;
 
     // if (coord.x < 1 && coord.y < 1) {
         // debugPrintfEXT("");
     // }
-
-    if (coord.x < 1 && coord.y < 1) {
-        debugPrintfEXT("\n%v3f", uniformBuffer.test);
-    }
 
     // dir(rad(vec2(30, 30)))
     
