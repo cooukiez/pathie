@@ -13,15 +13,8 @@
 # define rad(degree) vec2(3.14 * degree / 180.0)
 
 struct Ray {
-    vec3 origin;
-    vec3 dir;
-};
-
-struct NodeInfo {
-    uint index;
-    float span;
-    int depth;
-    float pos[3];
+    vec4 origin;
+    vec4 dir;
 };
 
 struct Intersection {
@@ -37,14 +30,25 @@ struct TraverseProp {
     uint locMaxSearchDepth;
 };
 
+struct Traverse {
+    uint index;
+    float span;
+
+    int depth;
+    vec4 maskInParentList[maxDepth];
+
+    Ray ray;
+
+    vec4 localPos;
+    vec4 posOnEdge;
+};
+
 layout (set = 0, binding = 0) uniform Uniform {
     vec4 pos;
-
 	vec2 mouse;
 	vec2 res;
-
-    float rootSpan;
     uint time;
+    Traverse 
 } uniformBuffer;
 
 struct TreeNode {
