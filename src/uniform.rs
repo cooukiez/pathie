@@ -3,7 +3,7 @@ use std::time::Duration;
 use ash::vk;
 use cgmath::{Vector3, Vector2, Vector4};
 
-use crate::{octree::{Octree, ROOT_SPAN}, service::vector_two_boundary};
+use crate::{octree::{Octree, Traverse}, service::Vector};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -11,8 +11,8 @@ pub struct Uniform {
     pub pos: Vector4<f32>,
     pub mouse_pos: Vector2<f32>,
     pub resolution: Vector2<f32>,
-    pub root_span: f32,
     pub time: u32,
+    pub traverse: Traverse,
 }
 
 // Simple Data storage
@@ -27,22 +27,23 @@ impl Uniform {
 
     pub fn move_mouse(&mut self, mouse_velocity: Vector2<f32>, ) {
         self.mouse_pos += mouse_velocity;
-        vector_two_boundary(Vector2::new(0.0, 0.0, ), self.resolution, &mut self.mouse_pos, )
+        self.mouse_pos = self.mouse_pos.boundary(Vector2::from([0.0; 2]), self.resolution);
     }
 
     pub fn update_uniform(&mut self, cur_time: Duration, octree: &mut Octree, ) {
         self.time = cur_time.as_millis() as u32;
+        self.traverse = octree.node_at_pos(self.pos);
     }
 }
 
 impl Default for Uniform {
     fn default() -> Self {
         Self {
-            time: 0,
-            resolution: Vector2::new(0.0, 0.0),
-            mouse_pos: Vector2::new(0.0, 0.0),
-            root_span: ROOT_SPAN,
             pos: Vector4::new(5.0, 5.0, 5.0, 0.0, ),
+            mouse_pos: Vector2::default(),
+            resolution: Vector2::default(),
+            time: 0,
+            traverse: Traverse::default()
         }
     }
 }

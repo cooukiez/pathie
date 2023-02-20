@@ -1,66 +1,177 @@
-use cgmath::{Vector3, Array, Vector2};
+use cgmath::{Vector3, Array, Vector2, Vector4};
 
-// Position / Mask Utility
-pub fn pos_to_index(pos: Vector3<f32>, side_len: i32, ) -> usize {
-    Vector3 {
-        x: ((pos.x as i32) % side_len),
-            y: ((pos.y as i32) % side_len) * side_len * side_len,
-                z: ((pos.z as i32) % side_len) * side_len
-    }.sum() as usize
+macro_rules! sqr { ($num : expr) => { { $num * $num } } }
+
+pub trait Mask {
+    fn to_index(&self, side_len: i32, ) -> usize;
+    fn from_index(index: usize, side_len: i32, ) -> Self;
+    fn add_dir(&self, dir: Self, ) -> Self;
 }
 
-pub fn index_to_pos(index: u32, side_len: u32, ) -> Vector3<f32> { 
-    Vector3 {
-        x: ((index % (side_len * side_len)) % side_len) as f32,
-            y:(index / (side_len * side_len)) as f32,
-                z: ((index % (side_len * side_len)) / side_len) as f32
+impl Mask for Vector4<i32> {
+    fn to_index(&self, side_len: i32, ) -> usize {
+        Self {
+            x: ((self.x) % side_len),
+                y: ((self.y) % side_len) * sqr!(side_len),
+                    z: ((self.z) % side_len) * side_len,
+                        w: 0
+        }.sum() as usize
+    }
+
+    fn from_index(index: usize, side_len: i32, ) -> Self {
+        let index = index as i32;
+        Self {
+            x: (index % sqr!(side_len)) % side_len,
+                y: index / sqr!(side_len),
+                    z: (index % sqr!(side_len)) / side_len,
+                        w: 0
+        }
+    }
+
+    fn add_dir(&self, dir: Self, ) -> Self {
+        Self {
+            x: (self.x - dir.x).abs(),
+                y: (self.y - dir.y).abs(),
+                    z: (self.z - dir.z).abs(),
+                        w: 0
+        }
     }
 }
 
-pub fn add_dir_to_mask(mask: Vector3<f32>, dir_mask: Vector3<f32>, ) -> Vector3<f32> {
-    Vector3 {
-        x: (mask.x - dir_mask.x).abs(),
-                y: (mask.y - dir_mask.y).abs(),
-                    z: (mask.z - dir_mask.z).abs()
+trait Num {
+    // Move Number back into boundary
+    fn boundary(&self, min: Self, max: Self, ) -> Self;
+}
+
+impl Num for f32 {
+    fn boundary(&self, min: Self, max: Self, ) -> Self {
+        let mut corrected = self.clone();
+        if self < &min { corrected = min }
+        if self > &max { max } else { corrected }
     }
 }
 
-// VectorThree Utility
-pub fn step_vec_three(edge: Vector3<f32>, input: Vector3<f32>, ) -> Vector3<u32> {
-    Vector3 {
-        x: (edge.x < input.x) as u32,
-                y: (edge.y < input.y) as u32,
-                    z: (edge.z < input.z) as u32
+pub trait Vector {
+    fn step(&self, edge: Self, ) -> Self;
+    fn floor(&self) -> Self;
+    fn sign(&self) -> Self;
+
+    // Move Vector back into boundary
+    fn boundary(&self, min: Self, max: Self, ) -> Self;
+
+    fn default() -> Self;
+}
+
+impl Vector for Vector4<f32> {
+    fn step(&self, edge: Self, ) -> Self {
+        Self {
+            x: (edge.x < self.x).into(),
+                y: (edge.y < self.y).into(),
+                    z: (edge.z < self.z).into(),
+                        w: (edge.w < self.w).into()
+        }
+    }
+
+    fn floor(&self) -> Self {
+        Self {
+            x: self.x.floor(),
+                y: self.y.floor(),
+                    z: self.z.floor(),
+                        w: self.w.floor()
+        }
+    }
+
+    fn sign(&self) -> Self {
+        Self {
+            x: self.x.signum(),
+                y: self.y.signum(),
+                    z: self.z.signum(),
+                        w: self.w.signum()
+        }
+    }
+
+    fn boundary(&self, min: Self, max: Self, ) -> Self {
+        Self {
+            x: self.x.boundary(min.x, max.x, ),
+                y: self.y.boundary(min.y, max.y, ),
+                    z: self.z.boundary(min.z, max.z, ),
+                        w: self.w.boundary(min.w, max.w, )
+        }
+    }
+
+    fn default() -> Self {
+        Self { x: 0.0, y: 0.0, z: 0.0, w: 0.0 }
     }
 }
 
-pub fn floor_vec_three(vec: Vector3<f32>) -> Vector3<f32> {
-    Vector3 {
-        x: vec.x.floor(),
-                y: vec.y.floor(),
-                    z: vec.z.floor()
+impl Vector for Vector3<f32> {
+    fn step(&self, edge: Self, ) -> Self {
+        Self {
+            x: (edge.x < self.x).into(),
+                y: (edge.y < self.y).into(),
+                    z: (edge.z < self.z).into()
+        }
+    }
+
+    fn floor(&self) -> Self {
+        Self {
+            x: self.x.floor(),
+                y: self.y.floor(),
+                    z: self.z.floor()
+        }
+    }
+
+    fn sign(&self) -> Self {
+        Self {
+            x: self.x.signum(),
+                y: self.y.signum(),
+                    z: self.z.signum()
+        }
+    }
+
+    fn boundary(&self, min: Self, max: Self, ) -> Self {
+        Self {
+            x: self.x.boundary(min.x, max.x, ),
+                y: self.y.boundary(min.y, max.y, ),
+                    z: self.z.boundary(min.z, max.z, )
+        }
+    }
+
+    fn default() -> Self {
+        Self { x: 0.0, y: 0.0, z: 0.0 }
     }
 }
 
-
-
-pub fn sign_vec_three(vec: Vector3<f32>) -> Vector3<f32> {
-    Vector3 {
-        x: vec.x.signum(),
-                y: vec.y.signum(),
-                    z: vec.z.signum()
+impl Vector for Vector2<f32> {
+    fn step(&self, edge: Self, ) -> Self {
+        Self {
+            x: (edge.x < self.x).into(),
+                y: (edge.y < self.y).into()
+        }
     }
-}
 
-// VectorTwo Utility
+    fn floor(&self) -> Self {
+        Self {
+            x: self.x.floor(),
+                y: self.y.floor()
+        }
+    }
 
-// Set Vector between boundary
-pub fn vector_two_boundary(min: Vector2<f32>, max: Vector2<f32>, vec: &mut Vector2<f32>, ) {
-    // Check Min
-    if vec.x < min.x { vec.x = min.x; }
-        if vec.y < min.y { vec.y = min.y; }
+    fn sign(&self) -> Self {
+        Self {
+            x: self.x.signum(),
+                y: self.y.signum()
+        }
+    }
 
-    // Check Max
-    if vec.x > max.x { vec.x = max.x; }
-        if vec.y > max.y { vec.y = max.y; }
+    fn boundary(&self, min: Self, max: Self, ) -> Self {
+        Self {
+            x: self.x.boundary(min.x, max.x, ),
+                y: self.y.boundary(min.y, max.y, )
+        }
+    }
+
+    fn default() -> Self {
+        Self { x: 0.0, y: 0.0 }
+    }
 }
