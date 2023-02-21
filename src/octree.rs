@@ -35,6 +35,7 @@ pub struct Traverse {
     pub mask_in_parent: [Vector4<i32>; MAX_RECURSION], // Position in parent at depth
 
     pub ray: Ray,
+    pub dist: f32,
 
     pub local_origin: Vector4<f32>, // Origin in CurNode
     pub origin_on_edge: Vector4<f32>, // Origin on first edge of CurNode
@@ -246,6 +247,7 @@ impl Default for Traverse {
             mask_in_parent: [Vector4::from([0; 4]); MAX_RECURSION],
 
             ray: Ray::default(),
+            dist: 0.0,
 
             local_origin: Vector4::default(),
             origin_on_edge: Vector4::default(),
