@@ -1,9 +1,9 @@
-use cgmath::{Vector3, Vector4};
+use cgmath::{Vector4, Vector3};
 
 use crate::service::{Vector, Mask};
 
-pub const MAX_RECURSION: usize = 17;
-pub const ROOT_SPAN: f32 = (1 << MAX_RECURSION) as f32;
+pub const MAX_DEPTH: usize = 15;
+pub const ROOT_SPAN: f32 = ((1 << MAX_DEPTH) / 2) as f32;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -26,13 +26,11 @@ pub struct Ray {
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Traverse {
-    pub parent: u32,
     pub index: u32,
-
+    pub parent: u32,
     pub span: f32,
-    
     pub depth: i32,
-    pub mask_in_parent: [Vector4<i32>; MAX_RECURSION], // Position in parent at depth
+    pub mask_in_parent: [Vector4<f32>; MAX_DEPTH], // Position in parent at depth
 
     pub ray: Ray,
     pub dist: f32,
@@ -48,27 +46,18 @@ pub struct Octree {
 }
 
 impl TreeNode {
-    pub fn new(node_type: u32, parent: usize, ) -> TreeNode {
-        TreeNode { node_type, parent: parent as u32, .. Default::default() }
+    pub fn new(parent: usize, ) -> TreeNode {
+        TreeNode { node_type: 0, parent: parent as u32, .. Default::default() }
     }
 
-    pub fn set_full(&mut self, base_color: Vector4<f32>, node_type: u32, ) {
+    pub fn set(&mut self, base_color: Vector4<f32>, node_type: u32, ) {
         self.node_type = node_type;
         self.base_color = base_color;
     }
 
-    pub fn get_center(node_pos: Vector4<f32>, span: f32, ) -> Vector4<f32> {
-        node_pos + Vector4::from([span * 0.5; 4])
-    }
-
-    pub fn get_top_right(node_pos: Vector4<f32>, span: f32, ) -> Vector4<f32> {
-        node_pos + Vector4::from([span; 4])
-    }
-
-    pub fn get_child_mask(cur_span: f32, local_origin: Vector4<f32>, ) -> Vector4<i32> {
-        Vector4::from([cur_span; 4]).step(local_origin)
-            .cast::<i32>()
-            .unwrap()
+    pub fn get_child_mask(cur_span: f32, local_origin: Vector3<f32>, ) -> Vector3<f32> {
+        local_origin
+            .step(Vector3::from([cur_span; 3]))
     }
 }
 
@@ -83,7 +72,7 @@ impl Octree {
             .. Default::default()
         };
 
-        for _  in 1 .. MAX_RECURSION {
+        for _  in 1 .. MAX_DEPTH {
             if traverse.node_type(&self.data) == 1 {
                 traverse.move_into_child(&self.data);
             } else {
@@ -104,13 +93,12 @@ impl Octree {
             .. Default::default()
         };
 
-        for _  in 1 .. MAX_RECURSION {
-            traverse.try_child_creation(&mut self.data);
+        for _  in 1 .. MAX_DEPTH {
+            traverse.try_child_creation(&mut self.data, base_color, );
             traverse.move_into_child(&self.data);
-            traverse.update_color(&mut self.data, base_color)
         }
 
-        self.data[traverse.index()].set_full(base_color.clone(), node_type, );
+        self.data[traverse.index()].set(base_color.clone(), node_type, );
 
         traverse
     }
@@ -182,19 +170,20 @@ impl Traverse {
     pub fn parent(&self) -> usize { self.parent as usize }
     pub fn node_type(&self, data: &Vec<TreeNode>, ) -> u32 { data[self.index()].node_type }
 
-    pub fn update_color(&mut self, data: &mut Vec<TreeNode>, color: Vector4<f32>, ) {
-        data[self.index()].base_color += color / self.span;
-    }
-
-    pub fn try_child_creation(&mut self, data: &mut Vec<TreeNode>, ) {
-        if data[self.index()].node_type == 0 {
-            data[self.index()].node_type = 1;
+    pub fn try_child_creation(&mut self, data: &mut Vec<TreeNode>, base_color: Vector4<f32>, ) {
+        let mut node = data[self.index()];
+        if node.node_type == 1 {
+            node.base_color += base_color.clone() / self.span;
+        } else {
+            node.set(base_color.clone() / self.span, 1, );
 
             for index in 0 .. 8 {
-                data[self.index()].children[index] = data.len() as u32;
-                data.push(TreeNode::new(0, self.index(), ));
+                node.children[index] = data.len() as u32;
+                data.push(TreeNode::new(self.index()));
             }
         }
+
+        data[self.index()] = node;
     }
 
     pub fn move_into_child(&mut self, data: &Vec<TreeNode>, ) {
@@ -202,13 +191,13 @@ impl Traverse {
         self.depth += 1;
 
         let child_mask =
-            TreeNode::get_child_mask(self.span, self.local_origin, );
+            TreeNode::get_child_mask(self.span, self.local_origin.truncate(), );
 
-        self.origin_on_edge += child_mask.cast::<f32>().unwrap() * self.span;
-        self.local_origin -= child_mask.cast::<f32>().unwrap() * self.span;
+        self.origin_on_edge += (child_mask * self.span).extend(0.0);
+        self.local_origin -= (child_mask * self.span).extend(0.0);
 
-        self.mask_in_parent[self.depth as usize] = child_mask.clone();
-        let space_index = child_mask.to_index(2);
+        self.mask_in_parent[self.depth as usize] = child_mask.clone().extend(0.0);
+        let space_index = child_mask.to_index(2.0);
 
         self.parent = self.index;
         self.index = data[self.parent()].children[space_index] as u32;
@@ -244,7 +233,7 @@ impl Default for Traverse {
             span: ROOT_SPAN,
 
             depth: 0,
-            mask_in_parent: [Vector4::from([0; 4]); MAX_RECURSION],
+            mask_in_parent: [Vector4::from([0.0; 4]); MAX_DEPTH],
 
             ray: Ray::default(),
             dist: 0.0,
@@ -258,6 +247,9 @@ impl Default for Traverse {
 impl Default for Octree {
     fn default() -> Self {
         log::info!("Creating Octree with RootSpan [ {} ] -> VoxSpan is 1.0 ...", ROOT_SPAN);
-        Self { data: vec![TreeNode::default()], light_data: vec![] }
+        Self {
+            data: vec![TreeNode::default()],
+            light_data: vec![]
+        }
     }
 }

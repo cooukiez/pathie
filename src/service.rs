@@ -3,28 +3,26 @@ use cgmath::{Vector3, Array, Vector2, Vector4};
 macro_rules! sqr { ($num : expr) => { { $num * $num } } }
 
 pub trait Mask {
-    fn to_index(&self, side_len: i32, ) -> usize;
-    fn from_index(index: usize, side_len: i32, ) -> Self;
+    fn to_index(&self, side_len: f32, ) -> usize;
+    fn from_index(index: usize, side_len: f32, ) -> Self;
     fn add_dir(&self, dir: Self, ) -> Self;
 }
 
-impl Mask for Vector4<i32> {
-    fn to_index(&self, side_len: i32, ) -> usize {
+impl Mask for Vector3<f32> {
+    fn to_index(&self, side_len: f32, ) -> usize {
         Self {
             x: ((self.x) % side_len),
                 y: ((self.y) % side_len) * sqr!(side_len),
                     z: ((self.z) % side_len) * side_len,
-                        w: 0
         }.sum() as usize
     }
 
-    fn from_index(index: usize, side_len: i32, ) -> Self {
-        let index = index as i32;
+    fn from_index(index: usize, side_len: f32, ) -> Self {
+        let index = index as f32;
         Self {
             x: (index % sqr!(side_len)) % side_len,
                 y: index / sqr!(side_len),
                     z: (index % sqr!(side_len)) / side_len,
-                        w: 0
         }
     }
 
@@ -33,7 +31,6 @@ impl Mask for Vector4<i32> {
             x: (self.x - dir.x).abs(),
                 y: (self.y - dir.y).abs(),
                     z: (self.z - dir.z).abs(),
-                        w: 0
         }
     }
 }

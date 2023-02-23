@@ -3,7 +3,7 @@
 # extension GL_ARB_shading_language_420pack : enable
 # extension GL_EXT_debug_printf : enable
 
-# define maxDepth 17
+# define maxDepth 15
 # define maxDistance 4096.0
 # define maxSearchDepth 4096
 
@@ -12,21 +12,25 @@
 # define dir(rot) vec3(cos(rot.x) * cos(rot.y), sin(rot.y), sin(rot.x) * cos(rot.y))
 # define rad(degree) vec2(3.14 * degree / 180.0)
 
+# define f(v) vec3(v)
+# define b(v) vec4(v, 0)
+
 struct Ray {
     vec4 origin;
     vec4 dir;
 };
 
 struct Traverse {
-    uint parent;
     uint index;
+    uint parent;
 
     float span;
 
     int depth;
-    ivec4 maskInParent[maxDepth];
+    vec4 maskInParent[maxDepth];
 
-    Ray ray;
+    vec4 origin;
+    vec4 dir;
     float dist;
 
     vec4 localPos; // Position within current Cell / Node
@@ -45,11 +49,11 @@ struct Intersection {
 };
 
 layout (set = 0, binding = 0) uniform Uniform {
+    Traverse traverse;
     vec4 pos;
 	vec2 mouse;
 	vec2 res;
     uint time;
-    Traverse traverse;
 } uniformBuffer;
 
 struct TreeNode {
@@ -61,7 +65,7 @@ struct TreeNode {
     vec4 baseColor; // ToDo -> Add transparency
 };
 
-layout (set = 1, binding = 0) readonly buffer OctreeData { TreeNode octreeData[2000000]; };
+layout (set = 1, binding = 0) buffer OctreeData { TreeNode octreeData[40000]; };
 layout (set = 2, binding = 0) readonly buffer LightData { Traverse lightData[2000]; };
 
 layout (location = 0) in vec2 localPos;
@@ -77,9 +81,9 @@ uint maskToIndex(vec3 mask) {
     return uint(mask.x + mask.y * 4.0 + mask.z * 2.0);
 }
 
-Intersection traverseRay(Traverse trav, TraverseProp prop) {
+Intersection traverseRay(inout Traverse trav, TraverseProp prop) {
     Ray ray = trav.ray;
-    vec3 invRayDir = 1.0 / max(abs(vec3(ray.dir)), 0.001); // Used for RayCube Intersection
+    vec3 invRayDir = 1.0 / max(abs(f(ray.dir)), 0.001); // Used for RayCube Intersection
 
     bool intersect = false;
     bool exitOctree = false; // Should move upward
@@ -102,23 +106,23 @@ Intersection traverseRay(Traverse trav, TraverseProp prop) {
         if (exitOctree) {
             if (trav.parent == 0) break;
 
-            vec3 newPosOnEdge = floor(vec3(trav.posOnEdge) / (trav.span * 2.0)) * (trav.span * 2.0);
+            vec3 newPosOnEdge = floor(f(trav.posOnEdge) / (trav.span * 2.0)) * (trav.span * 2.0);
             
-            trav.localPos += trav.posOnEdge - vec4(newPosOnEdge, 0);
-            trav.posOnEdge = vec4(newPosOnEdge, 0);
+            trav.localPos += b(f(trav.posOnEdge) - newPosOnEdge);
+            trav.posOnEdge = b(newPosOnEdge);
             
             // Moving one Layer upward -> Decrease RecursionAmount & Double trav.span
             trav.depth -= 1;
             trav.span *= 2.0;
             
             TreeNode grandParent = octreeData[octreeData[trav.parent].parent];
-            vec3 posMask = abs(vec3(trav.maskInParent[trav.depth]) - dirMask);
+            vec3 posMask = abs(f(trav.maskInParent[trav.depth]) - dirMask);
 
             trav.maskInParent[trav.depth] = ivec4(posMask, 0);
             trav.index = grandParent.children[maskToIndex(posMask)];
             node = octreeData[trav.index];
 
-            exitOctree = (abs(dot(mod((vec3(trav.posOnEdge) + 0.25) / trav.span + 0.5, 2.0) - 1.0 + dirMask * sign(vec3(ray.dir)) * 0.5, dirMask)) < 0.1);
+            exitOctree = (abs(dot(mod((f(trav.posOnEdge) + 0.25) / trav.span + 0.5, 2.0) - 1.0 + dirMask * sign(f(ray.dir)) * 0.5, dirMask)) < 0.1);
         } else {
             // Getting Node Type
             uint state = node.nodeType;
@@ -133,12 +137,12 @@ Intersection traverseRay(Traverse trav, TraverseProp prop) {
                 trav.span *= 0.5;
 
                 // Select specific Child
-                vec3 childMask = step(vec3(trav.span), vec3(trav.localPos));
+                vec3 childMask = step(vec3(trav.span), f(trav.localPos));
 
-                trav.posOnEdge += vec4(childMask * trav.span, 0);
-                trav.localPos -= vec4(childMask * trav.span, 0);
+                trav.posOnEdge += b(childMask * trav.span);
+                trav.localPos -= b(childMask * trav.span);
 
-                trav.index = node.children[maskToIndex(vec3(childMask))];
+                trav.index = node.children[maskToIndex(childMask)];
                 node = octreeData[trav.index];
                 
                 trav.maskInParent[trav.depth] = ivec4(childMask, 0);
@@ -147,7 +151,7 @@ Intersection traverseRay(Traverse trav, TraverseProp prop) {
             } else if (state == 0) {
                 // Raycast and find distance to NearestVoxSurface in direction of Ray
                 // No need to call everytime
-                vec3 hit = rayCubeIntersect(vec3(trav.localPos), vec3(ray.dir), invRayDir, trav.span);
+                vec3 hit = rayCubeIntersect(f(trav.localPos), f(ray.dir), invRayDir, trav.span);
 
                 dirMask = vec3(lessThan(hit, min(hit.yzx, hit.zxy)));
 
@@ -156,25 +160,22 @@ Intersection traverseRay(Traverse trav, TraverseProp prop) {
                 // Moving forward in direciton of Ray
                 trav.dist += len;
 
-                trav.localPos += vec4(vec3(ray.dir) * len - dirMask * sign(vec3(ray.dir)) * trav.span, 0);
-                vec3 newPosOnEdge = vec3(trav.posOnEdge) + dirMask * sign(vec3(ray.dir)) * trav.span;
+                trav.localPos += b(f(ray.dir) * len - dirMask * sign(f(ray.dir)) * trav.span);
+                vec3 newPosOnEdge = f(trav.posOnEdge) + dirMask * sign(f(ray.dir)) * trav.span;
 
-                vec3 posMask = abs(vec3(trav.maskInParent[trav.depth]) - dirMask);
+                vec3 posMask = abs(f(trav.maskInParent[trav.depth]) - dirMask);
+
                 trav.maskInParent[trav.depth] = ivec4(posMask, 0);
                 trav.index = octreeData[trav.parent].children[maskToIndex(posMask)];
                 node = octreeData[trav.index];
 
-                exitOctree = (floor(newPosOnEdge / trav.span * 0.5 + 0.25) != floor(vec3(trav.posOnEdge) / trav.span * 0.5 + 0.25));
+                exitOctree = (floor(newPosOnEdge / trav.span * 0.5 + 0.25) != floor(f(trav.posOnEdge) / trav.span * 0.5 + 0.25));
 
-                trav.posOnEdge = vec4(newPosOnEdge, 0);
+                trav.posOnEdge = b(newPosOnEdge);
             } else if (state > 1) {
                 intersect = true;
                 break;
             }
-        }
-
-        if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
-            debugPrintfEXT("\n%d", trav.index);
         }
     }
 
@@ -182,6 +183,7 @@ Intersection traverseRay(Traverse trav, TraverseProp prop) {
 }
 
 Intersection traversePrimaryRay(vec2 coord, vec2 res, vec2 mouse) {
+    vec4 maskInParent[maxDepth];
     vec2 screenPos = (coord * 2.0 - res) / res.y;
 
     vec3 rayOrigin = uniformBuffer.pos.xyz;
@@ -191,8 +193,19 @@ Intersection traversePrimaryRay(vec2 coord, vec2 res, vec2 mouse) {
     rayDir.yz *= rot(mouse.y / res.y * 3.14 - offset);
     rayDir.xz *= rot(mouse.x / res.x * 3.14 - offset);
 
-    Traverse trav = uniformBuffer.traverse;
-    trav.ray = Ray(vec4(rayOrigin, 0), vec4(rayDir, 0));
+    Traverse trav = Traverse(
+        0,
+        0,
+        32768.0,
+        0,
+        maskInParent,
+        Ray(b(rayOrigin), b(rayDir)),
+        0.0,
+        b(mod(rayOrigin, 16384.0)),
+        b(rayOrigin - mod(rayOrigin, 16384.0))
+    );
+
+    // trav.ray = Ray(b(rayOrigin), b(rayDir));
 
     TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
 
@@ -236,11 +249,15 @@ void main() {
     // }
 
     // dir(rad(vec2(30, 30)))
+
+    if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
+        debugPrintfEXT("\n%v4f", uniformBuffer.pos);
+    }
     
     Intersection intSec = traversePrimaryRay(coord, res, mouse);
     TreeNode node = octreeData[intSec.traverse.index];
     if (intSec.intersect) {
-        fragColor = vec4(1);
+        fragColor = node.baseColor;
         // if (octreeData[intSec.info.index].nodeType == 3) {
         //     fragColor = vec4(color, 1);
         // } else {
@@ -249,7 +266,7 @@ void main() {
         //     if (shadowIntSec.intersect) {
         //         fragColor = vec4(shadowIntSec.dist / 100);
         //     } else {
-        //         fragColor = vec4(0, 0.3, 0, 0);
+        //         fragColor = vec4(0.3);
         //     }
         // }
     }

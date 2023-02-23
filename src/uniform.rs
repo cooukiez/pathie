@@ -8,11 +8,11 @@ use crate::{octree::{Octree, Traverse}, service::Vector};
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Uniform {
+    pub traverse: Traverse,
     pub pos: Vector4<f32>,
     pub mouse_pos: Vector2<f32>,
     pub resolution: Vector2<f32>,
     pub time: u32,
-    pub traverse: Traverse,
 }
 
 // Simple Data storage

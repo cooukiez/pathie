@@ -184,8 +184,8 @@ impl Pipe {
                 .unwrap();
 
             let uniform_buffer_descriptor = vk::DescriptorBufferInfo { buffer: uniform_buffer.buffer, offset: 0, range: mem::size_of_val(&uniform_data) as u64, };
-            let octree_buffer_descriptor = vk::DescriptorBufferInfo { buffer: octree_buffer.buffer, offset: 0, range: ( mem::size_of::<TreeNode>() * octree_data.len()) as u64, };
-            let light_buffer_descriptor = vk::DescriptorBufferInfo { buffer: light_buffer.buffer, offset: 0, range: ( mem::size_of::<Traverse>() * light_data.len()) as u64, };
+            let octree_buffer_descriptor = vk::DescriptorBufferInfo { buffer: octree_buffer.buffer, offset: 0, range: (mem::size_of::<TreeNode>() * octree_data.len()) as u64, };
+            let light_buffer_descriptor = vk::DescriptorBufferInfo { buffer: light_buffer.buffer, offset: 0, range: (mem::size_of::<Traverse>() * light_data.len()) as u64, };
 
             log::info!("Writing whole DescriptorPool ...");
             let write_desc_set_list = [
