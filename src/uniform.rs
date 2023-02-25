@@ -3,15 +3,27 @@ use std::time::Duration;
 use ash::vk;
 use cgmath::{Vector3, Vector2, Vector4};
 
-use crate::{octree::{Octree, Traverse}, service::Vector};
+use crate::{octree::{Octree, MAX_DEPTH}, service::Vector};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Uniform {
-    pub traverse: Traverse,
+    pub mask_in_parent: [Vector4<f32>; MAX_DEPTH],
+
     pub pos: Vector4<f32>,
-    pub mouse_pos: Vector2<f32>,
+
+    pub local_pos: Vector4<f32>,
+    pub pos_on_edge: Vector4<f32>,
+    
     pub resolution: Vector2<f32>,
+    pub mouse_pos: Vector2<f32>,
+
+    pub index: u32,
+    pub parent: u32,
+
+    pub span: f32,
+    pub depth: i32,
+
     pub time: u32,
 }
 
@@ -32,18 +44,44 @@ impl Uniform {
 
     pub fn update_uniform(&mut self, cur_time: Duration, octree: &mut Octree, ) {
         self.time = cur_time.as_millis() as u32;
-        self.traverse = octree.node_at_pos(self.pos);
+        let traverse = octree.get_traverse(self.pos.truncate());
+
+        traverse.mask_in_parent
+            .iter()
+            .enumerate()
+            .for_each(| (index, &mask, ) | self.mask_in_parent[index] = mask.extend(0.0));
+
+        self.local_pos = traverse.local_pos.extend(0.0);
+        self.pos_on_edge = traverse.pos_on_edge.extend(0.0);
+
+        self.index = traverse.index;
+        self.parent = traverse.parent;
+
+        self.span = traverse.span;
+        self.depth = traverse.depth
     }
 }
 
 impl Default for Uniform {
     fn default() -> Self {
         Self {
-            pos: Vector4::new(5.0, 5.0, 5.0, 0.0, ),
-            mouse_pos: Vector2::default(),
+            mask_in_parent: [Vector4::default(); MAX_DEPTH],
+
+            pos: Vector4::default(),
+
+            local_pos: Vector4::default(),
+            pos_on_edge: Vector4::default(),
+
             resolution: Vector2::default(),
-            time: 0,
-            traverse: Traverse::default()
+            mouse_pos: Vector2::default(),
+            
+            index: 0,
+            parent: 0,
+
+            span: 0.0,
+            depth: 0,
+
+            time: 0
         }
     }
 }

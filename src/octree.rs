@@ -1,6 +1,6 @@
 use cgmath::{Vector4, Vector3};
 
-use crate::service::{Vector, Mask};
+use crate::{service::{Vector, Mask}};
 
 pub const MAX_DEPTH: usize = 15;
 pub const ROOT_SPAN: f32 = ((1 << MAX_DEPTH) / 2) as f32;
@@ -8,35 +8,39 @@ pub const ROOT_SPAN: f32 = ((1 << MAX_DEPTH) / 2) as f32;
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct TreeNode {
+    pub base_color: Vector4<f32>,
+    pub children: [u32; 8],
+
     // 0 = empty | 1 = subdivide | 2 = full | 3 = light
     pub node_type: u32,
     pub parent: u32,
-    
-    pub children: [u32; 8],
-    pub base_color: Vector4<f32>,
+
+    padding: [u32; 2],
 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Ray {
-    pub origin: Vector4<f32>,
-    pub dir: Vector4<f32>,
+    pub origin: Vector3<f32>,
+    pub dir: Vector3<f32>,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Traverse {
-    pub index: u32,
-    pub parent: u32,
-    pub span: f32,
-    pub depth: i32,
-    pub mask_in_parent: [Vector4<f32>; MAX_DEPTH], // Position in parent at depth
+    pub mask_in_parent: [Vector3<f32>; MAX_DEPTH], // Position in parent at depth
 
     pub ray: Ray,
-    pub dist: f32,
+    pub local_pos: Vector3<f32>, // Origin in CurNode
+    pub pos_on_edge: Vector3<f32>, // Origin on first edge of CurNode
 
-    pub local_origin: Vector4<f32>, // Origin in CurNode
-    pub origin_on_edge: Vector4<f32>, // Origin on first edge of CurNode
+    pub index: u32,
+    pub parent: u32,
+
+    pub dist: f32,
+    pub span: f32,
+    
+    pub depth: i32,
 }
 
 pub struct Octree {
@@ -62,12 +66,12 @@ impl TreeNode {
 }
 
 impl Octree {
-    pub fn node_at_pos(&mut self, pos: Vector4<f32>, ) -> Traverse {
+    pub fn get_traverse(&mut self, pos: Vector3<f32>, ) -> Traverse {
         let mut traverse = Traverse {
             span: ROOT_SPAN,
 
-            local_origin: pos % ROOT_SPAN,
-            origin_on_edge: pos - (pos % ROOT_SPAN),
+            local_pos: pos % ROOT_SPAN,
+            pos_on_edge: pos - (pos % ROOT_SPAN),
 
             .. Default::default()
         };
@@ -83,12 +87,12 @@ impl Octree {
         traverse
     }
 
-    pub fn insert_node(&mut self, insert_pos: Vector4<f32>, base_color: Vector4<f32>, node_type: u32, ) -> Traverse {
+    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, base_color: Vector4<f32>, node_type: u32, ) -> Traverse {
         let mut traverse = Traverse {
             span: ROOT_SPAN,
 
-            local_origin: insert_pos % ROOT_SPAN,
-            origin_on_edge: insert_pos - (insert_pos % ROOT_SPAN),
+            local_pos: insert_pos % ROOT_SPAN,
+            pos_on_edge: insert_pos - (insert_pos % ROOT_SPAN),
 
             .. Default::default()
         };
@@ -103,7 +107,7 @@ impl Octree {
         traverse
     }
 
-    pub fn insert_light(&mut self, insert_pos: Vector4<f32>, light_color: Vector4<f32>, ) {
+    pub fn insert_light(&mut self, insert_pos: Vector3<f32>, light_color: Vector4<f32>, ) {
         let traverse = self.insert_node(insert_pos, light_color, 3, );
         self.light_data.push(traverse.clone());
     }
@@ -113,7 +117,7 @@ impl Octree {
         for x in 0 .. 100 {
             for z in 0 .. 100 {
                 let base_color = Vector4::new(1.0, 1.0, 1.0, 0.0, );
-                self.insert_node(Vector4::new(100.0 + x as f32, 100.0, 100.0 + z as f32, 0.0, ), base_color, 2);
+                self.insert_node(Vector3::new(100.0 + x as f32, 100.0, 100.0 + z as f32, ), base_color, 2);
             }
         }
 
@@ -121,7 +125,7 @@ impl Octree {
         for z in 0 .. 100 {
             for y in 0 .. 100 {
                 let base_color = Vector4::new(0.0, 1.0, 0.0, 0.0, );
-                self.insert_node(Vector4::new(100.0, 100.0 + y as f32, 100.0 + z as f32, 0.0, ), base_color, 2);
+                self.insert_node(Vector3::new(100.0, 100.0 + y as f32, 100.0 + z as f32, ), base_color, 2);
             }
         }
 
@@ -129,7 +133,7 @@ impl Octree {
         for z in 0 .. 100 {
             for y in 0 .. 100 {
                 let base_color = Vector4::new(1.0, 0.0, 0.0, 0.0, );
-                self.insert_node(Vector4::new(200.0, 100.0 + y as f32, 100.0 + z as f32, 0.0, ), base_color, 2);
+                self.insert_node(Vector3::new(200.0, 100.0 + y as f32, 100.0 + z as f32, ), base_color, 2);
             }
         }
 
@@ -137,7 +141,7 @@ impl Octree {
         for x in 0 .. 100 {
             for y in 0 .. 100 {
                 let base_color = Vector4::new(1.0, 1.0, 1.0, 0.0, );
-                self.insert_node(Vector4::new(100.0 + x as f32, 100.0 + y as f32, 200.0, 0.0, ), base_color, 2);
+                self.insert_node(Vector3::new(100.0 + x as f32, 100.0 + y as f32, 200.0, ), base_color, 2);
             }
         }
 
@@ -145,7 +149,7 @@ impl Octree {
         for x in 0 .. 100 {
             for z in 0 .. 100 {
                 let base_color = Vector4::new(1.0, 1.0, 1.0, 0.0, );
-                self.insert_node(Vector4::new(100.0 + x as f32, 200.0, 100.0 + z as f32, 0.0, ), base_color, 2);
+                self.insert_node(Vector3::new(100.0 + x as f32, 200.0, 100.0 + z as f32, ), base_color, 2);
             }
         }
 
@@ -154,14 +158,14 @@ impl Octree {
             for z in 0 .. 20 {
                 for y in 0 .. 20 {
                     let base_color = Vector4::new(0.0, 0.0, 1.0, 0.0, );
-                    self.insert_node(Vector4::new(140.0 + x as f32, 100.0 + y as f32, 140.0 + z as f32, 0.0, ), base_color, 2);
+                    self.insert_node(Vector3::new(140.0 + x as f32, 100.0 + y as f32, 140.0 + z as f32, ), base_color, 2);
                 }
             }
         }
 
         // Light
         let light_color = Vector4::new(1.0, 1.0, 0.0, 0.0, );
-        self.insert_light(Vector4::new(150.0, 180.0, 150.0, 0.0, ), light_color, );
+        self.insert_light(Vector3::new(150.0, 180.0, 150.0, ), light_color, );
     }
 }
 
@@ -191,12 +195,12 @@ impl Traverse {
         self.depth += 1;
 
         let child_mask =
-            TreeNode::get_child_mask(self.span, self.local_origin.truncate(), );
+            TreeNode::get_child_mask(self.span, self.local_pos, );
 
-        self.origin_on_edge += (child_mask * self.span).extend(0.0);
-        self.local_origin -= (child_mask * self.span).extend(0.0);
+        self.pos_on_edge += child_mask * self.span;
+        self.local_pos -= child_mask * self.span;
 
-        self.mask_in_parent[self.depth as usize] = child_mask.clone().extend(0.0);
+        self.mask_in_parent[self.depth as usize] = child_mask.clone();
         let space_index = child_mask.to_index(2.0);
 
         self.parent = self.index;
@@ -206,11 +210,12 @@ impl Traverse {
 
 impl Default for TreeNode {
     fn default() -> Self {
-        Self { 
+        Self {
+            base_color: Vector4::default(),
+            children: [0; 8],
             node_type: 0,
             parent: 0,
-            children: [0; 8],
-            base_color: Vector4::default()
+            padding: [0; 2]
         }
     }
 }
@@ -218,8 +223,8 @@ impl Default for TreeNode {
 impl Default for Ray {
     fn default() -> Self {
         Self {
-            origin: Vector4::default(),
-            dir: Vector4::default()
+            origin: Vector3::default(),
+            dir: Vector3::default()
         }
     }
 }
@@ -233,13 +238,13 @@ impl Default for Traverse {
             span: ROOT_SPAN,
 
             depth: 0,
-            mask_in_parent: [Vector4::from([0.0; 4]); MAX_DEPTH],
+            mask_in_parent: [Vector3::from([0.0; 3]); MAX_DEPTH],
 
             ray: Ray::default(),
             dist: 0.0,
 
-            local_origin: Vector4::default(),
-            origin_on_edge: Vector4::default(),
+            local_pos: Vector3::default(),
+            pos_on_edge: Vector3::default(),
         }
     }
 }

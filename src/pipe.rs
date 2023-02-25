@@ -132,9 +132,9 @@ impl Pipe {
             
             log::info!("Creating DescriptorPool ...");
             let descriptor_size_list = [
-                vk::DescriptorPoolSize { ty: vk::DescriptorType::UNIFORM_BUFFER, descriptor_count: 1, },
-                vk::DescriptorPoolSize { ty: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: 1, },
-                vk::DescriptorPoolSize { ty: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: 1, },
+                vk::DescriptorPoolSize { ty: vk::DescriptorType::UNIFORM_BUFFER, descriptor_count: 1, }, // Uniform
+                vk::DescriptorPoolSize { ty: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: 1, }, // Octree - NodeData
+                vk::DescriptorPoolSize { ty: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: 1, }, // Octree - LightData
             ];
 
             let descriptor_pool_info = vk::DescriptorPoolCreateInfo::builder()
