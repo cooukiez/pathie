@@ -2,7 +2,7 @@ use cgmath::{Vector4, Vector3};
 
 use crate::{service::{Vector, Mask}};
 
-pub const MAX_DEPTH: usize = 15;
+pub const MAX_DEPTH: usize = 17;
 pub const ROOT_SPAN: f32 = ((1 << MAX_DEPTH) / 2) as f32;
 
 #[repr(C)]

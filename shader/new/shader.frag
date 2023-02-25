@@ -4,7 +4,7 @@
 # extension GL_EXT_debug_printf : enable
 # extension GL_EXT_scalar_block_layout : enable
 
-# define maxDepth 15
+# define maxDepth 17
 # define maxDistance 4096.0
 # define maxSearchDepth 4096
 
@@ -28,7 +28,6 @@ layout (std430, set = 0, binding = 0) uniform Uniform {
 } uniformBuffer;
 
 struct TreeNode {
-
     uint children[8];
     
     // 0 = empty | 1 = subdivide | 2 = full
@@ -44,34 +43,31 @@ struct Ray {
     vec3 dir;
 };
 
-struct Traverse {
+// Position in Octree
+struct PosInfo {
     vec3 maskInParent[maxDepth]; // Offset of array wrong
 
-    Ray ray;
     vec3 localPos; // Position within current Cell / Node
     vec3 posOnEdge; // RayOrigin on the Edge of the Node
-    vec3 invRayDir; // Used for RayCube Intersection
 
     uint index;
-    uint parent;
-    
-    float dist;
     float span;
-
     int depth;
 };
 
-layout (set = 2, binding = 0) readonly buffer LightData { Traverse lightData[2000]; };
+layout (set = 2, binding = 0) readonly buffer LightData { PosInfo lightData[2000]; };
 
 struct Intersection {
     bool intersect;
-    Traverse traverse;
+    float dist;
+    PosInfo info;
 };
 
 struct TraverseProp {
-    uint locMaxDepth;
-    float locMaxDistance;
-    uint locMaxSearchDepth;
+    // Max
+    uint depth;
+    float dist;
+    uint searchDepth;
 };
 
 // RayCube Intersection on inside of Cube
@@ -79,27 +75,26 @@ vec3 rayCubeIntersect(vec3 origin, vec3 dir, vec3 invDir, float span) {
     return - (sign(dir) * (origin - span * 0.5) - span * 0.5) * invDir;
 }
 
+vec3 addDirToMask(vec3 mask, vec3 dirMask) {
+    return abs(mask - dirMask);
+}
+
 // Simple Hashing Scheme
 uint maskToIndex(vec3 mask) {
     return uint(mask.x + mask.y * 4.0 + mask.z * 2.0);
 }
 
-Intersection traverseRay(in Traverse trav, TraverseProp prop) {
-    Ray ray = trav.ray;
+Intersection traverseRay(Ray ray, PosInfo info, TraverseProp prop) {
+    vec3 maskInParent[maxDepth];
+    vec3 invRayDir = 1.0 / max(abs(ray.dir), 0.001); // Used for RayCube Intersection
 
     bool intersect = false;
     bool exitOctree = false; // Should move upward
     
     vec3 dirMask;
-    TreeNode node = octreeData[trav.index];
+    TreeNode node = octreeData[info.index];
 
-    if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
-        // debugPrintfEXT("\n%v3f", ray.dir);
-    }
-    
-    // if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
-        // debugPrintfEXT("");
-    // }
+    float dist = 0;
     
     // The Octree TraverseLoop
     // Each Iteration either check ...
@@ -109,91 +104,87 @@ Intersection traverseRay(in Traverse trav, TraverseProp prop) {
     // ... If Node / Cell is empty -> Go one step forward
 
     int curStep;
-    for (curStep = 0; curStep < prop.locMaxSearchDepth; curStep += 1) {
-        if (trav.dist > prop.locMaxDistance) break;
+    for (curStep = 0; curStep < prop.searchDepth; curStep += 1) {
+        if (dist > prop.dist) break;
 
         // Should go up
         if (exitOctree) {
-            if (trav.parent == 0) break;
+            if (node.parent == 0 || info.depth < 1) break;
 
-            vec3 newPosOnEdge = floor(trav.posOnEdge / (trav.span * 2.0)) * (trav.span * 2.0);
+            vec3 newPosOnEdge = floor(info.posOnEdge / (info.span * 2.0)) * (info.span * 2.0);
             
-            trav.localPos += trav.posOnEdge - newPosOnEdge;
-            trav.posOnEdge = newPosOnEdge;
+            info.localPos += info.posOnEdge - newPosOnEdge;
+            info.posOnEdge = newPosOnEdge;
             
-            // Moving one Layer upward -> Decrease RecursionAmount & Double trav.span
-            trav.depth -= 1;
-            trav.span *= 2.0;
+            // Moving one Layer upward -> Decrease RecursionAmount & Double info.span
+            info.depth -= 1;
+            info.span *= 2.0;
             
-            TreeNode grandParent = octreeData[octreeData[trav.parent].parent];
-            vec3 posMask = abs(trav.maskInParent[trav.depth] - dirMask);
+            TreeNode grandParent = octreeData[octreeData[node.parent].parent];
+            vec3 posMask = abs(info.maskInParent[info.depth] - dirMask);
+            info.maskInParent[info.depth] = posMask;
 
-            trav.maskInParent[trav.depth] = posMask;
-            trav.index = grandParent.children[maskToIndex(posMask)];
-            node = octreeData[trav.index];
+            info.index = grandParent.children[maskToIndex(posMask)];
+            node = octreeData[info.index];
 
-            exitOctree = (abs(dot(mod((trav.posOnEdge + 0.25) / trav.span + 0.5, 2.0) - 1.0 + dirMask * sign(ray.dir) * 0.5, dirMask)) < 0.1);
+            exitOctree = (abs(dot(mod((info.posOnEdge + 0.25) / info.span + 0.5, 2.0) - 1.0 + dirMask * sign(ray.dir) * 0.5, dirMask)) < 0.1);
         } else {
             // Getting Node Type
             uint state = node.nodeType;
 
             // If State == Subdivide && too much Detail -> State = Empty
-            if (state == 1 && trav.depth > prop.locMaxDepth) state = 2;
+            if (state == 1 && info.depth > prop.depth) state = 0;
 
             // If State = Subdivide && no Limit of Detail reached -> Select Child
             if (state == 1) {
-                // Moving one Layer down -> Increase RecursionAmount & Half trav.span
-                trav.depth += 1;
-                trav.span *= 0.5;
+                // Moving one Layer down -> Increase RecursionAmount & Half info.span
+                info.depth += 1;
+                info.span *= 0.5;
 
                 // Select specific Child
-                vec3 childMask = step(vec3(trav.span), trav.localPos);
+                vec3 childMask = step(vec3(info.span), info.localPos);
 
-                trav.posOnEdge += childMask * trav.span;
-                trav.localPos -= childMask * trav.span;
+                info.posOnEdge += childMask * info.span;
+                info.localPos -= childMask * info.span;
 
-                trav.index = node.children[maskToIndex(childMask)];
-                node = octreeData[trav.index];
+                info.index = node.children[maskToIndex(childMask)];
+                node = octreeData[info.index];
                 
-                trav.maskInParent[trav.depth] = childMask;
+                info.maskInParent[info.depth] = childMask;
 
             // Move forward or stop -> 0 = Empty , 2 = Full
             } else if (state == 0) {
-                // Raycast and find distance to NearestVoxSurface in direction of Ray
+                // Raycast and find info.distance to NearestNodeSurface in direction of Ray
                 // No need to call everytime
-                vec3 hit = rayCubeIntersect(trav.localPos, ray.dir, trav.invRayDir, trav.span);
+                vec3 hit = rayCubeIntersect(info.localPos, ray.dir, invRayDir, info.span);
 
                 dirMask = vec3(lessThan(hit, min(hit.yzx, hit.zxy)));
 
                 float len = dot(hit, dirMask);
 
                 // Moving forward in direciton of Ray
-                trav.dist += len;
+                dist += len;
 
-                trav.localPos += ray.dir * len - dirMask * sign(ray.dir) * trav.span;
-                vec3 newPosOnEdge = trav.posOnEdge + dirMask * sign(ray.dir) * trav.span;
+                info.localPos += ray.dir * len - dirMask * sign(ray.dir) * info.span;
+                vec3 newPosOnEdge = info.posOnEdge + dirMask * sign(ray.dir) * info.span;
 
-                vec3 posMask = abs(trav.maskInParent[trav.depth] - dirMask);
+                vec3 posMask = abs(info.maskInParent[info.depth] - dirMask);
+                info.maskInParent[info.depth] = posMask;
 
-                trav.maskInParent[trav.depth] = posMask;
-                trav.index = octreeData[trav.parent].children[maskToIndex(posMask)];
-                node = octreeData[trav.index];
+                info.index = octreeData[node.parent].children[maskToIndex(posMask)];
+                node = octreeData[info.index];
 
-                exitOctree = (floor(newPosOnEdge / trav.span * 0.5 + 0.25) != floor(trav.posOnEdge / trav.span * 0.5 + 0.25));
+                exitOctree = (floor(newPosOnEdge / info.span * 0.5 + 0.25) != floor(info.posOnEdge / info.span * 0.5 + 0.25));
 
-                trav.posOnEdge = newPosOnEdge;
+                info.posOnEdge = newPosOnEdge;
             } else if (state > 1) {
                 intersect = true;
                 break;
             }
         }
-
-        if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
-            // debugPrintfEXT("\n%d", node.children[0]);
-        }
     }
 
-    return Intersection(intersect, trav);
+    return Intersection(intersect, dist, info);
 }
 
 Intersection traversePrimaryRay(vec2 coord, vec2 res, vec2 mouse) {
@@ -206,47 +197,40 @@ Intersection traversePrimaryRay(vec2 coord, vec2 res, vec2 mouse) {
     dir.yz *= rot(mouse.y / res.y * 3.14 - offset);
     dir.xz *= rot(mouse.x / res.x * 3.14 - offset);
 
+    Ray ray = Ray(origin, dir);
+
     vec3 maskInParent[maxDepth];
-    Traverse trav = Traverse(
-        maskInParent,
-        Ray(origin, dir),
-        mod(origin, uniformBuffer.rootSpan),
-        origin - mod(origin, uniformBuffer.rootSpan),
-        1.0 / max(abs(dir), 0.001),
-        0,
-        0,
-        0.0,
-        uniformBuffer.rootSpan,
-        0
-    );
+    vec3 localPos = mod(origin, uniformBuffer.rootSpan);
+    vec3 posOnEdge = origin - localPos;
+    PosInfo info = PosInfo(maskInParent, localPos, posOnEdge, 0, uniformBuffer.rootSpan * 2.0, 0);
 
     TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
 
-    return traverseRay(trav, prop);
+    return traverseRay(ray, info, prop);
 }
 
-// Intersection genShadowRay(Intersection curIntSec) {
-//     NodeInfo light = lightData[0];
+Intersection genShadowRay(Intersection lastIntSec) {
+    NodeInfo light = lightData[0];
 
-//     vec3 rayOrigin = vec(curIntSec.info.pos);
-//     vec3 rayDir = normalize(vec(curIntSec.info.pos) - vec(light.pos));
+    vec3 origin = lastIntSec.info.posOnEdge + lastIntSec.info.localPos;
+    vec3 dir = normalize(origin - vec(light.pos));
 
-//     // rayOrigin += rayDir * curIntSec.info.span;
+    // rayOrigin += rayDir * curIntSec.info.span;
 
-//     Ray ray = Ray(rayOrigin, rayDir);
-//     TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
+    Ray ray = Ray(origin, dir);
+    TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
 
-//     Intersection intSec = traverseRay(ray, prop);
-//     if (octreeData[intSec.info.index].nodeType != 3) {
-//         intSec.intersect = false;
-//     }
+    Intersection intSec = traverseRay(ray, prop);
+    if (octreeData[intSec.info.index].nodeType != 3) {
+        intSec.intersect = false;
+    }
 
-//     if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
-//         // debugPrintfEXT("\n%d", intSec.info.index);
-//     }
+    if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
+        // debugPrintfEXT("\n%d", intSec.info.index);
+    }
 
-//     return intSec;
-// }
+    return intSec;
+}
 
 void main() {
     fragColor = vec4(0.0);
@@ -262,16 +246,12 @@ void main() {
     // }
 
     // dir(rad(vec2(30, 30)))
-
-    if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
-        debugPrintfEXT("\n%v4f", octreeData[55].baseColor);
-    }
     
     Intersection intSec = traversePrimaryRay(coord, res, mouse);
-    TreeNode node = octreeData[intSec.traverse.index];
-    fragColor = node.baseColor;
+    TreeNode node = octreeData[intSec.info.index];
+    
     if (intSec.intersect) {
-        
+        fragColor = node.baseColor;
         // if (octreeData[intSec.info.index].nodeType == 3) {
         //     fragColor = vec4(color, 1);
         // } else {

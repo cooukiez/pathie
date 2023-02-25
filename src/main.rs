@@ -1,7 +1,6 @@
 use std::{io::Write, thread, time::{Instant, Duration}, borrow::BorrowMut};
 
 use ash::vk;
-use cgmath::Vector4;
 use env_logger::fmt::{Color, Formatter};
 use input::Input;
 use interface::Interface;
@@ -10,8 +9,6 @@ use octree::Octree;
 use pipe::Pipe;
 use uniform::Uniform;
 use winit::{event_loop::{EventLoop, ControlFlow}, event::{WindowEvent, KeyboardInput, Event}, platform::run_return::EventLoopExtRunReturn, dpi::PhysicalPosition};
-
-use crate::octree::Traverse;
 
 mod pipe;
 mod interface;
@@ -78,7 +75,6 @@ fn main() {
         .format(log_format)
         .init();
 
-    let test = memoffset::offset_of!(Uniform, pos);
     log::info!("Starting Application ...");
     thread::spawn(| | { loop { } });
 
