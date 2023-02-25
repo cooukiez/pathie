@@ -8,14 +8,15 @@ pub const ROOT_SPAN: f32 = ((1 << MAX_DEPTH) / 2) as f32;
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct TreeNode {
-    pub base_color: Vector4<f32>,
     pub children: [u32; 8],
 
     // 0 = empty | 1 = subdivide | 2 = full | 3 = light
     pub node_type: u32,
     pub parent: u32,
 
-    padding: [u32; 2],
+    pub padding: [u32; 2],
+
+    pub base_color: Vector4<f32>,
 }
 
 #[repr(C)]
@@ -66,7 +67,7 @@ impl TreeNode {
 }
 
 impl Octree {
-    pub fn get_traverse(&mut self, pos: Vector3<f32>, ) -> Traverse {
+    pub fn node_at_pos(&mut self, pos: Vector3<f32>, ) -> Traverse {
         let mut traverse = Traverse {
             span: ROOT_SPAN,
 
@@ -172,7 +173,7 @@ impl Octree {
 impl Traverse {
     pub fn index(&self) -> usize { self.index as usize }
     pub fn parent(&self) -> usize { self.parent as usize }
-    pub fn node_type(&self, data: &Vec<TreeNode>, ) -> u32 { data[self.index()].node_type }
+    pub fn node_type(&self, data: &Vec<TreeNode>, ) -> u32 { data[self.index()].node_type } 
 
     pub fn try_child_creation(&mut self, data: &mut Vec<TreeNode>, base_color: Vector4<f32>, ) {
         let mut node = data[self.index()];
