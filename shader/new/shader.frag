@@ -2,6 +2,7 @@
 # extension GL_ARB_separate_shader_objects : enable
 # extension GL_ARB_shading_language_420pack : enable
 # extension GL_EXT_debug_printf : enable
+# extension GL_EXT_scalar_block_layout : enable
 
 # define maxDepth 15
 # define maxDistance 4096.0
@@ -15,27 +16,52 @@
 # define f(v) vec3(v)
 # define b(v) vec4(v, 0)
 
+layout (location = 0) in vec2 localPos;
+layout (location = 0) out vec4 fragColor;
+
+layout (std430, set = 0, binding = 0) uniform Uniform {
+    vec4 pos;
+    vec2 mouse;
+	vec2 res;
+    uint time;
+} uniformBuffer;
+
 struct Ray {
     vec4 origin;
     vec4 dir;
 };
 
 struct Traverse {
+    vec4 maskInParent[maxDepth]; // Offset of array wrong
+
+    Ray ray;
+    vec4 localPos; // Position within current Cell / Node
+    vec4 posOnEdge; // RayOrigin on the Edge of the Node
+
     uint index;
     uint parent;
-
+    
+    float dist;
     float span;
 
     int depth;
-    vec4 maskInParent[maxDepth];
-
-    vec4 origin;
-    vec4 dir;
-    float dist;
-
-    vec4 localPos; // Position within current Cell / Node
-    vec4 posOnEdge; // RayOrigin on the Edge of the Node
 };
+
+layout (std430, set = 0, binding = 1) uniform TraverseBuffer {
+    Traverse traverseBuffer;
+};
+
+struct TreeNode {
+    vec4 baseColor; // ToDo -> Add transparency
+    uint children[8];
+    
+    // 0 = empty | 1 = subdivide | 2 = full
+    uint nodeType;
+	uint parent;
+};
+
+layout (std430, set = 1, binding = 0) buffer OctreeData { TreeNode octreeData[40000]; };
+layout (set = 2, binding = 0) readonly buffer LightData { Traverse lightData[2000]; };
 
 struct TraverseProp {
     uint locMaxDepth;
@@ -47,29 +73,6 @@ struct Intersection {
     bool intersect;
     Traverse traverse;
 };
-
-layout (set = 0, binding = 0) uniform Uniform {
-    Traverse traverse;
-    vec4 pos;
-	vec2 mouse;
-	vec2 res;
-    uint time;
-} uniformBuffer;
-
-struct TreeNode {
-    // 0 = empty | 1 = subdivide | 2 = full
-    uint nodeType;
-	uint parent;
-
-	uint children[8];
-    vec4 baseColor; // ToDo -> Add transparency
-};
-
-layout (set = 1, binding = 0) buffer OctreeData { TreeNode octreeData[40000]; };
-layout (set = 2, binding = 0) readonly buffer LightData { Traverse lightData[2000]; };
-
-layout (location = 0) in vec2 localPos;
-layout (location = 0) out vec4 fragColor;
 
 // RayCube Intersection on inside of Cube
 vec3 rayCubeIntersect(vec3 rayOrigin, vec3 rayDir, vec3 inverseRayDir, float curSpan) {
@@ -90,6 +93,11 @@ Intersection traverseRay(inout Traverse trav, TraverseProp prop) {
     
     vec3 dirMask;
     TreeNode node = octreeData[trav.index];
+
+    
+    // if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
+        // debugPrintfEXT("");
+    // }
     
     // The Octree TraverseLoop
     // Each Iteration either check ...
@@ -193,19 +201,8 @@ Intersection traversePrimaryRay(vec2 coord, vec2 res, vec2 mouse) {
     rayDir.yz *= rot(mouse.y / res.y * 3.14 - offset);
     rayDir.xz *= rot(mouse.x / res.x * 3.14 - offset);
 
-    Traverse trav = Traverse(
-        0,
-        0,
-        32768.0,
-        0,
-        maskInParent,
-        Ray(b(rayOrigin), b(rayDir)),
-        0.0,
-        b(mod(rayOrigin, 16384.0)),
-        b(rayOrigin - mod(rayOrigin, 16384.0))
-    );
-
-    // trav.ray = Ray(b(rayOrigin), b(rayDir));
+    Traverse trav = traverseBuffer;
+    trav.ray = Ray(b(rayOrigin), b(rayDir));
 
     TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
 
@@ -244,15 +241,11 @@ void main() {
 	
 	float time = float(uniformBuffer.time) / 1000.0 * 0.5;
 
-    // if (coord.x < 1 && coord.y < 1) {
+    // if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
         // debugPrintfEXT("");
     // }
 
     // dir(rad(vec2(30, 30)))
-
-    if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
-        debugPrintfEXT("\n%v4f", uniformBuffer.pos);
-    }
     
     Intersection intSec = traversePrimaryRay(coord, res, mouse);
     TreeNode node = octreeData[intSec.traverse.index];
