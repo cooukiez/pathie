@@ -197,8 +197,8 @@ impl Pipe {
             interface.device.update_descriptor_sets(&write_desc_set_list, &[], );
 
             log::info!("Getting ShaderCode ...");
-            let mut vertex_spv_file = Cursor::new(&include_bytes!("../shader/new/vert.spv")[..]);
-            let mut frag_spv_file = Cursor::new(&include_bytes!("../shader/new/frag.spv")[..]);
+            let mut vertex_spv_file = Cursor::new(&include_bytes!("../shader/vert.spv")[..]);
+            let mut frag_spv_file = Cursor::new(&include_bytes!("../shader/frag.spv")[..]);
 
             let vertex_code = read_spv(&mut vertex_spv_file).expect("ERR_READ_VERTEX_SPV");
             let vertex_shader_info = vk::ShaderModuleCreateInfo::builder().code(&vertex_code);
