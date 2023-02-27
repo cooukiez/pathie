@@ -21,33 +21,35 @@ pub struct TreeNode {
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
+pub struct Light {
+    pub pos: Vector4<f32>,
+    pub index: u32,
+
+    pub padding: [u32; 3],
+}
+
+#[derive(Clone, Debug)]
 pub struct Ray {
     pub origin: Vector3<f32>,
     pub dir: Vector3<f32>,
 }
 
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct Traverse {
+#[derive(Clone, Debug)]
+pub struct PosInfo {
     pub mask_in_parent: [Vector3<f32>; MAX_DEPTH], // Position in parent at depth
 
-    pub ray: Ray,
     pub local_pos: Vector3<f32>, // Origin in CurNode
     pub pos_on_edge: Vector3<f32>, // Origin on first edge of CurNode
 
     pub index: u32,
-    pub parent: u32,
-
-    pub dist: f32,
     pub span: f32,
-    
     pub depth: i32,
 }
 
 pub struct Octree {
     // RootIndex = 0
     pub data: Vec<TreeNode>, // Octree as List
-    pub light_data: Vec<Traverse>,
+    pub light_data: Vec<Light>,
 }
 
 impl TreeNode {
@@ -67,8 +69,8 @@ impl TreeNode {
 }
 
 impl Octree {
-    pub fn node_at_pos(&mut self, pos: Vector3<f32>, ) -> Traverse {
-        let mut traverse = Traverse {
+    pub fn node_at_pos(&mut self, pos: Vector3<f32>, ) -> PosInfo {
+        let mut pos_info = PosInfo {
             span: ROOT_SPAN,
 
             local_pos: pos % ROOT_SPAN,
@@ -78,18 +80,18 @@ impl Octree {
         };
 
         for _  in 1 .. MAX_DEPTH {
-            if traverse.node_type(&self.data) == 1 {
-                traverse.move_into_child(&self.data);
+            if pos_info.node_type(&self.data) == 1 {
+                pos_info.move_into_child(&self.data);
             } else {
                 break;
             }
         }
 
-        traverse
+        pos_info
     }
 
-    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, base_color: Vector4<f32>, node_type: u32, ) -> Traverse {
-        let mut traverse = Traverse {
+    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, base_color: Vector4<f32>, node_type: u32, ) -> PosInfo {
+        let mut pos_info = PosInfo {
             span: ROOT_SPAN,
 
             local_pos: insert_pos % ROOT_SPAN,
@@ -99,18 +101,18 @@ impl Octree {
         };
 
         for _  in 1 .. MAX_DEPTH {
-            traverse.try_child_creation(&mut self.data, base_color, );
-            traverse.move_into_child(&self.data);
+            pos_info.try_child_creation(&mut self.data, base_color, );
+            pos_info.move_into_child(&self.data);
         }
 
-        self.data[traverse.index()].set(base_color.clone(), node_type, );
+        self.data[pos_info.index()].set(base_color.clone(), node_type, );
 
-        traverse
+        pos_info
     }
 
     pub fn insert_light(&mut self, insert_pos: Vector3<f32>, light_color: Vector4<f32>, ) {
-        let traverse = self.insert_node(insert_pos, light_color, 3, );
-        self.light_data.push(traverse.clone());
+        let pos_info = self.insert_node(insert_pos, light_color, 3, );
+        self.light_data.push(Light { pos: insert_pos.extend(0.0), index: pos_info.index, .. Default::default() });
     }
 
     pub fn test_scene(&mut self) {
@@ -170,9 +172,9 @@ impl Octree {
     }
 }
 
-impl Traverse {
+impl PosInfo {
     pub fn index(&self) -> usize { self.index as usize }
-    pub fn parent(&self) -> usize { self.parent as usize }
+    pub fn parent(&self, data: &Vec<TreeNode>, ) -> usize { data[self.index()].parent as usize }
     pub fn node_type(&self, data: &Vec<TreeNode>, ) -> u32 { data[self.index()].node_type } 
 
     pub fn try_child_creation(&mut self, data: &mut Vec<TreeNode>, base_color: Vector4<f32>, ) {
@@ -204,8 +206,7 @@ impl Traverse {
         self.mask_in_parent[self.depth as usize] = child_mask.clone();
         let space_index = child_mask.to_index(2.0);
 
-        self.parent = self.index;
-        self.index = data[self.parent()].children[space_index] as u32;
+        self.index = data[self.index()].children[space_index] as u32;
     }
 }
 
@@ -221,6 +222,16 @@ impl Default for TreeNode {
     }
 }
 
+impl Default for Light {
+    fn default() -> Self {
+        Self {
+            pos: Vector4::default(),
+            index: 0,
+            padding: [0; 3]
+        }
+    }
+}
+
 impl Default for Ray {
     fn default() -> Self {
         Self {
@@ -230,22 +241,17 @@ impl Default for Ray {
     }
 }
 
-impl Default for Traverse {
+impl Default for PosInfo {
     fn default() -> Self {
-        Self { 
-            parent: 0,
-            index: 0,
-
-            span: ROOT_SPAN,
-
-            depth: 0,
+        Self {
             mask_in_parent: [Vector3::from([0.0; 3]); MAX_DEPTH],
-
-            ray: Ray::default(),
-            dist: 0.0,
 
             local_pos: Vector3::default(),
             pos_on_edge: Vector3::default(),
+
+            index: 0,
+            span: ROOT_SPAN,
+            depth: 0,
         }
     }
 }

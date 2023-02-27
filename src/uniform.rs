@@ -14,8 +14,9 @@ pub struct Uniform {
     pub mouse_pos: Vector2<f32>,
 
     pub root_span: f32,
-
     pub time: u32,
+
+    pub padding: [u32; 2],
 }
 
 // Simple Data storage
@@ -48,7 +49,9 @@ impl Default for Uniform {
 
             root_span: ROOT_SPAN,
 
-            time: 0
+            time: 0,
+
+            padding: [0; 2]
         }
     }
 }
