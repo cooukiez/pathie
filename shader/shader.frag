@@ -13,7 +13,7 @@
 #define dir(rot) vec3(cos(rot.x) * cos(rot.y), sin(rot.y), sin(rot.x) * cos(rot.y))
 #define rad(degree) vec2(3.14 * degree / 180.0)
 
-layout (location = 0) in vec2 localPos;
+layout (location = 0) in vec2 localPos  ;
 layout (location = 0) out vec4 fragColor;
 
 layout (std430, set = 0, binding = 0) uniform Uniform {
@@ -152,14 +152,14 @@ void moveForward(in Ray ray, inout PosInfo info, inout Intersection intSec, inou
     info.posOnEdge = newPosOnEdge;
 }
 
-Intersection traverseRay(Ray ray, PosInfo info, TraverseProp prop) {
+Intersection traverseRay(Ray ray, PosInfo info, TraverseProp prop, int skip) {
     vec3 dirMask;
     vec3 posMask;
 
     TreeNode node = octreeData[info.index];
 
     Intersection intSec = Intersection(false, 0.0, info);
-    
+
     // The Octree TraverseLoop
     // Each Iteration either check ...
     // ... If need to go up
@@ -173,6 +173,10 @@ Intersection traverseRay(Ray ray, PosInfo info, TraverseProp prop) {
 
         // Should go up
         if (info.parentEdge) {
+            if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
+                debugPrintfEXT("\nUp %d", info.index);
+            }
+
             if (node.parent == 0) break;
 
             moveUp(ray, info, dirMask, posMask, node);
@@ -181,19 +185,32 @@ Intersection traverseRay(Ray ray, PosInfo info, TraverseProp prop) {
             uint state = node.nodeType;
 
             // If State == Subdivide && too much Detail -> State = Empty
-            if (state == 1 && info.depth > prop.depth) state = 0;
+            if (state == 1 && info.depth > prop.depth) state = 2;
+            if (state > 1 && curStep < skip) state = 0;
 
             // If State = Subdivide && no Limit of Detail reached -> Select Child
             if (state == 1) {
+                if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
+                    // debugPrintfEXT("\nDown %d", info.index);
+                }
+
                 moveDown(info, node, posMask);
 
             // Move forward
             } else if (state == 0) {
+                if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
+                    debugPrintfEXT("\nForward %d", info.index);
+                }
+
                 moveForward(ray, info, intSec, dirMask, posMask, node);
 
             // Stop -> 0 = Empty , 2 = Full
             } else if (state > 1) {
                 intSec.intersect = true;
+                if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
+                    debugPrintfEXT("\nFin %d", info.index);
+                }
+
                 break;
             }
         }
@@ -222,7 +239,7 @@ Intersection traversePrimaryRay(vec2 coord, vec2 res, vec2 mouse) {
 
     TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
 
-    return traverseRay(ray, info, prop);
+    return traverseRay(ray, info, prop, 0);
 }
 
 Intersection genShadowRay(Intersection lastIntSec) {
@@ -232,13 +249,8 @@ Intersection genShadowRay(Intersection lastIntSec) {
     vec3 dir = normalize(origin - vec3(light.pos));
 
     Ray ray = Ray(origin, dir, vec3(0));
-    PosInfo newInfo = lastIntSec.info;
-    vec3 dirMask = vec3(0);
-    vec3 posMask = vec3(0);
-    TreeNode node = octreeData[newInfo.index];
 
-    // Move into next Node because else current Node is returned
-    moveForward(ray, newInfo, lastIntSec, dirMask, posMask, node);
+    PosInfo newInfo = PosInfo(lastIntSec.info.maskInParent, lastIntSec.info.posOnEdge + vec3(lastIntSec.info.span), lastIntSec.info.posOnEdge, lastIntSec.info.index, lastIntSec.info.span, lastIntSec.info.depth, false);
 
     TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
 
@@ -248,12 +260,16 @@ Intersection genShadowRay(Intersection lastIntSec) {
     // }
 
     if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
-        // debugPrintfEXT("\n%d", intSec.info.index);
+        debugPrintfEXT("\nIn %d", lastIntSec.info.index);
     }
 
-    Intersection newIntSec = traverseRay(ray, newInfo, prop);
+    Intersection newIntSec = traverseRay(ray, newInfo, prop, 10);
     if (newIntSec.info.index == lastIntSec.info.index) {
         newIntSec.dist = 500.0;
+    }
+
+    if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
+        debugPrintfEXT("\nOut %d", newIntSec.info.index);
     }
 
     return newIntSec;
@@ -280,6 +296,6 @@ void main() {
     if (intSec.intersect) {
         fragColor = node.baseColor;
         Intersection shadowIntSec = genShadowRay(intSec);
-        fragColor = vec4(1 - shadowIntSec.dist / 1000);
+        fragColor = vec4(1 - shadowIntSec.dist / maxDistance);
     }
 }
