@@ -246,11 +246,9 @@ Intersection genShadowRay(Intersection lastIntSec) {
     Light light = lightData[0];
     vec3 origin = lastIntSec.info.posOnEdge + lastIntSec.info.localPos;
     // Origin - LightOrigin
-    vec3 dir = normalize(origin - vec3(light.pos));
+    vec3 dir = normalize(vec3(light.pos) - origin);
 
-    Ray ray = Ray(origin, dir, vec3(0));
-
-    PosInfo newInfo = PosInfo(lastIntSec.info.maskInParent, lastIntSec.info.posOnEdge + vec3(lastIntSec.info.span), lastIntSec.info.posOnEdge, lastIntSec.info.index, lastIntSec.info.span, lastIntSec.info.depth, false);
+    Ray ray = Ray(origin, dir, 1.0 / max(abs(dir), 0.001));
 
     TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
 
@@ -263,9 +261,10 @@ Intersection genShadowRay(Intersection lastIntSec) {
         debugPrintfEXT("\nIn %d", lastIntSec.info.index);
     }
 
-    Intersection newIntSec = traverseRay(ray, newInfo, prop, 10);
-    if (newIntSec.info.index == lastIntSec.info.index) {
-        newIntSec.dist = 500.0;
+    Intersection newIntSec = traverseRay(ray, lastIntSec.info, prop, 20);
+
+    if (octreeData[newIntSec.info.index].nodeType != 3) {
+       // newIntSec.dist = 450.0;
     }
 
     if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
@@ -294,8 +293,12 @@ void main() {
     TreeNode node = octreeData[intSec.info.index];
     
     if (intSec.intersect) {
-        fragColor = node.baseColor;
-        Intersection shadowIntSec = genShadowRay(intSec);
-        fragColor = vec4(1 - shadowIntSec.dist / maxDistance);
+        // fragColor = node.baseColor;
+        if (node.nodeType == 3) {
+            fragColor = node.baseColor;
+        } else {
+            Intersection shadowIntSec = genShadowRay(intSec);
+            fragColor = vec4(1 - shadowIntSec.dist / 500.0);
+        }
     }
 }
