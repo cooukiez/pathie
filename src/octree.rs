@@ -3,7 +3,7 @@ use cgmath::{Vector4, Vector3};
 use crate::{service::{Vector, Mask}};
 
 pub const MAX_DEPTH: usize = 17;
-pub const ROOT_SPAN: f32 = ((1 << MAX_DEPTH) / 2) as f32;
+pub const ROOT_SPAN: f32 = ((1 << MAX_DEPTH)) as f32;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -165,6 +165,8 @@ impl Octree {
                 }
             }
         }
+
+        self.insert_node(Vector3::new(150.0, 190.0, 150.0, ), Vector4::new(1.0, 0.0, 0.0, 0.0, ), 2, );
 
         // Light
         let light_color = Vector4::new(1.0, 1.0, 0.0, 0.0, );

@@ -52,8 +52,8 @@ impl Input {
             match self.binding_list[* keycode as usize] {
                 Action::FORWARD => uniform.apply_velocity(Vector3::new(0.0, 0.0, MOVEMENT_INC, )),
                 Action::BACKWARD => uniform.apply_velocity(Vector3::new(0.0, 0.0, - MOVEMENT_INC, )),
-                Action::LEFT => uniform.apply_velocity(Vector3::new(- MOVEMENT_INC, 0.0, 0.0, )),
-                Action::RIGHT => uniform.apply_velocity(Vector3::new(MOVEMENT_INC, 0.0, 0.0, )),
+                Action::LEFT => uniform.apply_velocity(Vector3::new(MOVEMENT_INC, 0.0, 0.0, )),
+                Action::RIGHT => uniform.apply_velocity(Vector3::new(- MOVEMENT_INC, 0.0, 0.0, )),
 
                 Action::JUMP => uniform.apply_velocity(Vector3::new(0.0, MOVEMENT_INC, 0.0, )),
                 Action::SHIFT => uniform.apply_velocity(Vector3::new(0.0, - MOVEMENT_INC, 0.0, )),

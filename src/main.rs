@@ -157,7 +157,7 @@ impl Render {
 
                             // Update Uniform
                             self.uniform
-                                .update_uniform(app_start.elapsed(), &mut self.octree, );
+                                .update_uniform(app_start.elapsed());
                             self.graphic_pipe.uniform_buffer
                                 .update(&self.interface, &[self.uniform], );
                             

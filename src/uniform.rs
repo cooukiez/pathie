@@ -3,7 +3,7 @@ use std::time::Duration;
 use ash::vk;
 use cgmath::{Vector3, Vector2, Vector4};
 
-use crate::{octree::{Octree, ROOT_SPAN}, service::Vector};
+use crate::{octree::ROOT_SPAN, service::Vector};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -34,7 +34,7 @@ impl Uniform {
         self.mouse_pos = self.mouse_pos.boundary(Vector2::from([0.0; 2]), self.resolution);
     }
 
-    pub fn update_uniform(&mut self, cur_time: Duration, octree: &mut Octree, ) {
+    pub fn update_uniform(&mut self, cur_time: Duration) {
         self.time = cur_time.as_millis() as u32;
     }
 }

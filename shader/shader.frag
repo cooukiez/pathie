@@ -13,7 +13,7 @@
 #define dir(rot) vec3(cos(rot.x) * cos(rot.y), sin(rot.y), sin(rot.x) * cos(rot.y))
 #define rad(degree) vec2(3.14 * degree / 180.0)
 
-layout (location = 0) in vec2 localPos  ;
+layout (location = 0) in vec2 localPos;
 layout (location = 0) out vec4 fragColor;
 
 layout (std430, set = 0, binding = 0) uniform Uniform {
@@ -174,7 +174,7 @@ Intersection traverseRay(Ray ray, PosInfo info, TraverseProp prop, int skip) {
         // Should go up
         if (info.parentEdge) {
             if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
-                debugPrintfEXT("\nUp %d", info.index);
+                // debugPrintfEXT("\nUp %d", info.index);
             }
 
             if (node.parent == 0) break;
@@ -185,7 +185,7 @@ Intersection traverseRay(Ray ray, PosInfo info, TraverseProp prop, int skip) {
             uint state = node.nodeType;
 
             // If State == Subdivide && too much Detail -> State = Empty
-            if (state == 1 && info.depth > prop.depth) state = 2;
+            if (state == 1 && info.depth + 1 > prop.depth - 1) state = 2;
             if (state > 1 && curStep < skip) state = 0;
 
             // If State = Subdivide && no Limit of Detail reached -> Select Child
@@ -199,7 +199,7 @@ Intersection traverseRay(Ray ray, PosInfo info, TraverseProp prop, int skip) {
             // Move forward
             } else if (state == 0) {
                 if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
-                    debugPrintfEXT("\nForward %d", info.index);
+                    // debugPrintfEXT("\nForward %d", info.index);
                 }
 
                 moveForward(ray, info, intSec, dirMask, posMask, node);
@@ -208,7 +208,7 @@ Intersection traverseRay(Ray ray, PosInfo info, TraverseProp prop, int skip) {
             } else if (state > 1) {
                 intSec.intersect = true;
                 if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
-                    debugPrintfEXT("\nFin %d", info.index);
+                    // debugPrintfEXT("\nFin %d", info.index);
                 }
 
                 break;
@@ -216,26 +216,30 @@ Intersection traverseRay(Ray ray, PosInfo info, TraverseProp prop, int skip) {
         }
     }
 
+    if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
+        debugPrintfEXT("\nFin %d %f", curStep, intSec.dist);
+    }
+
     intSec.info = info;
     return intSec;
 }
 
 Intersection traversePrimaryRay(vec2 coord, vec2 res, vec2 mouse) {
-    vec2 screenPos = (coord * 2.0 - res) / res.y;
+    vec2 screenPos = (res - coord * 2.0) / res.y;
 
     vec3 origin = uniformBuffer.pos.xyz;
     vec3 dir = normalize(vec3(screenPos, 1.0));
 
     float offset = 3.14 * 0.5;
-    dir.yz *= rot(mouse.y / res.y * 3.14 - offset);
-    dir.xz *= rot(mouse.x / res.x * 3.14 - offset);
+    dir.yz *= rot((res.y - mouse.y) / res.y * 3.14 - offset);
+    dir.xz *= rot((res.x - mouse.x) / res.x * 3.14 - offset);
 
     Ray ray = Ray(origin, dir, 1.0 / max(abs(dir), 0.001));
 
     vec3 maskInParent[maxDepth];
     vec3 localPos = mod(origin, uniformBuffer.rootSpan);
     vec3 posOnEdge = origin - localPos;
-    PosInfo info = PosInfo(maskInParent, localPos, posOnEdge, 0, uniformBuffer.rootSpan * 2.0, 0, false);
+    PosInfo info = PosInfo(maskInParent, localPos, posOnEdge, 0, uniformBuffer.rootSpan, 0, false);
 
     TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
 
@@ -245,30 +249,29 @@ Intersection traversePrimaryRay(vec2 coord, vec2 res, vec2 mouse) {
 Intersection genShadowRay(Intersection lastIntSec) {
     Light light = lightData[0];
     vec3 origin = lastIntSec.info.posOnEdge + lastIntSec.info.localPos;
-    // Origin - LightOrigin
-    vec3 dir = normalize(vec3(light.pos) - origin);
+    vec3 dir = normalize(vec3(light.pos) - origin); // Origin - LightOrigin
 
     Ray ray = Ray(origin, dir, 1.0 / max(abs(dir), 0.001));
 
     TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
 
-    // Intersection intSec = traverseRay(ray, prop);
-    // if (octreeData[intSec.info.index].nodeType != 3) {
-    //     intSec.intersect = false;
-    // }
-
     if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
-        debugPrintfEXT("\nIn %d", lastIntSec.info.index);
+        debugPrintfEXT("\nIn %v3f %v3f", vec3(light.pos), lastIntSec.info.posOnEdge);
     }
 
-    Intersection newIntSec = traverseRay(ray, lastIntSec.info, prop, 20);
+    float expectedDist = distance(origin, vec3(light.pos));
+    Intersection newIntSec = traverseRay(ray, lastIntSec.info, prop, 5);
 
-    if (octreeData[newIntSec.info.index].nodeType != 3) {
-       // newIntSec.dist = 450.0;
+    if (newIntSec.dist > expectedDist * 1.1) {
+        newIntSec.dist = 450.0;
+    }
+
+    if (newIntSec.dist < expectedDist * 0.9) {
+        newIntSec.dist = 450.0;
     }
 
     if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
-        debugPrintfEXT("\nOut %d", newIntSec.info.index);
+        // debugPrintfEXT("\nOut %d", newIntSec.info.index);
     }
 
     return newIntSec;
@@ -293,12 +296,13 @@ void main() {
     TreeNode node = octreeData[intSec.info.index];
     
     if (intSec.intersect) {
-        // fragColor = node.baseColor;
+
         if (node.nodeType == 3) {
             fragColor = node.baseColor;
         } else {
             Intersection shadowIntSec = genShadowRay(intSec);
             fragColor = vec4(1 - shadowIntSec.dist / 500.0);
         }
+        fragColor = node.baseColor;
     }
 }
