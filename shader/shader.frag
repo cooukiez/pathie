@@ -6,7 +6,7 @@
 
 #define maxDepth 17
 #define maxDistance 4096.0
-#define maxSearchDepth 4096
+#define maxSearchDepth 300
 
 #define sqr(number) (number * number)
 #define rot(spin) mat2(cos(spin), sin(spin), - sin(spin), cos(spin))
@@ -260,14 +260,14 @@ Intersection genShadowRay(Intersection lastIntSec) {
     }
 
     float expectedDist = distance(origin, vec3(light.pos));
-    Intersection newIntSec = traverseRay(ray, lastIntSec.info, prop, 5);
+    Intersection newIntSec = traverseRay(ray, lastIntSec.info, prop, 1);
 
     if (newIntSec.dist > expectedDist * 1.1) {
         newIntSec.dist = 450.0;
     }
 
     if (newIntSec.dist < expectedDist * 0.9) {
-        newIntSec.dist = 450.0;
+        newIntSec.dist = 0.0;
     }
 
     if (gl_FragCoord.x < 1 && gl_FragCoord.y < 1) {
@@ -296,13 +296,7 @@ void main() {
     TreeNode node = octreeData[intSec.info.index];
     
     if (intSec.intersect) {
-
-        if (node.nodeType == 3) {
-            fragColor = node.baseColor;
-        } else {
-            Intersection shadowIntSec = genShadowRay(intSec);
-            fragColor = vec4(1 - shadowIntSec.dist / 500.0);
-        }
-        fragColor = node.baseColor;
+        Intersection shadowIntSec = genShadowRay(intSec);
+        fragColor = node.baseColor * 1 - shadowIntSec.dist / 500.0;
     }
 }
