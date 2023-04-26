@@ -1,4 +1,5 @@
 use cgmath::{Vector4, Vector3};
+use rand::Rng;
 
 use crate::{service::{Vector, Mask}};
 
@@ -90,7 +91,7 @@ impl Octree {
         pos_info
     }
 
-    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, base_color: Vector4<f32>, node_type: u32, ) -> PosInfo {
+    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, base_color: Vector4<f32>, node_type: u32, max_depth: usize, ) -> PosInfo {
         let mut pos_info = PosInfo {
             span: ROOT_SPAN,
 
@@ -100,7 +101,7 @@ impl Octree {
             .. Default::default()
         };
 
-        for _  in 1 .. MAX_DEPTH {
+        for _  in 1 .. max_depth {
             pos_info.try_child_creation(&mut self.data, base_color, );
             pos_info.move_into_child(&self.data);
         }
@@ -111,7 +112,7 @@ impl Octree {
     }
 
     pub fn insert_light(&mut self, insert_pos: Vector3<f32>, light_color: Vector4<f32>, ) {
-        let pos_info = self.insert_node(insert_pos, light_color, 3, );
+        let pos_info = self.insert_node(insert_pos, light_color, 3, MAX_DEPTH - 2, );
         self.light_data.push(Light { pos: insert_pos.extend(0.0), index: pos_info.index, .. Default::default() });
     }
 
@@ -120,7 +121,7 @@ impl Octree {
         for x in 0 .. 100 {
             for z in 0 .. 100 {
                 let base_color = Vector4::new(1.0, 1.0, 1.0, 0.0, );
-                self.insert_node(Vector3::new(100.0 + x as f32, 100.0, 100.0 + z as f32, ), base_color, 2);
+                self.insert_node(Vector3::new(100.0 + x as f32, 100.0, 100.0 + z as f32, ), base_color, 2, MAX_DEPTH);
             }
         }
 
@@ -128,7 +129,7 @@ impl Octree {
         for z in 0 .. 100 {
             for y in 0 .. 100 {
                 let base_color = Vector4::new(0.0, 1.0, 0.0, 0.0, );
-                self.insert_node(Vector3::new(100.0, 100.0 + y as f32, 100.0 + z as f32, ), base_color, 2);
+                self.insert_node(Vector3::new(100.0, 100.0 + y as f32, 100.0 + z as f32, ), base_color, 2, MAX_DEPTH);
             }
         }
 
@@ -136,7 +137,7 @@ impl Octree {
         for z in 0 .. 100 {
             for y in 0 .. 100 {
                 let base_color = Vector4::new(1.0, 0.0, 0.0, 0.0, );
-                self.insert_node(Vector3::new(200.0, 100.0 + y as f32, 100.0 + z as f32, ), base_color, 2);
+                self.insert_node(Vector3::new(200.0, 100.0 + y as f32, 100.0 + z as f32, ), base_color, 2, MAX_DEPTH);
             }
         }
 
@@ -144,7 +145,7 @@ impl Octree {
         for x in 0 .. 100 {
             for y in 0 .. 100 {
                 let base_color = Vector4::new(1.0, 1.0, 1.0, 0.0, );
-                self.insert_node(Vector3::new(100.0 + x as f32, 100.0 + y as f32, 200.0, ), base_color, 2);
+                self.insert_node(Vector3::new(100.0 + x as f32, 100.0 + y as f32, 200.0, ), base_color, 2, MAX_DEPTH);
             }
         }
 
@@ -152,7 +153,7 @@ impl Octree {
         for x in 0 .. 100 {
             for z in 0 .. 100 {
                 let base_color = Vector4::new(1.0, 1.0, 1.0, 0.0, );
-                self.insert_node(Vector3::new(100.0 + x as f32, 200.0, 100.0 + z as f32, ), base_color, 2);
+                self.insert_node(Vector3::new(100.0 + x as f32, 200.0, 100.0 + z as f32, ), base_color, 2, MAX_DEPTH);
             }
         }
 
@@ -161,12 +162,18 @@ impl Octree {
             for z in 0 .. 20 {
                 for y in 0 .. 20 {
                     let base_color = Vector4::new(0.0, 0.0, 1.0, 0.0, );
-                    self.insert_node(Vector3::new(140.0 + x as f32, 100.0 + y as f32, 140.0 + z as f32, ), base_color, 2);
+                    self.insert_node(Vector3::new(140.0 + x as f32, 100.0 + y as f32, 140.0 + z as f32, ), base_color, 2, MAX_DEPTH);
                 }
             }
         }
 
-        self.insert_node(Vector3::new(150.0, 190.0, 150.0, ), Vector4::new(1.0, 0.0, 0.0, 0.0, ), 2, );
+        for _ in 0 .. 10000 {
+            let mut rng = rand::thread_rng();
+            let base_color = Vector4::new(0.0, 0.0, 0.5, 0.0, );
+            // self.insert_node(Vector3::new(rng.gen_range(0.0 .. 500.0), rng.gen_range(0.0 .. 500.0), rng.gen_range(0.0 .. 500.0), ), base_color, 2, MAX_DEPTH);
+        }
+
+        self.insert_node(Vector3::new(150.0, 190.0, 150.0, ), Vector4::new(1.0, 0.0, 0.0, 0.0, ), 2, MAX_DEPTH);
 
         // Light
         let light_color = Vector4::new(1.0, 1.0, 0.0, 0.0, );

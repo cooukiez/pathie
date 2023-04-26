@@ -17,12 +17,6 @@ mod uniform;
 mod input;
 mod service;
 
-const NAME: &str = env!("CARGO_PKG_NAME");
-const ENGINE_NAME: &str = "VulkanEngine";
-  
-const WIDTH: u32 = 800;
-const HEIGHT: u32 = 600;
-
 const DEFAULT_STORAGE_BUFFER_SIZE: u64 = 134217728;
 const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 
@@ -53,6 +47,11 @@ pub struct Pref {
     pub pref_present_mode: vk::PresentModeKHR,
     pub img_filter: vk::Filter,
     pub img_scale: f32,
+
+    pub name: String,
+    pub engine_name: String,
+
+    pub start_window_size: vk::Extent2D,
 
     pub use_render_res: bool,
     pub render_res: vk::Extent2D,
@@ -90,6 +89,11 @@ impl Render {
             pref_present_mode: vk::PresentModeKHR::IMMEDIATE,
             img_filter: vk::Filter::LINEAR,
             img_scale: 2.0,
+
+            name: env!("CARGO_PKG_NAME").to_string(),
+            engine_name: "Engine".to_string(),
+
+            start_window_size: vk::Extent2D { width: 800, height: 600 },
 
             use_render_res: true,
             render_res: vk::Extent2D { width: 1920, height: 1080 },
@@ -165,6 +169,8 @@ impl Render {
                             let start = Instant::now();
                             self.state.out_of_date = self.graphic_pipe.draw(&self.interface, &self.pref, ).expect("RENDER_FAILED");
                             self.state.frame_time = start.elapsed();
+
+                            // self.interface.window.set_title(format!("{} - FrameTime {} - Per Second {}", NAME, self.state.frame_time.as_millis(), 1000 / self.state.frame_time.as_millis()).as_str());
                         },
 
                     Event::LoopDestroyed => self.interface.wait_for_gpu().expect("DEVICE_LOST"), _ => (),
