@@ -63,7 +63,8 @@ pub struct Pipe {
 
 impl Pipe {
     /// Create basic index buffer with index data.
-    /// First step for pipe creation.
+    /// This is not intended to be used for anything other
+    /// than instructing the GPU to draw screen squad.
 
     pub fn create_index_buffer(interface: &Interface, index_data: &Vec<u32>, ) -> BufferSet {
         log::info!("Creating IndexBuffer ...");
@@ -84,12 +85,12 @@ impl Pipe {
     }
 
     /// Create basic vertex buffer with vertex data.
-    /// Second step for pipe creation. This method is intended
+    /// This method is intended
     /// to only create screen quad for ray marching technique.
+    /// Same as the index buffer creation function.
 
     pub fn create_vertex_buffer(interface: &Interface, vertex_data: &Vec<Vertex>, ) -> BufferSet {
         log::info!("Creating VertexBuffer ...");
-        
         let vertex_buffer_info = vk::BufferCreateInfo {
             size: std::mem::size_of_val(&vertex_data) as u64,
             usage: vk::BufferUsageFlags::VERTEX_BUFFER,
@@ -106,11 +107,42 @@ impl Pipe {
         )
     }
 
-    /// Create buffer for Uniform struct 
-    /// 
+    /// Create buffer for Uniform struct,
+    /// the uniform x should be aligned correctly.
     
-    pub fn create_uniform_buffer() {
-        
+    pub fn create_uniform_buffer(interface: &Interface, uniform_data: &Uniform, ) -> BufferSet {
+        log::info!("Creating UniformBuffer ...");
+        let uniform_buffer_info = vk::BufferCreateInfo {
+            size: mem::size_of_val(&uniform_data) as u64,
+            usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+
+            ..Default::default()
+        };
+
+        BufferSet::new(
+            interface,
+            uniform_buffer_info,
+            align_of::<Uniform>() as u64,
+            &[uniform_data],
+        )
+    }
+
+    pub fn create_octree_buffer(interface: &Interface, octree_data: &Vec<TreeNode>, ) {
+        let octree_buffer_info = vk::BufferCreateInfo {
+            size: DEFAULT_STORAGE_BUFFER_SIZE,
+            usage: vk::BufferUsageFlags::STORAGE_BUFFER,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+
+            ..Default::default()
+        };
+
+        let octree_buffer = BufferSet::new(
+            interface,
+            octree_buffer_info,
+            align_of::<TreeNode>() as u64,
+            octree_data,
+        );
     }
 
     pub fn init(interface: &Interface, uniform: &mut Uniform, ) -> Self {
@@ -150,40 +182,13 @@ impl Pipe {
             ];
 
             let vertex_buffer = Self::create_vertex_buffer(interface, &vertex_data, );
-
-            log::info!("Creating UniformBuffer ...");
-            let uniform_data = uniform.clone();
-            let uniform_buffer_info = vk::BufferCreateInfo {
-                size: mem::size_of_val(&uniform_data) as u64,
-                usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
-                sharing_mode: vk::SharingMode::EXCLUSIVE,
-
-                ..Default::default()
-            };
-
-            let uniform_buffer = BufferSet::new(
-                interface,
-                uniform_buffer_info,
-                align_of::<Uniform>() as u64,
-                &[uniform_data],
-            );
-
+            
+            let uniform_data: Uniform = uniform.clone();
+            let uniform_buffer = Self::create_uniform_buffer(interface, &uniform_data, );
+            
             log::info!("Creating OctreeBuffer ...");
             let octree_data = octree.data.clone();
-            let octree_buffer_info = vk::BufferCreateInfo {
-                size: DEFAULT_STORAGE_BUFFER_SIZE,
-                usage: vk::BufferUsageFlags::STORAGE_BUFFER,
-                sharing_mode: vk::SharingMode::EXCLUSIVE,
-
-                ..Default::default()
-            };
-
-            let octree_buffer = BufferSet::new(
-                interface,
-                octree_buffer_info,
-                align_of::<TreeNode>() as u64,
-                &octree_data,
-            );
+            
 
             log::info!("Creating LightingBuffer ...");
             let light_data = octree.light_data.clone();
