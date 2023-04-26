@@ -67,12 +67,7 @@ macro_rules! offset_of {
     }};
 }
 
-unsafe extern "system" fn vulkan_debug_callback(
-    flag: vk::DebugUtilsMessageSeverityFlagsEXT,
-    msg_type: vk::DebugUtilsMessageTypeFlagsEXT,
-    callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-    _: *mut c_void,
-) -> vk::Bool32 {
+unsafe extern "system" fn vulkan_debug_callback(flag: vk::DebugUtilsMessageSeverityFlagsEXT, msg_type: vk::DebugUtilsMessageTypeFlagsEXT, callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT, _: *mut c_void, ) -> vk::Bool32 {
     use vk::DebugUtilsMessageSeverityFlagsEXT as Flag;
     let message = CStr::from_ptr((*callback_data).p_message);
 
@@ -183,7 +178,7 @@ impl Interface {
         feature: vk::PhysicalDeviceFeatures,
         instance: &Instance,
         phy_device: vk::PhysicalDevice,
-    ) -> (Device, vk::Queue) {
+    ) -> (Device, vk::Queue, ) {
         unsafe {
             log::info!("Get QueueList ...");
             // Queue info with index and priority
@@ -208,7 +203,7 @@ impl Interface {
 
             let present_queue = device.get_device_queue(queue_family_index, 0);
 
-            (device, present_queue)
+            (device, present_queue, )
         }
     }
 
@@ -324,11 +319,9 @@ impl Interface {
                 .clipped(true)
                 .image_array_layers(1);
 
-            let swapchain = swapchain_loader
+            swapchain_loader
                 .create_swapchain(&swapchain_create_info, None)
-                .unwrap();
-
-            swapchain
+                .unwrap()
         }
     }
 
@@ -387,7 +380,7 @@ impl Interface {
         swapchain: vk::SwapchainKHR,
         surface_format: &vk::SurfaceFormatKHR,
         device: &Device,
-    ) -> (Vec<vk::Image>, Vec<vk::ImageView>) {
+    ) -> (Vec<vk::Image>, Vec<vk::ImageView>, ) {
         unsafe {
             log::info!("Load PresentImgList ...");
             let present_img_list = swapchain_loader.get_swapchain_images(swapchain).unwrap();
@@ -418,7 +411,7 @@ impl Interface {
                 })
                 .collect();
 
-            (present_img_list, present_img_view_list)
+            (present_img_list, present_img_view_list, )
         }
     }
 
@@ -690,7 +683,7 @@ impl Interface {
             })
             .map(|(index, _)| index as _)
     }
-    
+
     pub fn wait_for_gpu(&self) -> Result<(), Box<dyn Error>> {
         unsafe { Ok(self.device.device_wait_idle().unwrap()) }
     }
