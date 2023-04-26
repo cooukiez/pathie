@@ -27,11 +27,12 @@ pub struct Interface {
     pub debug_call_back: vk::DebugUtilsMessengerEXT,
 
     pub phy_device: vk::PhysicalDevice,
-    pub physical_device_prop: vk::PhysicalDeviceProperties,
+    pub phy_device_prop: vk::PhysicalDeviceProperties,
     pub device_memory_prop: vk::PhysicalDeviceMemoryProperties,
     pub queue_family_index: u32,
     pub present_queue: vk::Queue,
-    pub surface_capability: vk::SurfaceCapabilitiesKHR,
+
+    pub surface_capa: vk::SurfaceCapabilitiesKHR,
     pub pre_transform: SurfaceTransformFlagsKHR,
 
     pub surface: vk::SurfaceKHR,
@@ -41,6 +42,8 @@ pub struct Interface {
     pub swapchain: vk::SwapchainKHR,
     pub img_count: u32,
     pub present_mode_list: Vec<vk::PresentModeKHR>,
+    pub present_mode: vk::PresentModeKHR,
+
     pub present_img_list: Vec<vk::Image>,
     pub present_img_view_list: Vec<vk::ImageView>,
 
@@ -82,10 +85,10 @@ unsafe extern "system" fn vulkan_debug_callback(flag: vk::DebugUtilsMessageSever
 }
 
 impl Interface {
-    /// Find suitable physical device or GPU in system.
+    /// Find suitable phy device or GPU in system.
     /// Will select based on queue support
     /// and surface support. Will also output
-    /// limit of group count and other stuff about physical device.
+    /// limit of group count and other stuff about phy device.
 
     pub fn get_phy_device(
         instance: &Instance,
@@ -129,45 +132,45 @@ impl Interface {
                 .expect("NO_SUITABLE_PHY_DEVICE");
 
             // Can be stored, but do not have to be
-            let physical_device_prop = instance.get_physical_device_properties(phy_device);
+            let phy_device_prop = instance.get_physical_device_properties(phy_device);
             let device_memory_prop = instance.get_physical_device_memory_properties(phy_device);
 
             // Output info about device
             log::info!(
                 "Selected PhysicalDevice [ {} ]",
-                &CStr::from_ptr(physical_device_prop.device_name.as_ptr())
+                &CStr::from_ptr(phy_device_prop.device_name.as_ptr())
                     .to_str()
                     .unwrap(),
             );
             log::info!(
                 "Max WorkGroupSize is [ {} x {} x {} ]",
-                physical_device_prop.limits.max_compute_work_group_size[0],
-                physical_device_prop.limits.max_compute_work_group_size[1],
-                physical_device_prop.limits.max_compute_work_group_size[2],
+                phy_device_prop.limits.max_compute_work_group_size[0],
+                phy_device_prop.limits.max_compute_work_group_size[1],
+                phy_device_prop.limits.max_compute_work_group_size[2],
             );
             log::info!(
                 "Max WorkGroupInvocation [ {} ]",
-                physical_device_prop
+                phy_device_prop
                     .limits
                     .max_compute_work_group_invocations,
             );
             log::info!(
                 "Max WorkGroupCount is [ {} x {} x {} ]",
-                physical_device_prop.limits.max_compute_work_group_count[0],
-                physical_device_prop.limits.max_compute_work_group_count[1],
-                physical_device_prop.limits.max_compute_work_group_count[2],
+                phy_device_prop.limits.max_compute_work_group_count[0],
+                phy_device_prop.limits.max_compute_work_group_count[1],
+                phy_device_prop.limits.max_compute_work_group_count[2],
             );
 
             (
                 phy_device,
                 queue_family_index,
-                physical_device_prop,
+                phy_device_prop,
                 device_memory_prop,
             )
         }
     }
 
-    /// Get the queue and device with physical device.
+    /// Get the queue and device with phy device.
     /// Note that device is the so called logical device.
     /// Also note that queue priority is usually one.
 
@@ -237,32 +240,32 @@ impl Interface {
                 .unwrap()[0];
 
             // What can your surface do?
-            let surface_capability = surface_loader
+            let surface_capa = surface_loader
                 .get_physical_device_surface_capabilities(phy_device, surface)
                 .unwrap();
 
             // Often -> Desired image count = 3
-            let mut img_count = surface_capability.min_image_count + 1;
-            if surface_capability.max_image_count > 0
-                && img_count > surface_capability.max_image_count
+            let mut img_count = surface_capa.min_image_count + 1;
+            if surface_capa.max_image_count > 0
+                && img_count > surface_capa.max_image_count
             {
-                img_count = surface_capability.max_image_count;
+                img_count = surface_capa.max_image_count;
             }
 
             // Surface resolution
-            let surface_res = match surface_capability.current_extent.width {
+            let surface_res = match surface_capa.current_extent.width {
                 std::u32::MAX => pref.start_window_size,
-                _ => surface_capability.current_extent,
+                _ => surface_capa.current_extent,
             };
 
             // Rotate screen, mostly used for smartphone app
-            let pre_transform = if surface_capability
+            let pre_transform = if surface_capa
                 .supported_transforms
                 .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
             {
                 vk::SurfaceTransformFlagsKHR::IDENTITY
             } else {
-                surface_capability.current_transform
+                surface_capa.current_transform
             };
 
             // Present mode list of all available
@@ -279,7 +282,7 @@ impl Interface {
 
             (
                 surface_format,
-                surface_capability,
+                surface_capa,
                 img_count,
                 surface_res,
                 pre_transform,
@@ -559,7 +562,7 @@ impl Interface {
                 .enumerate_physical_devices()
                 .expect("ERR_NO_PHY_DEVICE");
 
-            let (phy_device, queue_family_index, physical_device_prop, device_memory_prop) =
+            let (phy_device, queue_family_index, phy_device_prop, device_memory_prop) =
                 Self::get_phy_device(&instance, &phy_device_list, &surface_loader, surface);
 
             let device_ext_list = [
@@ -587,7 +590,7 @@ impl Interface {
 
             let (
                 surface_format,
-                surface_capability,
+                surface_capa,
                 img_count,
                 surface_res,
                 pre_transform,
@@ -633,11 +636,12 @@ impl Interface {
                 debug_call_back,
 
                 phy_device,
-                physical_device_prop,
+                phy_device_prop,
                 device_memory_prop,
                 queue_family_index,
                 present_queue,
-                surface_capability,
+
+                surface_capa,
                 pre_transform,
 
                 surface,
@@ -647,6 +651,8 @@ impl Interface {
                 swapchain,
                 img_count,
                 present_mode_list,
+                present_mode,
+
                 present_img_list,
                 present_img_view_list,
 
@@ -667,11 +673,7 @@ impl Interface {
     /// type index for memory req. Evaluate all available and then
     /// select suitable type and return index.
 
-    pub fn find_memorytype_index(
-        &self,
-        memory_req: &vk::MemoryRequirements,
-        flag: vk::MemoryPropertyFlags,
-    ) -> Option<u32> {
+    pub fn find_memorytype_index(&self, memory_req: &vk::MemoryRequirements, flag: vk::MemoryPropertyFlags, ) -> Option<u32> {
         // Get all available
         self.device_memory_prop.memory_types[..self.device_memory_prop.memory_type_count as _]
             .iter()
