@@ -303,7 +303,7 @@ impl Interface {
         surface_res: vk::Extent2D,
         pre_transform: vk::SurfaceTransformFlagsKHR,
         present_mode: vk::PresentModeKHR,
-        swapchain_loader: Swapchain,
+        swapchain_loader: &Swapchain,
     ) -> vk::SwapchainKHR {
         unsafe {
             log::info!("Creating Swapchain ...");
@@ -465,7 +465,7 @@ impl Interface {
         unsafe {
             log::info!("Creating Window and EventLoop ...");
             let window = WindowBuilder::new()
-                .with_title(pref.name)
+                .with_title(pref.name.clone())
                 .with_inner_size(winit::dpi::LogicalSize::new(
                     f64::from(pref.start_window_size.width),
                     f64::from(pref.start_window_size.height),
@@ -481,8 +481,8 @@ impl Interface {
             let entry = Entry::load().unwrap();
 
             log::info!("Creating VulkanInstance ...");
-            let name = CString::new(pref.name).unwrap();
-            let engine_name = CString::new(pref.engine_name).unwrap();
+            let name = CString::new(pref.name.clone()).unwrap();
+            let engine_name = CString::new(pref.engine_name.clone()).unwrap();
 
             let mut extension_name_list =
                 ash_window::enumerate_required_extensions(window.raw_display_handle())
@@ -606,7 +606,7 @@ impl Interface {
                 surface_res,
                 pre_transform,
                 present_mode,
-                swapchain_loader,
+                &swapchain_loader,
             );
 
             let (pool, command_buffer_list, setup_command_buffer, draw_command_buffer) =

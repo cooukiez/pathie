@@ -19,7 +19,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Copy)]
-struct Vertex {
+pub struct Vertex {
     pos: [f32; 4],
     uv: [f32; 2],
 }
@@ -337,149 +337,13 @@ impl Pipe {
         (viewport, scissor)
     }
 
-    pub fn create_graphic_pipe(
-        desc_set_layout_list: &Vec<DescriptorSetLayout>,
-        interface: &Interface,
-        vert_shader: &Shader,
-        frag_shader: &Shader,
-        render_res: &vk::Extent2D,
-    ) -> (
-        Vec<vk::Viewport>,
-        Vec<vk::Rect2D>,
-        vk::PipelineLayout,
-        vk::GraphicsPipelineCreateInfo,
-    ) {
-        unsafe {
-            let layout_create_info =
-                vk::PipelineLayoutCreateInfo::builder().set_layouts(desc_set_layout_list);
-
-            log::info!("Creating PipelineLayout ...");
-            let pipe_layout = interface
-                .device
-                .create_pipeline_layout(&layout_create_info, None)
-                .unwrap();
-
-            log::info!("Stage Creation ...");
-            // Create basic graphic shader stage info
-            let shader_entry_name = CString::new("main").unwrap();
-            let shader_stage_info_list = [
-                vk::PipelineShaderStageCreateInfo {
-                    module: vert_shader.module,
-                    p_name: shader_entry_name.as_ptr(),
-                    stage: vk::ShaderStageFlags::VERTEX,
-                    ..Default::default()
-                },
-                vk::PipelineShaderStageCreateInfo {
-                    module: frag_shader.module,
-                    p_name: shader_entry_name.as_ptr(),
-                    stage: vk::ShaderStageFlags::FRAGMENT,
-                    ..Default::default()
-                },
-            ];
-
-            // Memory alignment of vertex object
-            let vertex_input_binding_description_list = [vk::VertexInputBindingDescription {
-                binding: 0,
-                stride: mem::size_of::<Vertex>() as u32,
-                input_rate: vk::VertexInputRate::VERTEX,
-            }];
-
-            // Just basic Vertex object stuff
-            let vertex_input_attribute_description_list = [
-                vk::VertexInputAttributeDescription {
-                    location: 0,
-                    binding: 0,
-                    format: vk::Format::R32G32B32A32_SFLOAT,
-                    offset: offset_of!(Vertex, pos) as u32,
-                },
-                vk::VertexInputAttributeDescription {
-                    location: 1,
-                    binding: 0,
-                    format: vk::Format::R32G32_SFLOAT,
-                    offset: offset_of!(Vertex, uv) as u32,
-                },
-            ];
-
-            // Bind vertex input
-            let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
-                .vertex_attribute_descriptions(&vertex_input_attribute_description_list)
-                .vertex_binding_descriptions(&vertex_input_binding_description_list);
-
-            let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo {
-                topology: vk::PrimitiveTopology::TRIANGLE_LIST,
-                ..Default::default()
-            };
-
-            let (viewport, scissor) = Self::create_viewport_and_scissor(render_res);
-
-            let viewport_state_info = vk::PipelineViewportStateCreateInfo::builder()
-                .scissors(&scissor)
-                .viewports(&viewport);
-
-            log::info!("Rasterization ...");
-            let rasterization_info = vk::PipelineRasterizationStateCreateInfo {
-                front_face: vk::FrontFace::COUNTER_CLOCKWISE,
-                line_width: 1.0,
-                polygon_mode: vk::PolygonMode::FILL,
-                ..Default::default()
-            };
-
-            let multisample_state_info = vk::PipelineMultisampleStateCreateInfo::builder()
-                .rasterization_samples(vk::SampleCountFlags::TYPE_1);
-
-            log::info!("Blending ...");
-            let color_blend_attachment_state_list = [vk::PipelineColorBlendAttachmentState {
-                blend_enable: 0,
-
-                src_color_blend_factor: vk::BlendFactor::SRC_COLOR,
-                dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_DST_COLOR,
-
-                color_blend_op: vk::BlendOp::ADD,
-                src_alpha_blend_factor: vk::BlendFactor::ZERO,
-                dst_alpha_blend_factor: vk::BlendFactor::ZERO,
-                alpha_blend_op: vk::BlendOp::ADD,
-
-                color_write_mask: vk::ColorComponentFlags::RGBA,
-            }];
-
-            let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
-                .logic_op(vk::LogicOp::CLEAR)
-                .attachments(&color_blend_attachment_state_list);
-
-            log::info!("Creating DynamicState ...");
-            let dynamic_state = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-            let dynamic_state_info =
-                vk::PipelineDynamicStateCreateInfo::builder().dynamic_states(&dynamic_state);
-
-            let format_list = [interface.surface_format.format];
-            let mut pipe_rendering = vk::PipelineRenderingCreateInfoKHR::builder()
-                .color_attachment_formats(&format_list);
-
-            log::info!("Pipe incoming ...");
-            let graphic_pipe_info = vk::GraphicsPipelineCreateInfo::builder()
-                .stages(&shader_stage_info_list)
-                .vertex_input_state(&vertex_input_state_info)
-                .input_assembly_state(&vertex_input_assembly_state_info)
-                .viewport_state(&viewport_state_info)
-                .rasterization_state(&rasterization_info)
-                .multisample_state(&multisample_state_info)
-                .color_blend_state(&color_blend_state)
-                .dynamic_state(&dynamic_state_info)
-                .layout(pipe_layout)
-                .push_next(&mut pipe_rendering)
-                .build();
-
-            (viewport, scissor, pipe_layout, graphic_pipe_info)
-        }
-    }
-
     // Add compute pipe here
 
     /// Main method for creating necessary pipe list.
     /// This is the main rendering part. The interface is only for
     /// vulkan and API stuff.
 
-    pub fn init_render(interface: &Interface, uniform: &mut Uniform) -> Self {
+    pub fn init_render(interface: &Interface, uniform: &mut Uniform, octree: &Octree, ) -> Self {
         unsafe {
             // Create list of target image for rendering and
             // copying to swapchain image later on.
@@ -520,94 +384,183 @@ impl Pipe {
             let uniform_data: Uniform = uniform.clone();
             let uniform_buffer = Self::create_uniform_buffer(interface, &uniform_data);
 
-            // Create empty octree for buffer creation
-            let empty_octree = Octree::default();
-
-            let octree_data = empty_octree.data;
+            let octree_data = octree.data.clone();
             let octree_buffer =
                 Self::create_octree_buffer(interface, &octree_data, DEFAULT_STORAGE_BUFFER_SIZE);
 
-            let light_data = empty_octree.light_data;
+            let light_data = octree.light_data.clone();
             let light_buffer =
-                Self::create_light_buffer(interface, &light_data, DEFAULT_UNIFORM_BUFFER_SIZE);
+            Self::create_light_buffer(interface, &light_data, DEFAULT_UNIFORM_BUFFER_SIZE);
 
-            let descriptor_pool = Self::create_descriptor_pool(1, 2, 2, interface);
+            log::info!("Creating DescriptorPool ...");
+            let descriptor_size_list = [
+                vk::DescriptorPoolSize { ty: vk::DescriptorType::UNIFORM_BUFFER, descriptor_count: 1, }, // Uniform
+                vk::DescriptorPoolSize { ty: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: 1, }, // Octree - NodeData
+                vk::DescriptorPoolSize { ty: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: 1, }, // Octree - LightData
+            ];
 
-            log::info!("Creating descriptor set layout list ...");
+            let descriptor_pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&descriptor_size_list)
+                .max_sets(descriptor_size_list.len() as u32);
+            let descriptor_pool = interface.device
+                .create_descriptor_pool(&descriptor_pool_info, None, )
+                .unwrap();
+            
+            log::info!("Creating UniformSet ...");
+            let uniform_set_binding_list = [
+                vk::DescriptorSetLayoutBinding { descriptor_type: vk::DescriptorType::UNIFORM_BUFFER, descriptor_count: 1, stage_flags: vk::ShaderStageFlags::FRAGMENT, ..Default::default() },
+            ];
+
+            log::info!("Creating OctreeSet ...");
+            let octree_set_binding_list = [
+                vk::DescriptorSetLayoutBinding { descriptor_type: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: 1, stage_flags: vk::ShaderStageFlags::FRAGMENT, ..Default::default() },
+            ];
+
+            log::info!("Creating LightingSet ...");
+            let light_set_binding_list = [
+                vk::DescriptorSetLayoutBinding { descriptor_type: vk::DescriptorType::STORAGE_BUFFER, descriptor_count: 1, stage_flags: vk::ShaderStageFlags::FRAGMENT, ..Default::default() },
+            ];
+
+            let uniform_desc_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&uniform_set_binding_list);
+            let octree_desc_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&octree_set_binding_list);
+            let light_desc_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&light_set_binding_list);
+
+            log::info!("Allocating whole DescriptorPool ...");
             let desc_set_layout_list: Vec<vk::DescriptorSetLayout> = vec![
-                // Uniform Set
-                Self::create_descriptor_set_layout(
-                    vk::DescriptorType::UNIFORM_BUFFER,
-                    1,
-                    vk::ShaderStageFlags::FRAGMENT,
-                    interface,
-                ),
-                // Octree Set
-                Self::create_descriptor_set_layout(
-                    vk::DescriptorType::STORAGE_BUFFER,
-                    2,
-                    vk::ShaderStageFlags::FRAGMENT,
-                    interface,
-                ),
+                interface.device
+                    .create_descriptor_set_layout(&uniform_desc_info, None, )
+                    .unwrap(),
+                interface.device
+                    .create_descriptor_set_layout(&octree_desc_info, None, )
+                    .unwrap(),
+                interface.device
+                    .create_descriptor_set_layout(&light_desc_info, None, )
+                    .unwrap(),
             ];
 
             let desc_alloc_info = vk::DescriptorSetAllocateInfo::builder()
                 .descriptor_pool(descriptor_pool)
                 .set_layouts(&desc_set_layout_list);
-
-            let descriptor_set_list = interface
-                .device
+            let descriptor_set_list = interface.device
                 .allocate_descriptor_sets(&desc_alloc_info)
                 .unwrap();
 
-            log::info!("Writing descriptor list ...");
+            let uniform_buffer_descriptor = vk::DescriptorBufferInfo { buffer: uniform_buffer.buffer, offset: 0, range: mem::size_of_val(&uniform_data) as u64, };
+            let octree_buffer_descriptor = vk::DescriptorBufferInfo { buffer: octree_buffer.buffer, offset: 0, range: (mem::size_of::<TreeNode>() * octree_data.len()) as u64, };
+            let light_buffer_descriptor = vk::DescriptorBufferInfo { buffer: light_buffer.buffer, offset: 0, range: (mem::size_of::<Light>() * light_data.len()) as u64, };
+
+            log::info!("Writing whole DescriptorPool ...");
             let write_desc_set_list = [
-                Self::write_buffer_descriptor(
-                    uniform_buffer.buffer,
-                    mem::size_of_val(&uniform_data) as u64,
-                    descriptor_set_list[0],
-                    0,
-                    vk::DescriptorType::UNIFORM_BUFFER,
-                ),
-                Self::write_buffer_descriptor(
-                    octree_buffer.buffer,
-                    (mem::size_of::<TreeNode>() * octree_data.len()) as u64,
-                    descriptor_set_list[1],
-                    0,
-                    vk::DescriptorType::STORAGE_BUFFER,
-                ),
-                Self::write_buffer_descriptor(
-                    light_buffer.buffer,
-                    (mem::size_of::<Light>() * light_data.len()) as u64,
-                    descriptor_set_list[1],
-                    1,
-                    vk::DescriptorType::STORAGE_BUFFER,
-                ),
+                vk::WriteDescriptorSet { dst_set: descriptor_set_list[0], descriptor_count: 1, descriptor_type: vk::DescriptorType::UNIFORM_BUFFER, p_buffer_info: &uniform_buffer_descriptor, ..Default::default() },
+                vk::WriteDescriptorSet { dst_set: descriptor_set_list[1], descriptor_count: 1, descriptor_type: vk::DescriptorType::STORAGE_BUFFER, p_buffer_info: &octree_buffer_descriptor, ..Default::default() },
+                vk::WriteDescriptorSet { dst_set: descriptor_set_list[2], descriptor_count: 1, descriptor_type: vk::DescriptorType::STORAGE_BUFFER, p_buffer_info: &light_buffer_descriptor, ..Default::default() },
             ];
 
-            interface
-                .device
-                .update_descriptor_sets(&write_desc_set_list, &[]);
+            interface.device.update_descriptor_sets(&write_desc_set_list, &[], );
 
             let (vert_shader, frag_shader) = Self::load_shader(interface);
 
             // Create graphic pipe
-            let (viewport, scissor, graphic_pipe_layout, graphic_pipe_create_info) =
-                Self::create_graphic_pipe(
-                    &desc_set_layout_list,
-                    interface,
-                    &vert_shader,
-                    &frag_shader,
-                    &interface.surface_res,
-                );
+            let layout_create_info =
+                vk::PipelineLayoutCreateInfo::builder().set_layouts(&desc_set_layout_list);
 
-            let pipe_layout_list = vec![graphic_pipe_layout];
-            let pipe_create_info_list = vec![graphic_pipe_create_info];
-
-            let pipe_list = interface
-                .device
-                .create_graphics_pipelines(vk::PipelineCache::null(), &pipe_create_info_list, None)
+            log::info!("Creating PipelineLayout ...");
+            let pipeline_layout = interface.device
+                .create_pipeline_layout(&layout_create_info, None, )
                 .unwrap();
+
+            log::info!("Stage Creation ...");
+            let shader_entry_name = CString::new("main").unwrap();
+            let shader_stage_info_list = [
+                vk::PipelineShaderStageCreateInfo { module: vert_shader.module, p_name: shader_entry_name.as_ptr(), stage: vk::ShaderStageFlags::VERTEX, ..Default::default() },
+                vk::PipelineShaderStageCreateInfo { module: frag_shader.module, p_name: shader_entry_name.as_ptr(), stage: vk::ShaderStageFlags::FRAGMENT, ..Default::default() },
+            ];
+
+            let vertex_input_binding_description_list = [
+                vk::VertexInputBindingDescription { binding: 0, stride: mem::size_of::<Vertex>() as u32, input_rate: vk::VertexInputRate::VERTEX, }
+            ];
+
+            let vertex_input_attribute_description_list = [
+                vk::VertexInputAttributeDescription { location: 0, binding: 0, format: vk::Format::R32G32B32A32_SFLOAT, offset: offset_of!(Vertex, pos) as u32, },
+                vk::VertexInputAttributeDescription { location: 1, binding: 0, format: vk::Format::R32G32_SFLOAT, offset: offset_of!(Vertex, uv) as u32, },
+            ];
+
+            let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
+                .vertex_attribute_descriptions(&vertex_input_attribute_description_list)
+                .vertex_binding_descriptions(&vertex_input_binding_description_list);
+
+            let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo { topology: vk::PrimitiveTopology::TRIANGLE_LIST, ..Default::default() };
+
+            log::info!("Viewport and Scissor ...");
+            let viewport = vec![
+                vk::Viewport { 
+                    width: interface.surface_res.width as f32,
+                    height: interface.surface_res.height as f32,
+                    max_depth: 1.0,
+
+                    .. Default::default()
+                }
+            ];
+
+            let scissor = vec![interface.surface_res.into()];
+            let viewport_state_info = vk::PipelineViewportStateCreateInfo::builder()
+                .scissors(&scissor)
+                .viewports(&viewport);
+
+            log::info!("Rasterization ...");
+            let rasterization_info = vk::PipelineRasterizationStateCreateInfo { front_face: vk::FrontFace::COUNTER_CLOCKWISE, line_width: 1.0, polygon_mode: vk::PolygonMode::FILL, ..Default::default() };
+            let multisample_state_info = vk::PipelineMultisampleStateCreateInfo::builder()
+                .rasterization_samples(vk::SampleCountFlags::TYPE_1);
+            
+            log::info!("Blending ...");
+            let color_blend_attachment_state_list = [
+                vk::PipelineColorBlendAttachmentState {
+                    blend_enable: 0,
+
+                    src_color_blend_factor: vk::BlendFactor::SRC_COLOR,
+                    dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_DST_COLOR,
+
+                    color_blend_op: vk::BlendOp::ADD,
+                    src_alpha_blend_factor: vk::BlendFactor::ZERO,
+                    dst_alpha_blend_factor: vk::BlendFactor::ZERO,
+                    alpha_blend_op: vk::BlendOp::ADD,
+
+                    color_write_mask: vk::ColorComponentFlags::RGBA,
+                }
+            ];
+
+            let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
+                .logic_op(vk::LogicOp::CLEAR)
+                .attachments(&color_blend_attachment_state_list);
+
+            log::info!("Creating DynamicState ...");
+            let dynamic_state = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+            let dynamic_state_info =
+                vk::PipelineDynamicStateCreateInfo::builder().dynamic_states(&dynamic_state);
+
+            let format_list = [interface.surface_format.format];
+            let mut pipeline_rendering = vk::PipelineRenderingCreateInfoKHR::builder()
+                .color_attachment_formats(&format_list);
+
+            log::info!("Pipe incoming ...");
+            let graphic_pipeline_info_list = vk::GraphicsPipelineCreateInfo::builder()
+                .stages(&shader_stage_info_list)
+                .vertex_input_state(&vertex_input_state_info)
+                .input_assembly_state(&vertex_input_assembly_state_info)
+                .viewport_state(&viewport_state_info)
+                .rasterization_state(&rasterization_info)
+                .multisample_state(&multisample_state_info)
+                .color_blend_state(&color_blend_state)
+                .dynamic_state(&dynamic_state_info)
+                .layout(pipeline_layout)
+                .push_next(&mut pipeline_rendering)
+                .build();
+
+            let pipe_list = interface.device
+                .create_graphics_pipelines(vk::PipelineCache::null(), &[graphic_pipeline_info_list], None, )
+                .unwrap();
+
+            let pipe_layout_list = vec![pipeline_layout];
 
             log::info!("Rendering initialisation finished ...");
             Pipe {
@@ -639,7 +592,6 @@ impl Pipe {
     pub fn copy_image(
         &self,
         interface: &Interface,
-        present_index: u32,
         pref: &Pref,
         src_img: vk::Image,
         dst_img: vk::Image,
@@ -822,7 +774,6 @@ impl Pipe {
 
             self.copy_image(
                 interface,
-                present_index,
                 pref,
                 self.image_target_list[present_index as usize].image_target,
                 interface.present_img_list[present_index as usize],
@@ -908,8 +859,8 @@ impl Pipe {
         pref: &Pref,
     ) {
         unsafe {
-            interface.wait_for_gpu().expect("DEVICE_LOST");
             log::info!("Recreating Swapchain ...");
+            interface.wait_for_gpu().expect("DEVICE_LOST");
 
             // Destroy old swapchain an img list
             self.image_target_list.iter().for_each(|target| {
@@ -943,14 +894,14 @@ impl Pipe {
             self.render_res = self.get_render_res(pref, interface);
             uniform.apply_resolution(self.render_res);
 
-            let swapchain = Interface::create_swapchain(
+            interface.swapchain = Interface::create_swapchain(
                 interface.surface,
                 interface.img_count,
                 &interface.surface_format,
                 interface.surface_res,
                 interface.pre_transform,
                 interface.present_mode,
-                interface.swapchain_loader,
+                &interface.swapchain_loader,
             );
 
             // Create new image target list because size of image has changed

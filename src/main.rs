@@ -1,7 +1,7 @@
 use std::{
     borrow::BorrowMut,
     io::Write,
-    thread,
+    mem, thread,
     time::{Duration, Instant},
 };
 
@@ -10,7 +10,7 @@ use env_logger::fmt::{Color, Formatter};
 use input::Input;
 use interface::Interface;
 use log::Record;
-use octree::Octree;
+use octree::{Octree, TreeNode};
 use pipe::Pipe;
 use uniform::Uniform;
 use winit::{
@@ -19,6 +19,8 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     platform::run_return::EventLoopExtRunReturn,
 };
+
+use crate::octree::Light;
 
 mod input;
 mod interface;
@@ -125,13 +127,11 @@ impl Render {
 
         let input = Input::new();
         let mut uniform = Uniform::default();
-        let mut octree = Octree::default();
-        octree.test_scene();
 
         let interface = Interface::init(&event_loop, &pref);
-        let graphic_pipe = Pipe::init_render(&interface, &mut uniform);
-
-        graphic_pipe.
+        let mut octree = Octree::default();
+        octree.test_scene();
+        let graphic_pipe = Pipe::init_render(&interface, &mut uniform, &octree, );
 
         Render {
             state,
