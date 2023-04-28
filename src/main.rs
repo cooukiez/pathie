@@ -178,6 +178,8 @@ impl Render {
                         event: WindowEvent::CursorMoved { position, .. },
                         ..
                     } => {
+                        /*
+                        
                         self.input.handle_mouse_input(position, &mut self.uniform);
                         self.interface.window.set_cursor_visible(false);
                         self.interface
@@ -187,6 +189,8 @@ impl Render {
                                 self.uniform.resolution.y / 2.0,
                             ))
                             .unwrap();
+
+                        */
                     }
 
                     Event::WindowEvent {

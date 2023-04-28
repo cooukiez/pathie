@@ -4,7 +4,7 @@ use ash::{
         ext::DebugUtils,
         khr::{DynamicRendering, Surface, Swapchain},
     },
-    vk::{self, SurfaceTransformFlagsKHR},
+    vk::{self, MemoryPriorityAllocateInfoEXT, SurfaceTransformFlagsKHR},
     Device, Entry, Instance,
 };
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -28,7 +28,9 @@ pub struct Interface {
 
     pub phy_device: vk::PhysicalDevice,
     pub phy_device_prop: vk::PhysicalDeviceProperties,
-    pub device_memory_prop: vk::PhysicalDeviceMemoryProperties,
+    pub phy_device_memory_prop: vk::PhysicalDeviceMemoryProperties,
+    pub phy_device_feature: vk::PhysicalDeviceFeatures,
+
     pub queue_family_index: u32,
     pub present_queue: vk::Queue,
 
@@ -48,6 +50,7 @@ pub struct Interface {
     pub present_img_view_list: Vec<vk::ImageView>,
 
     pub pool: vk::CommandPool,
+    pub command_buffer_list: Vec<vk::CommandBuffer>,
     pub draw_command_buffer: vk::CommandBuffer,
     pub setup_command_buffer: vk::CommandBuffer,
 
@@ -70,7 +73,12 @@ macro_rules! offset_of {
     }};
 }
 
-unsafe extern "system" fn vulkan_debug_callback(flag: vk::DebugUtilsMessageSeverityFlagsEXT, msg_type: vk::DebugUtilsMessageTypeFlagsEXT, callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT, _: *mut c_void, ) -> vk::Bool32 {
+unsafe extern "system" fn vulkan_debug_callback(
+    flag: vk::DebugUtilsMessageSeverityFlagsEXT,
+    msg_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    _: *mut c_void,
+) -> vk::Bool32 {
     use vk::DebugUtilsMessageSeverityFlagsEXT as Flag;
     let message = CStr::from_ptr((*callback_data).p_message);
 
@@ -85,91 +93,6 @@ unsafe extern "system" fn vulkan_debug_callback(flag: vk::DebugUtilsMessageSever
 }
 
 impl Interface {
-    /// Find suitable phy device or GPU in system.
-    /// Will select based on queue support
-    /// and surface support. Will also output
-    /// limit of group count and other stuff about phy device.
-
-    pub fn get_phy_device(
-        instance: &Instance,
-        phy_device_list: &Vec<vk::PhysicalDevice>,
-        surface_loader: &Surface,
-        surface: vk::SurfaceKHR,
-    ) -> (
-        vk::PhysicalDevice,
-        usize,
-        vk::PhysicalDeviceProperties,
-        vk::PhysicalDeviceMemoryProperties,
-    ) {
-        unsafe {
-            log::info!("Creating PhyDevice ...");
-            let (phy_device, queue_family_index) = phy_device_list
-                .iter()
-                .find_map(|phy_device| {
-                    instance
-                        .get_physical_device_queue_family_properties(*phy_device)
-                        .iter()
-                        .enumerate()
-                        .find_map(|(index, info)| {
-                            let supported =
-                                // Queue support
-                                info.queue_flags.contains(vk::QueueFlags::GRAPHICS)
-                                    && surface_loader
-                                        // Surface support
-                                        .get_physical_device_surface_support(
-                                            *phy_device,
-                                            index as u32,
-                                            surface,
-                                        )
-                                        .unwrap();
-                            if supported {
-                                Some((*phy_device, index))
-                            } else {
-                                None
-                            }
-                        })
-                })
-                .expect("NO_SUITABLE_PHY_DEVICE");
-
-            // Can be stored, but do not have to be
-            let phy_device_prop = instance.get_physical_device_properties(phy_device);
-            let device_memory_prop = instance.get_physical_device_memory_properties(phy_device);
-
-            // Output info about device
-            log::info!(
-                "Selected PhysicalDevice [ {} ]",
-                &CStr::from_ptr(phy_device_prop.device_name.as_ptr())
-                    .to_str()
-                    .unwrap(),
-            );
-            log::info!(
-                "Max WorkGroupSize is [ {} x {} x {} ]",
-                phy_device_prop.limits.max_compute_work_group_size[0],
-                phy_device_prop.limits.max_compute_work_group_size[1],
-                phy_device_prop.limits.max_compute_work_group_size[2],
-            );
-            log::info!(
-                "Max WorkGroupInvocation [ {} ]",
-                phy_device_prop
-                    .limits
-                    .max_compute_work_group_invocations,
-            );
-            log::info!(
-                "Max WorkGroupCount is [ {} x {} x {} ]",
-                phy_device_prop.limits.max_compute_work_group_count[0],
-                phy_device_prop.limits.max_compute_work_group_count[1],
-                phy_device_prop.limits.max_compute_work_group_count[2],
-            );
-
-            (
-                phy_device,
-                queue_family_index,
-                phy_device_prop,
-                device_memory_prop,
-            )
-        }
-    }
-
     /// Get the queue and device with phy device.
     /// Note that device is the so called logical device.
     /// Also note that queue priority is usually one.
@@ -181,7 +104,7 @@ impl Interface {
         feature: vk::PhysicalDeviceFeatures,
         instance: &Instance,
         phy_device: vk::PhysicalDevice,
-    ) -> (Device, vk::Queue, ) {
+    ) -> (Device, vk::Queue) {
         unsafe {
             log::info!("Get QueueList ...");
             // Queue info with index and priority
@@ -193,7 +116,7 @@ impl Interface {
             let mut dynamic_rendering_feature =
                 vk::PhysicalDeviceDynamicRenderingFeaturesKHR::builder().dynamic_rendering(true);
 
-            // Create device info with predefined extension list and dynamic rendering as addition
+            // Create device info with predefined ext list and dynamic rendering as addition
             let device_create_info = vk::DeviceCreateInfo::builder()
                 .queue_create_infos(std::slice::from_ref(&queue_info))
                 .enabled_extension_names(device_ext_list)
@@ -206,7 +129,7 @@ impl Interface {
 
             let present_queue = device.get_device_queue(queue_family_index, 0);
 
-            (device, present_queue, )
+            (device, present_queue)
         }
     }
 
@@ -246,9 +169,7 @@ impl Interface {
 
             // Often -> Desired image count = 3
             let mut img_count = surface_capa.min_image_count + 1;
-            if surface_capa.max_image_count > 0
-                && img_count > surface_capa.max_image_count
-            {
+            if surface_capa.max_image_count > 0 && img_count > surface_capa.max_image_count {
                 img_count = surface_capa.max_image_count;
             }
 
@@ -383,7 +304,7 @@ impl Interface {
         swapchain: vk::SwapchainKHR,
         surface_format: &vk::SurfaceFormatKHR,
         device: &Device,
-    ) -> (Vec<vk::Image>, Vec<vk::ImageView>, ) {
+    ) -> (Vec<vk::Image>, Vec<vk::ImageView>) {
         unsafe {
             log::info!("Load PresentImgList ...");
             let present_img_list = swapchain_loader.get_swapchain_images(swapchain).unwrap();
@@ -414,7 +335,7 @@ impl Interface {
                 })
                 .collect();
 
-            (present_img_list, present_img_view_list, )
+            (present_img_list, present_img_view_list)
         }
     }
 
@@ -484,16 +405,16 @@ impl Interface {
             let name = CString::new(pref.name.clone()).unwrap();
             let engine_name = CString::new(pref.engine_name.clone()).unwrap();
 
-            let mut extension_name_list =
+            let mut ext_name_list =
                 ash_window::enumerate_required_extensions(window.raw_display_handle())
                     .unwrap()
                     .to_vec();
-            extension_name_list.push(DebugUtils::name().as_ptr());
-            
+            ext_name_list.push(DebugUtils::name().as_ptr());
+
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             {
-                extension_names.push(KhrPortabilityEnumerationFn::name().as_ptr());
-                extension_names.push(KhrGetPhysicalDeviceProperties2Fn::name().as_ptr());
+                ext_names.push(KhrPortabilityEnumerationFn::name().as_ptr());
+                ext_names.push(KhrGetPhysicalDeviceProperties2Fn::name().as_ptr());
             }
 
             let (major, minor) = match entry.try_enumerate_instance_version().unwrap() {
@@ -521,7 +442,7 @@ impl Interface {
 
             let create_info = vk::InstanceCreateInfo::builder()
                 .application_info(&app_info)
-                .enabled_extension_names(&extension_name_list)
+                .enabled_extension_names(&ext_name_list)
                 .flags(create_flag);
 
             let instance: Instance = entry
@@ -562,8 +483,35 @@ impl Interface {
                 .enumerate_physical_devices()
                 .expect("ERR_NO_PHY_DEVICE");
 
-            let (phy_device, queue_family_index, phy_device_prop, device_memory_prop) =
-                Self::get_phy_device(&instance, &phy_device_list, &surface_loader, surface);
+            let (phy_device, queue_family_index) = phy_device_list
+                .iter()
+                .find_map(|phy_device| {
+                    instance
+                        .get_physical_device_queue_family_properties(*phy_device)
+                        .iter()
+                        .enumerate()
+                        .find_map(|(index, info)| {
+                            let graphic_surface_support =
+                                info.queue_flags.contains(vk::QueueFlags::GRAPHICS)
+                                    && surface_loader
+                                        .get_physical_device_surface_support(
+                                            *phy_device,
+                                            index as u32,
+                                            surface,
+                                        )
+                                        .unwrap();
+                            if graphic_surface_support {
+                                Some((*phy_device, index))
+                            } else {
+                                None
+                            }
+                        })
+                })
+                .expect("NO_SUITABLE_PHY_DEVICE");
+
+            let phy_device_prop = instance.get_physical_device_properties(phy_device);
+            let phy_device_memory_prop = instance.get_physical_device_memory_properties(phy_device);
+            let phy_device_feature = instance.get_physical_device_features(phy_device);
 
             let device_ext_list = [
                 Swapchain::name().as_ptr(),
@@ -572,21 +520,32 @@ impl Interface {
                 KhrPortabilitySubsetFn::name().as_ptr(),
             ];
 
-            let queue_family_index = queue_family_index as u32;
-
             let feature = vk::PhysicalDeviceFeatures {
                 shader_clip_distance: 1,
                 ..Default::default()
             };
 
-            let (device, present_queue) = Self::get_device_and_queue(
-                queue_family_index,
-                &[1.0],
-                &device_ext_list,
-                feature,
-                &instance,
-                phy_device,
-            );
+            let queue_family_index = queue_family_index as u32;
+            let priority = [1.0];
+
+            log::info!("Get QueueList ...");
+            let queue_info = vk::DeviceQueueCreateInfo::builder()
+                .queue_family_index(queue_family_index)
+                .queue_priorities(&priority);
+
+            let mut dynamic_rendering_feature = vk::PhysicalDeviceDynamicRenderingFeaturesKHR::builder().dynamic_rendering(true);
+
+            let device_create_info = vk::DeviceCreateInfo::builder()
+                .queue_create_infos(std::slice::from_ref(&queue_info))
+                .enabled_extension_names(&device_ext_list)
+                .enabled_features(&feature)
+                .push_next(&mut dynamic_rendering_feature);
+
+            let device: Device = instance
+                .create_device(phy_device, &device_create_info, None, )
+                .unwrap();
+
+            let present_queue = device.get_device_queue(queue_family_index, 0);
 
             let (
                 surface_format,
@@ -609,18 +568,49 @@ impl Interface {
                 &swapchain_loader,
             );
 
-            let (pool, command_buffer_list, setup_command_buffer, draw_command_buffer) =
-                Self::create_command_pool(queue_family_index, &device);
+            log::info!("Creating CommandPool ...");
+            let pool_create_info = vk::CommandPoolCreateInfo::builder()
+                .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+                .queue_family_index(queue_family_index);
+
+            let pool = device.create_command_pool(&pool_create_info, None).unwrap();
+
+            log::info!("Creating CommandBuffer ...");
+            let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+                .command_buffer_count(2)
+                .command_pool(pool)
+                .level(vk::CommandBufferLevel::PRIMARY);
+
+            let command_buffer_list = device
+                .allocate_command_buffers(&command_buffer_allocate_info)
+                .unwrap();
+
+            let setup_command_buffer = command_buffer_list[0];
+            let draw_command_buffer = command_buffer_list[1];
 
             let (present_img_list, present_img_view_list) =
                 Self::load_present_img_list(&swapchain_loader, swapchain, &surface_format, &device);
 
-            let (
-                setup_command_fence,
-                draw_command_fence,
-                present_complete_semaphore,
-                rendering_complete_semaphore,
-            ) = Self::init_sync(&device);
+            log::info!("Init Fence ...");
+            let fence_create_info =
+                vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
+
+            let draw_command_fence = device
+                .create_fence(&fence_create_info, None)
+                .expect("FENCE_CREATE_ERR");
+            let setup_command_fence = device
+                .create_fence(&fence_create_info, None)
+                .expect("FENCE_CREATE_ERR");
+
+            log::info!("Init Semaphore ...");
+            let semaphore_create_info = vk::SemaphoreCreateInfo::default();
+
+            let present_complete_semaphore = device
+                .create_semaphore(&semaphore_create_info, None)
+                .unwrap();
+            let rendering_complete_semaphore = device
+                .create_semaphore(&semaphore_create_info, None)
+                .unwrap();
 
             log::info!("Interface finished ...");
             Interface {
@@ -637,7 +627,9 @@ impl Interface {
 
                 phy_device,
                 phy_device_prop,
-                device_memory_prop,
+                phy_device_memory_prop,
+                phy_device_feature,
+
                 queue_family_index,
                 present_queue,
 
@@ -657,6 +649,7 @@ impl Interface {
                 present_img_view_list,
 
                 pool,
+                command_buffer_list,
                 draw_command_buffer,
                 setup_command_buffer,
 
@@ -673,9 +666,14 @@ impl Interface {
     /// type index for memory req. Evaluate all available and then
     /// select suitable type and return index.
 
-    pub fn find_memorytype_index(&self, memory_req: &vk::MemoryRequirements, flag: vk::MemoryPropertyFlags, ) -> Option<u32> {
+    pub fn find_memorytype_index(
+        &self,
+        memory_req: &vk::MemoryRequirements,
+        flag: vk::MemoryPropertyFlags,
+    ) -> Option<u32> {
         // Get all available
-        self.device_memory_prop.memory_types[..self.device_memory_prop.memory_type_count as _]
+        self.phy_device_memory_prop.memory_types
+            [..self.phy_device_memory_prop.memory_type_count as _]
             .iter()
             .enumerate()
             // Find suitable type
