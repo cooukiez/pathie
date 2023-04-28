@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use ash::vk;
-use cgmath::{Vector3, Vector2, Vector4};
+use cgmath::{Vector2, Vector3, Vector4};
 
 use crate::{octree::ROOT_SPAN, service::Vector};
 
@@ -9,7 +9,7 @@ use crate::{octree::ROOT_SPAN, service::Vector};
 #[derive(Clone, Debug, Copy)]
 pub struct Uniform {
     pub pos: Vector4<f32>,
-    
+
     pub resolution: Vector2<f32>,
     pub mouse_pos: Vector2<f32>,
 
@@ -22,16 +22,18 @@ pub struct Uniform {
 // Simple Data storage
 impl Uniform {
     pub fn apply_resolution(&mut self, resolution: vk::Extent2D) {
-        self.resolution = Vector2::new(resolution.width as f32, resolution.height as f32, );
+        self.resolution = Vector2::new(resolution.width as f32, resolution.height as f32);
     }
-    
-    pub fn apply_velocity(&mut self, velocity: Vector3<f32>, ) {
+
+    pub fn apply_velocity(&mut self, velocity: Vector3<f32>) {
         self.pos += velocity.extend(0.0);
     }
 
-    pub fn move_mouse(&mut self, mouse_velocity: Vector2<f32>, ) {
+    pub fn move_mouse(&mut self, mouse_velocity: Vector2<f32>) {
         self.mouse_pos += mouse_velocity;
-        self.mouse_pos = self.mouse_pos.boundary(Vector2::from([0.0; 2]), self.resolution);
+        self.mouse_pos = self
+            .mouse_pos
+            .boundary(Vector2::from([0.0; 2]), self.resolution);
     }
 
     pub fn update_uniform(&mut self, cur_time: Duration) {
@@ -51,7 +53,7 @@ impl Default for Uniform {
 
             time: 0,
 
-            padding: [0; 2]
+            padding: [0; 2],
         }
     }
 }

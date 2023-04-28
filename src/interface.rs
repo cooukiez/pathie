@@ -12,11 +12,7 @@ use std::{
     error::Error,
     ffi::{c_void, CStr, CString},
 };
-use winit::{
-    event_loop::EventLoop,
-    monitor::MonitorHandle,
-    window::{Window, WindowBuilder},
-};
+use winit::{event_loop::EventLoop, monitor::MonitorHandle, window::WindowBuilder};
 
 pub struct Interface {
     pub entry: Entry,
@@ -33,7 +29,7 @@ pub struct Interface {
 
     pub phy_device: vk::PhysicalDevice,
     pub phy_device_prop: vk::PhysicalDeviceProperties,
-    pub phy_device_mem_porp: vk::PhysicalDeviceMemoryProperties,
+    pub phy_device_mem_prop: vk::PhysicalDeviceMemoryProperties,
 
     pub queue_family_index: u32,
     pub device: Device,
@@ -44,7 +40,7 @@ pub struct Interface {
     pub swap_img_count: u32,
 
     pub surface_res: vk::Extent2D,
-    pub present_mode: vk::PresentModeKHR,
+    pub present_mode_list: Vec<vk::PresentModeKHR>,
 
     pub swapchain_loader: Swapchain,
     pub swapchain: vk::SwapchainKHR,
@@ -75,7 +71,12 @@ macro_rules! offset_of {
     }};
 }
 
-unsafe extern "system" fn vulkan_debug_callback(flag: vk::DebugUtilsMessageSeverityFlagsEXT, msg_type: vk::DebugUtilsMessageTypeFlagsEXT, callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT, _: *mut c_void, ) -> vk::Bool32 {
+unsafe extern "system" fn vulkan_debug_callback(
+    flag: vk::DebugUtilsMessageSeverityFlagsEXT,
+    msg_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    _: *mut c_void,
+) -> vk::Bool32 {
     use vk::DebugUtilsMessageSeverityFlagsEXT as Flag;
     let message = CStr::from_ptr((*callback_data).p_message);
 
@@ -218,9 +219,10 @@ impl Interface {
                 .expect("NO_SUITABLE_PHY_DEVICE");
 
             let phy_device_prop = instance.get_physical_device_properties(phy_device);
-            let phy_device_mem_porp = instance.get_physical_device_memory_properties(phy_device);
+            let phy_device_mem_prop = instance.get_physical_device_memory_properties(phy_device);
 
-            let device_ext_list = [
+            let queue_family_index = queue_family_index as u32;
+            let device_extension_list = [
                 Swapchain::name().as_ptr(),
                 DynamicRendering::name().as_ptr(),
                 #[cfg(any(target_os = "macos", target_os = "ios",))]
@@ -231,12 +233,10 @@ impl Interface {
                 shader_clip_distance: 1,
                 ..Default::default()
             };
-
-            let queue_family_index = queue_family_index as u32;
             let priority = [1.0];
 
             log::info!("Get QueueList ...");
-            let queue_info: vk::DeviceQueueCreateInfoBuilder = vk::DeviceQueueCreateInfo::builder()
+            let queue_info = vk::DeviceQueueCreateInfo::builder()
                 .queue_family_index(queue_family_index)
                 .queue_priorities(&priority);
 
@@ -245,7 +245,7 @@ impl Interface {
 
             let device_create_info = vk::DeviceCreateInfo::builder()
                 .queue_create_infos(std::slice::from_ref(&queue_info))
-                .enabled_extension_names(&device_ext_list)
+                .enabled_extension_names(&device_extension_list)
                 .enabled_features(&feature)
                 .push_next(&mut dynamic_rendering_feature);
 
@@ -255,45 +255,52 @@ impl Interface {
 
             let present_queue = device.get_device_queue(queue_family_index, 0);
 
-            let surface_capa = surface_loader
+            log::info!("Load Surface ...");
+            let surface_format = surface_loader
+                .get_physical_device_surface_formats(phy_device, surface)
+                .unwrap()[0];
+
+            let surface_capability = surface_loader
                 .get_physical_device_surface_capabilities(phy_device, surface)
                 .unwrap();
 
-            log::info!("Load SurfaceInfo ...");
-            let surface_format = surface_loader
-                .get_physical_device_surface_formats(phy_device, surface, )
-                .unwrap()[0];
-            
-            let mut swap_img_count = surface_capa.min_image_count + 1;
-            if surface_capa.max_image_count > 0 && swap_img_count > surface_capa.max_image_count {
-                swap_img_count = surface_capa.max_image_count;
+            let mut swap_img_count = surface_capability.min_image_count + 1;
+            if surface_capability.max_image_count > 0
+                && swap_img_count > surface_capability.max_image_count
+            {
+                swap_img_count = surface_capability.max_image_count;
             }
-            
+
             let dim = window.inner_size();
-            let surface_res = match surface_capa.current_extent.width {
-                std::u32::MAX => vk::Extent2D { width: dim.width, height: dim.height, },
-                _ => surface_capa.current_extent,
+            let surface_res = match surface_capability.current_extent.width {
+                std::u32::MAX => vk::Extent2D {
+                    width: dim.width,
+                    height: dim.height,
+                },
+                _ => surface_capability.current_extent,
             };
 
-            let pre_transform = 
-                if surface_capa.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::IDENTITY) {
-                    vk::SurfaceTransformFlagsKHR::IDENTITY
-                } else {
-                    surface_capa.current_transform
-                };
+            let pre_transform = if surface_capability
+                .supported_transforms
+                .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
+            {
+                vk::SurfaceTransformFlagsKHR::IDENTITY
+            } else {
+                surface_capability.current_transform
+            };
 
             let present_mode_list = surface_loader
-                .get_physical_device_surface_present_modes(phy_device, surface, )
+                .get_physical_device_surface_present_modes(phy_device, surface)
                 .unwrap();
-            
+
             let present_mode = present_mode_list
                 .iter()
                 .cloned()
-                .find(| &mode | mode == pref.pref_present_mode)
+                .find(|&mode| mode == pref.pref_present_mode)
                 .unwrap_or(vk::PresentModeKHR::FIFO);
-            
+
             log::info!("Creating Swapchain ...");
-            let swapchain_loader = Swapchain::new(&instance, &device, );
+            let swapchain_loader = Swapchain::new(&instance, &device);
 
             let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
                 .surface(surface)
@@ -310,7 +317,7 @@ impl Interface {
                 .image_array_layers(1);
 
             let swapchain = swapchain_loader
-                .create_swapchain(&swapchain_create_info, None, )
+                .create_swapchain(&swapchain_create_info, None)
                 .unwrap();
 
             log::info!("Creating CommandPool ...");
@@ -321,17 +328,43 @@ impl Interface {
             let pool = device.create_command_pool(&pool_create_info, None).unwrap();
 
             log::info!("Creating CommandBuffer ...");
-            let cmd_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+            let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
                 .command_buffer_count(2)
                 .command_pool(pool)
                 .level(vk::CommandBufferLevel::PRIMARY);
 
-            let cmd_buffer_list = device
-                .allocate_command_buffers(&cmd_buffer_allocate_info)
+            let command_buffer_list = device
+                .allocate_command_buffers(&command_buffer_allocate_info)
                 .unwrap();
 
-            let setup_cmd_buffer = cmd_buffer_list[0];
-            let draw_cmd_buffer = cmd_buffer_list[1];
+            let setup_cmd_buffer = command_buffer_list[0];
+            let draw_cmd_buffer = command_buffer_list[1];
+
+            log::info!("Load PresentImgList ...");
+            let present_img_list = swapchain_loader.get_swapchain_images(swapchain).unwrap();
+            let present_img_view_list: Vec<vk::ImageView> = present_img_list
+                .iter()
+                .map(|&image| {
+                    let create_view_info = vk::ImageViewCreateInfo::builder()
+                        .view_type(vk::ImageViewType::TYPE_2D)
+                        .format(surface_format.format)
+                        .components(vk::ComponentMapping {
+                            r: vk::ComponentSwizzle::R,
+                            g: vk::ComponentSwizzle::G,
+                            b: vk::ComponentSwizzle::B,
+                            a: vk::ComponentSwizzle::A,
+                        })
+                        .subresource_range(vk::ImageSubresourceRange {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            base_mip_level: 0,
+                            level_count: 1,
+                            base_array_layer: 0,
+                            layer_count: 1,
+                        })
+                        .image(image);
+                    device.create_image_view(&create_view_info, None).unwrap()
+                })
+                .collect();
 
             log::info!("Init Fence ...");
             let fence_create_info =
@@ -343,34 +376,6 @@ impl Interface {
             let setup_cmd_fence = device
                 .create_fence(&fence_create_info, None)
                 .expect("FENCE_CREATE_ERR");
-
-                log::info!("Load PresentImgList ...");
-                let present_img_list = swapchain_loader.get_swapchain_images(swapchain).unwrap();
-                let present_img_view_list: Vec<vk::ImageView> = present_img_list
-                    .iter()
-                    .map(|&image| {
-                        let create_view_info = vk::ImageViewCreateInfo::builder()
-                            .view_type(vk::ImageViewType::TYPE_2D)
-                            .format(surface_format.format)
-                            // Change image channel ordering here
-                            .components(vk::ComponentMapping {
-                                r: vk::ComponentSwizzle::R,
-                                g: vk::ComponentSwizzle::G,
-                                b: vk::ComponentSwizzle::B,
-                                a: vk::ComponentSwizzle::A,
-                            })
-                            // Change img range here
-                            .subresource_range(vk::ImageSubresourceRange {
-                                aspect_mask: vk::ImageAspectFlags::COLOR,
-                                base_mip_level: 0,
-                                level_count: 1,
-                                base_array_layer: 0,
-                                layer_count: 1,
-                            })
-                            .image(image);
-                        device.create_image_view(&create_view_info, None).unwrap()
-                    })
-                    .collect();
 
             log::info!("Init Semaphore ...");
             let semaphore_create_info = vk::SemaphoreCreateInfo::default();
@@ -399,7 +404,7 @@ impl Interface {
 
                 phy_device,
                 phy_device_prop,
-                phy_device_mem_porp,
+                phy_device_mem_prop,
 
                 queue_family_index,
                 device,
@@ -410,7 +415,7 @@ impl Interface {
                 swap_img_count,
 
                 surface_res,
-                present_mode,
+                present_mode_list,
 
                 swapchain_loader,
                 swapchain,
@@ -431,111 +436,12 @@ impl Interface {
         }
     }
 
-    pub fn init_swapchain(
-        surface_loader: &Surface,
-        phy_device: vk::PhysicalDevice,
-        surface: vk::SurfaceKHR,
-        window: &Window,
-        pref: &Pref,
-        swap_img_count: u32,
-        surface_format: vk::SurfaceFormatKHR,
-        pre_transform: vk::SurfaceTransformFlagsKHR,
-        swapchain_loader: &Swapchain,
-        device: &Device,
-    ) -> (
-        vk::Extent2D,
-        vk::PresentModeKHR,
-        vk::SwapchainKHR,
-        Vec<vk::Image>,
-        Vec<vk::ImageView>,
-    ) {
-        unsafe {
-            let surface_capa = surface_loader
-                .get_physical_device_surface_capabilities(phy_device, surface)
-                .unwrap();
-
-            log::info!("Init Swapchain ...");
-            let dim = window.inner_size();
-            let surface_res = match surface_capa.current_extent.width {
-                std::u32::MAX => vk::Extent2D {
-                    width: dim.width,
-                    height: dim.height,
-                },
-                _ => surface_capa.current_extent,
-            };
-
-            let present_mode_list = surface_loader
-                .get_physical_device_surface_present_modes(phy_device, surface)
-                .unwrap();
-
-            let present_mode = present_mode_list
-                .iter()
-                .cloned()
-                .find(|&mode| mode == pref.pref_present_mode)
-                .unwrap_or(vk::PresentModeKHR::FIFO);
-
-            let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
-                .surface(surface)
-                .min_image_count(swap_img_count)
-                .image_color_space(surface_format.color_space)
-                .image_format(surface_format.format)
-                .image_extent(surface_res)
-                .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-                .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .pre_transform(pre_transform)
-                .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-                .present_mode(present_mode)
-                .clipped(true)
-                .image_array_layers(1);
-
-            let swapchain = swapchain_loader
-                .create_swapchain(&swapchain_create_info, None)
-                .unwrap();
-
-            log::info!("Load PresentImgList ...");
-            let present_img_list = swapchain_loader.get_swapchain_images(swapchain).unwrap();
-            let present_img_view_list: Vec<vk::ImageView> = present_img_list
-                .iter()
-                .map(|&image| {
-                    let create_view_info = vk::ImageViewCreateInfo::builder()
-                        .view_type(vk::ImageViewType::TYPE_2D)
-                        .format(surface_format.format)
-                        // Change image channel ordering here
-                        .components(vk::ComponentMapping {
-                            r: vk::ComponentSwizzle::R,
-                            g: vk::ComponentSwizzle::G,
-                            b: vk::ComponentSwizzle::B,
-                            a: vk::ComponentSwizzle::A,
-                        })
-                        // Change img range here
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                        .image(image);
-                    device.create_image_view(&create_view_info, None).unwrap()
-                })
-                .collect();
-
-            (
-                surface_res,
-                present_mode,
-                swapchain,
-                present_img_list,
-                present_img_view_list,
-            )
-        }
-    }
-
     pub fn find_memorytype_index(
         &self,
         memory_req: &vk::MemoryRequirements,
         flag: vk::MemoryPropertyFlags,
     ) -> Option<u32> {
-        self.phy_device_mem_porp.memory_types[..self.phy_device_mem_porp.memory_type_count as _]
+        self.phy_device_mem_prop.memory_types[..self.phy_device_mem_prop.memory_type_count as _]
             .iter()
             .enumerate()
             .find(|(index, memory_type)| {
