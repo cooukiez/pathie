@@ -7,7 +7,7 @@ use std::{
 
 use ash::{
     util::{read_spv, Align},
-    vk::{self, DescriptorSet, DescriptorSetLayout, ImageAspectFlags},
+    vk
 };
 
 use crate::{
@@ -47,8 +47,8 @@ pub struct Pipe {
     pub light_buffer: BufferSet,
 
     pub descriptor_pool: vk::DescriptorPool,
-    pub desc_set_layout_list: Vec<DescriptorSetLayout>,
-    pub descriptor_set_list: Vec<DescriptorSet>,
+    pub desc_set_layout_list: Vec<vk::DescriptorSetLayout>,
+    pub descriptor_set_list: Vec<vk::DescriptorSet>,
 
     pub vertex_code: Vec<u32>,
     pub frag_code: Vec<u32>,
@@ -148,80 +148,37 @@ impl Pipe {
                 &light_data,
             );
 
-            log::info!("Creating DescriptorPool ...");
-            let descriptor_size_list = [
-                vk::DescriptorPoolSize {
-                    ty: vk::DescriptorType::UNIFORM_BUFFER,
-                    descriptor_count: 1,
-                }, // Uniform
-                vk::DescriptorPoolSize {
-                    ty: vk::DescriptorType::STORAGE_BUFFER,
-                    descriptor_count: 1,
-                }, // Octree - NodeData
-                vk::DescriptorPoolSize {
-                    ty: vk::DescriptorType::STORAGE_BUFFER,
-                    descriptor_count: 1,
-                }, // Octree - LightData
-            ];
+            let descriptor_pool = Self::create_descriptor_pool(1, 2, 3, interface);
 
-            let descriptor_pool_info = vk::DescriptorPoolCreateInfo::builder()
-                .pool_sizes(&descriptor_size_list)
-                .max_sets(descriptor_size_list.len() as u32);
-            let descriptor_pool = interface
-                .device
-                .create_descriptor_pool(&descriptor_pool_info, None)
-                .unwrap();
-
-            log::info!("Creating UniformSet ...");
-            let uniform_set_binding_list = [vk::DescriptorSetLayoutBinding {
-                descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-                descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                ..Default::default()
-            }];
-
-            log::info!("Creating OctreeSet ...");
-            let octree_set_binding_list = [vk::DescriptorSetLayoutBinding {
-                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
-                descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                ..Default::default()
-            }];
-
-            log::info!("Creating LightingSet ...");
-            let light_set_binding_list = [vk::DescriptorSetLayoutBinding {
-                descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
-                descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                ..Default::default()
-            }];
-
-            let uniform_desc_info =
-                vk::DescriptorSetLayoutCreateInfo::builder().bindings(&uniform_set_binding_list);
-            let octree_desc_info =
-                vk::DescriptorSetLayoutCreateInfo::builder().bindings(&octree_set_binding_list);
-            let light_desc_info =
-                vk::DescriptorSetLayoutCreateInfo::builder().bindings(&light_set_binding_list);
-
-            log::info!("Allocating whole DescriptorPool ...");
+            log::info!("Creating descriptor set layout list ...");
             let desc_set_layout_list: Vec<vk::DescriptorSetLayout> = vec![
-                interface
-                    .device
-                    .create_descriptor_set_layout(&uniform_desc_info, None)
-                    .unwrap(),
-                interface
-                    .device
-                    .create_descriptor_set_layout(&octree_desc_info, None)
-                    .unwrap(),
-                interface
-                    .device
-                    .create_descriptor_set_layout(&light_desc_info, None)
-                    .unwrap(),
+                // Uniform Set
+                Self::create_descriptor_set_layout(
+                    vk::DescriptorType::UNIFORM_BUFFER,
+                    1,
+                    vk::ShaderStageFlags::FRAGMENT,
+                    interface,
+                ),
+                // Octree Set
+                Self::create_descriptor_set_layout(
+                    vk::DescriptorType::STORAGE_BUFFER,
+                    1,
+                    vk::ShaderStageFlags::FRAGMENT,
+                    interface,
+                ),
+                // Light Set
+                Self::create_descriptor_set_layout(
+                    vk::DescriptorType::STORAGE_BUFFER,
+                    1,
+                    vk::ShaderStageFlags::FRAGMENT,
+                    interface,
+                ),
             ];
 
             let desc_alloc_info = vk::DescriptorSetAllocateInfo::builder()
                 .descriptor_pool(descriptor_pool)
                 .set_layouts(&desc_set_layout_list);
+
             let descriptor_set_list = interface
                 .device
                 .allocate_descriptor_sets(&desc_alloc_info)
@@ -243,7 +200,7 @@ impl Pipe {
                 range: (mem::size_of::<Light>() * light_data.len()) as u64,
             };
 
-            log::info!("Writing whole DescriptorPool ...");
+            log::info!("Writing descriptor list ...");
             let write_desc_set_list = [
                 vk::WriteDescriptorSet {
                     dst_set: descriptor_set_list[0],
@@ -448,6 +405,73 @@ impl Pipe {
         }
     }
 
+    /// Desciptor describe some sort buffer like storage buffer.
+    /// Descriptor set is group of descriptor.
+    /// Specify the descriptor count for each storage type here.
+    /// Uniform buffer count and storage buffer descriptor count.
+    /// Max set is the max amount of set in the pool.
+
+    pub fn create_descriptor_pool(
+        uniform_desc_count: u32,
+        storage_desc_count: u32,
+        max_set: u32,
+        interface: &Interface,
+    ) -> vk::DescriptorPool {
+        unsafe {
+            // Specify descriptor count for each storage type
+            let descriptor_size_list = [
+                vk::DescriptorPoolSize {
+                    ty: vk::DescriptorType::UNIFORM_BUFFER,
+                    descriptor_count: uniform_desc_count,
+                },
+                vk::DescriptorPoolSize {
+                    ty: vk::DescriptorType::STORAGE_BUFFER,
+                    descriptor_count: storage_desc_count,
+                },
+            ];
+
+            log::info!("Creating DescriptorPool ...");
+            let descriptor_pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&descriptor_size_list)
+                .max_sets(max_set);
+
+            interface
+                .device
+                .create_descriptor_pool(&descriptor_pool_info, None)
+                .unwrap()
+        }
+    }
+
+    /// Create descriptor set which is group of descriptor.
+    /// Specify the type and count, could cause error if more used than
+    /// expect in pool creation. Same goes for descriptor set. If set count
+    /// is bigger than max set, it will throw an error.
+
+    pub fn create_descriptor_set_layout(
+        descriptor_type: vk::DescriptorType,
+        descriptor_count: u32,
+        shader_stage: vk::ShaderStageFlags,
+        interface: &Interface,
+    ) -> vk::DescriptorSetLayout {
+        unsafe {
+            log::info!("Creating DescriptorSet ...");
+            let set_binding_info = [vk::DescriptorSetLayoutBinding {
+                descriptor_type,
+                descriptor_count,
+                stage_flags: shader_stage,
+                ..Default::default()
+            }];
+
+            let desc_info =
+                vk::DescriptorSetLayoutCreateInfo::builder().bindings(&set_binding_info);
+
+            interface
+                .device
+                .create_descriptor_set_layout(&desc_info, None)
+                .unwrap()
+        }
+    }
+
     pub fn draw(&self, interface: &Interface, pref: &Pref) -> Result<bool, Box<dyn Error>> {
         unsafe {
             let next_image = interface.swapchain_loader.acquire_next_image(
@@ -563,13 +587,13 @@ impl Pipe {
                 .cmd_end_rendering(interface.draw_cmd_buffer);
 
             let src = vk::ImageSubresourceLayers {
-                aspect_mask: ImageAspectFlags::COLOR,
+                aspect_mask: vk::ImageAspectFlags::COLOR,
                 mip_level: 0,
                 base_array_layer: 0,
                 layer_count: 1,
             };
             let dst = vk::ImageSubresourceLayers {
-                aspect_mask: ImageAspectFlags::COLOR,
+                aspect_mask: vk::ImageAspectFlags::COLOR,
                 mip_level: 0,
                 base_array_layer: 0,
                 layer_count: 1,
