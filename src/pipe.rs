@@ -472,6 +472,71 @@ impl Pipe {
         }
     }
 
+    /// Function for blitting one image to another image with possibile
+    /// scaling implemented. This function is for fast usage
+    /// and not for changing the copy setting.
+
+    pub fn copy_image(
+        &self,
+        interface: &Interface,
+        pref: &Pref,
+        src_img: vk::Image,
+        dst_img: vk::Image,
+        src_res: vk::Extent2D,
+        dst_res: vk::Extent2D,
+    ) {
+        unsafe {
+            let src = vk::ImageSubresourceLayers {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                mip_level: 0,
+                base_array_layer: 0,
+                layer_count: 1,
+            };
+            let dst = vk::ImageSubresourceLayers {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                mip_level: 0,
+                base_array_layer: 0,
+                layer_count: 1,
+            };
+
+            let blit = vk::ImageBlit {
+                src_subresource: src,
+                src_offsets: [
+                    vk::Offset3D { x: 0, y: 0, z: 0 },
+                    vk::Offset3D {
+                        x: src_res.width as i32,
+                        y: src_res.height as i32,
+                        z: 1,
+                    },
+                ],
+                dst_subresource: dst,
+                dst_offsets: [
+                    vk::Offset3D { x: 0, y: 0, z: 0 },
+                    vk::Offset3D {
+                        x: dst_res.width as i32,
+                        y: dst_res.height as i32,
+                        z: 1,
+                    },
+                ],
+            };
+
+            interface.device.cmd_blit_image(
+                interface.draw_cmd_buffer,
+                src_img,
+                vk::ImageLayout::UNDEFINED,
+                dst_img,
+                vk::ImageLayout::UNDEFINED,
+                &[blit],
+                pref.img_filter,
+            );
+        }
+    }
+
+    /// Draw the next image onto the window
+    /// Get swapchain image, begin draw, render with
+    /// pipe onto image target and finally blit to swapchain
+    /// image. Then end draw.
+
     pub fn draw(&self, interface: &Interface, pref: &Pref) -> Result<bool, Box<dyn Error>> {
         unsafe {
             let next_image = interface.swapchain_loader.acquire_next_image(
@@ -586,48 +651,13 @@ impl Pipe {
                 .device
                 .cmd_end_rendering(interface.draw_cmd_buffer);
 
-            let src = vk::ImageSubresourceLayers {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                mip_level: 0,
-                base_array_layer: 0,
-                layer_count: 1,
-            };
-            let dst = vk::ImageSubresourceLayers {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                mip_level: 0,
-                base_array_layer: 0,
-                layer_count: 1,
-            };
-
-            let blit = vk::ImageBlit {
-                src_subresource: src,
-                src_offsets: [
-                    vk::Offset3D { x: 0, y: 0, z: 0 },
-                    vk::Offset3D {
-                        x: self.render_res.width as i32,
-                        y: self.render_res.height as i32,
-                        z: 1,
-                    },
-                ],
-                dst_subresource: dst,
-                dst_offsets: [
-                    vk::Offset3D { x: 0, y: 0, z: 0 },
-                    vk::Offset3D {
-                        x: interface.surface_res.width as i32,
-                        y: interface.surface_res.height as i32,
-                        z: 1,
-                    },
-                ],
-            };
-
-            interface.device.cmd_blit_image(
-                interface.draw_cmd_buffer,
+            self.copy_image(
+                interface,
+                pref,
                 self.image_target_list[present_index as usize].image_target,
-                vk::ImageLayout::UNDEFINED,
                 interface.present_img_list[present_index as usize],
-                vk::ImageLayout::UNDEFINED,
-                &[blit],
-                pref.img_filter,
+                self.render_res,
+                interface.surface_res,
             );
 
             // Finish Draw
@@ -682,6 +712,10 @@ impl Pipe {
         }
     }
 
+    /// This function is called when the swapchain is outdated
+    /// or has the wrong size basically whenever you change the window
+    /// size or just minimize the window.
+
     pub fn recreate_swapchain(
         &mut self,
         interface: &mut Interface,
@@ -692,10 +726,13 @@ impl Pipe {
             interface.wait_for_gpu().expect("DEVICE_LOST");
 
             log::info!("Recreating Swapchain ...");
+
+            // Destroy Image Target
             self.image_target_list.iter().for_each(|target| {
                 target.destroy(interface);
             });
 
+            // Destroy Swapchain and SwapchainImgList
             interface
                 .present_img_view_list
                 .iter()
@@ -710,25 +747,7 @@ impl Pipe {
                 .get_physical_device_surface_capabilities(interface.phy_device, interface.surface)
                 .unwrap();
 
-            // Select new Dimension
-            let dim = interface.window.inner_size();
-            interface.surface_res = match surface_capa.current_extent.width {
-                std::u32::MAX => vk::Extent2D {
-                    width: dim.width,
-                    height: dim.height,
-                },
-                _ => surface_capa.current_extent,
-            };
-
-            // Select new RenderResolution
-            self.render_res = if pref.use_render_res && interface.window.fullscreen() != None {
-                pref.render_res
-            } else {
-                vk::Extent2D {
-                    width: (interface.surface_res.width as f32 / pref.img_scale) as u32,
-                    height: (interface.surface_res.height as f32 / pref.img_scale) as u32,
-                }
-            };
+            (interface.surface_res, self.render_res) = Interface::get_res(&interface.window, pref, &surface_capa);
 
             uniform.apply_resolution(self.render_res);
 
@@ -762,6 +781,7 @@ impl Pipe {
                 .swapchain_loader
                 .get_swapchain_images(interface.swapchain)
                 .unwrap();
+            
             interface.present_img_view_list = interface
                 .present_img_list
                 .iter()

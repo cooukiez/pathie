@@ -110,7 +110,7 @@ impl Render {
                 height: 600,
             },
 
-            use_render_res: true,
+            use_render_res: false,
             render_res: vk::Extent2D {
                 width: 1920,
                 height: 1080,

@@ -12,7 +12,7 @@ use std::{
     error::Error,
     ffi::{c_void, CStr, CString},
 };
-use winit::{event_loop::EventLoop, monitor::MonitorHandle, window::WindowBuilder};
+use winit::{event_loop::EventLoop, monitor::MonitorHandle, window::{WindowBuilder, Window}};
 
 pub struct Interface {
     pub entry: Entry,
@@ -260,33 +260,26 @@ impl Interface {
                 .get_physical_device_surface_formats(phy_device, surface)
                 .unwrap()[0];
 
-            let surface_capability = surface_loader
+            let surface_capa = surface_loader
                 .get_physical_device_surface_capabilities(phy_device, surface)
                 .unwrap();
 
-            let mut swap_img_count = surface_capability.min_image_count + 1;
-            if surface_capability.max_image_count > 0
-                && swap_img_count > surface_capability.max_image_count
+            let mut swap_img_count = surface_capa.min_image_count + 1;
+            if surface_capa.max_image_count > 0
+                && swap_img_count > surface_capa.max_image_count
             {
-                swap_img_count = surface_capability.max_image_count;
+                swap_img_count = surface_capa.max_image_count;
             }
 
-            let dim = window.inner_size();
-            let surface_res = match surface_capability.current_extent.width {
-                std::u32::MAX => vk::Extent2D {
-                    width: dim.width,
-                    height: dim.height,
-                },
-                _ => surface_capability.current_extent,
-            };
+            let (surface_res, _) = Self::get_res(&window, pref, &surface_capa);
 
-            let pre_transform = if surface_capability
+            let pre_transform = if surface_capa
                 .supported_transforms
                 .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
             {
                 vk::SurfaceTransformFlagsKHR::IDENTITY
             } else {
-                surface_capability.current_transform
+                surface_capa.current_transform
             };
 
             let present_mode_list = surface_loader
@@ -434,6 +427,34 @@ impl Interface {
                 setup_cmd_fence,
             }
         }
+    }
+
+    /// Function to get the resolution
+    /// at which to render. The resolution or scale factor
+    /// can be changed in pref.
+
+    pub fn get_res(window: &Window, pref: &Pref, surface_capa: &vk::SurfaceCapabilitiesKHR) -> (vk::Extent2D, vk::Extent2D) {
+        // Select new Dimension
+        let dim = window.inner_size();
+        let surface_res = match surface_capa.current_extent.width {
+            std::u32::MAX => vk::Extent2D {
+                width: dim.width,
+                height: dim.height,
+            },
+            _ => surface_capa.current_extent,
+        };
+
+        // Select new RenderResolution
+        let render_res = if pref.use_render_res && window.fullscreen() != None {
+            pref.render_res
+        } else {
+            vk::Extent2D {
+                width: (surface_res.width as f32 / pref.img_scale) as u32,
+                height: (surface_res.height as f32 / pref.img_scale) as u32,
+            }
+        };
+
+        (surface_res, render_res)
     }
 
     pub fn find_memorytype_index(
