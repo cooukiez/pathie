@@ -4,61 +4,63 @@ use ash::{
         ext::DebugUtils,
         khr::{DynamicRendering, Surface, Swapchain},
     },
-    vk::{self, MemoryPriorityAllocateInfoEXT, SurfaceTransformFlagsKHR},
+    vk::{self, SurfaceTransformFlagsKHR},
     Device, Entry, Instance,
 };
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use std::{
     error::Error,
-    ffi::{c_char, c_void, CStr, CString},
+    ffi::{c_void, CStr, CString},
 };
-use winit::{event_loop::EventLoop, monitor::MonitorHandle, window::WindowBuilder};
+use winit::{
+    event_loop::EventLoop,
+    monitor::MonitorHandle,
+    window::{Window, WindowBuilder},
+};
 
 pub struct Interface {
     pub entry: Entry,
     pub instance: Instance,
-    pub device: Device,
-    pub surface_loader: Surface,
-    pub swapchain_loader: Swapchain,
     pub debug_util_loader: DebugUtils,
+    pub debug_call_back: vk::DebugUtilsMessengerEXT,
+
     pub window: winit::window::Window,
     pub monitor_list: Vec<MonitorHandle>,
     pub monitor: MonitorHandle,
-    pub debug_call_back: vk::DebugUtilsMessengerEXT,
+
+    pub surface_loader: Surface,
+    pub surface: vk::SurfaceKHR,
 
     pub phy_device: vk::PhysicalDevice,
     pub phy_device_prop: vk::PhysicalDeviceProperties,
-    pub phy_device_memory_prop: vk::PhysicalDeviceMemoryProperties,
-    pub phy_device_feature: vk::PhysicalDeviceFeatures,
+    pub phy_device_mem_porp: vk::PhysicalDeviceMemoryProperties,
 
     pub queue_family_index: u32,
+    pub device: Device,
     pub present_queue: vk::Queue,
 
-    pub surface_capa: vk::SurfaceCapabilitiesKHR,
-    pub pre_transform: SurfaceTransformFlagsKHR,
-
-    pub surface: vk::SurfaceKHR,
     pub surface_format: vk::SurfaceFormatKHR,
-    pub surface_res: vk::Extent2D,
+    pub pre_transform: SurfaceTransformFlagsKHR,
+    pub swap_img_count: u32,
 
-    pub swapchain: vk::SwapchainKHR,
-    pub img_count: u32,
-    pub present_mode_list: Vec<vk::PresentModeKHR>,
+    pub surface_res: vk::Extent2D,
     pub present_mode: vk::PresentModeKHR,
+
+    pub swapchain_loader: Swapchain,
+    pub swapchain: vk::SwapchainKHR,
 
     pub present_img_list: Vec<vk::Image>,
     pub present_img_view_list: Vec<vk::ImageView>,
 
     pub pool: vk::CommandPool,
-    pub command_buffer_list: Vec<vk::CommandBuffer>,
-    pub draw_command_buffer: vk::CommandBuffer,
-    pub setup_command_buffer: vk::CommandBuffer,
+    pub setup_cmd_buffer: vk::CommandBuffer,
+    pub draw_cmd_buffer: vk::CommandBuffer,
 
-    pub present_complete_semaphore: vk::Semaphore,
-    pub rendering_complete_semaphore: vk::Semaphore,
+    pub present_complete: vk::Semaphore,
+    pub render_complete: vk::Semaphore,
 
-    pub draw_command_fence: vk::Fence,
-    pub setup_command_fence: vk::Fence,
+    pub draw_cmd_fence: vk::Fence,
+    pub setup_cmd_fence: vk::Fence,
 }
 
 #[macro_export]
@@ -73,12 +75,7 @@ macro_rules! offset_of {
     }};
 }
 
-unsafe extern "system" fn vulkan_debug_callback(
-    flag: vk::DebugUtilsMessageSeverityFlagsEXT,
-    msg_type: vk::DebugUtilsMessageTypeFlagsEXT,
-    callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-    _: *mut c_void,
-) -> vk::Bool32 {
+unsafe extern "system" fn vulkan_debug_callback(flag: vk::DebugUtilsMessageSeverityFlagsEXT, msg_type: vk::DebugUtilsMessageTypeFlagsEXT, callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT, _: *mut c_void, ) -> vk::Bool32 {
     use vk::DebugUtilsMessageSeverityFlagsEXT as Flag;
     let message = CStr::from_ptr((*callback_data).p_message);
 
@@ -93,295 +90,6 @@ unsafe extern "system" fn vulkan_debug_callback(
 }
 
 impl Interface {
-    /// Get the queue and device with phy device.
-    /// Note that device is the so called logical device.
-    /// Also note that queue priority is usually one.
-
-    pub fn get_device_and_queue(
-        queue_family_index: u32,
-        priority: &[f32],
-        device_ext_list: &[*const c_char],
-        feature: vk::PhysicalDeviceFeatures,
-        instance: &Instance,
-        phy_device: vk::PhysicalDevice,
-    ) -> (Device, vk::Queue) {
-        unsafe {
-            log::info!("Get QueueList ...");
-            // Queue info with index and priority
-            let queue_info = vk::DeviceQueueCreateInfo::builder()
-                .queue_family_index(queue_family_index)
-                .queue_priorities(priority);
-
-            // Dynamic rendering is used later on
-            let mut dynamic_rendering_feature =
-                vk::PhysicalDeviceDynamicRenderingFeaturesKHR::builder().dynamic_rendering(true);
-
-            // Create device info with predefined ext list and dynamic rendering as addition
-            let device_create_info = vk::DeviceCreateInfo::builder()
-                .queue_create_infos(std::slice::from_ref(&queue_info))
-                .enabled_extension_names(device_ext_list)
-                .enabled_features(&feature)
-                .push_next(&mut dynamic_rendering_feature);
-
-            let device: Device = instance
-                .create_device(phy_device, &device_create_info, None)
-                .unwrap();
-
-            let present_queue = device.get_device_queue(queue_family_index, 0);
-
-            (device, present_queue)
-        }
-    }
-
-    /// Load surface or more like get info about surface.
-    /// This funciton is necessary for swapchain creation because
-    /// it does require info about the surface.
-    /// Note -> PreTransform is for rotation.
-    /// Note -> the int is the desired image count which is usally three
-    /// Note -> List of all present mode available returned
-
-    pub fn load_surface(
-        surface_loader: &Surface,
-        phy_device: vk::PhysicalDevice,
-        surface: vk::SurfaceKHR,
-        pref: &Pref,
-    ) -> (
-        vk::SurfaceFormatKHR,
-        vk::SurfaceCapabilitiesKHR,
-        u32,
-        vk::Extent2D,
-        SurfaceTransformFlagsKHR,
-        Vec<vk::PresentModeKHR>,
-        vk::PresentModeKHR,
-    ) {
-        unsafe {
-            log::info!("Load Surface ...");
-
-            // Surface format like which RGB channel type and whatsoever
-            let surface_format = surface_loader
-                .get_physical_device_surface_formats(phy_device, surface)
-                .unwrap()[0];
-
-            // What can your surface do?
-            let surface_capa = surface_loader
-                .get_physical_device_surface_capabilities(phy_device, surface)
-                .unwrap();
-
-            // Often -> Desired image count = 3
-            let mut img_count = surface_capa.min_image_count + 1;
-            if surface_capa.max_image_count > 0 && img_count > surface_capa.max_image_count {
-                img_count = surface_capa.max_image_count;
-            }
-
-            // Surface resolution
-            let surface_res = match surface_capa.current_extent.width {
-                std::u32::MAX => pref.start_window_size,
-                _ => surface_capa.current_extent,
-            };
-
-            // Rotate screen, mostly used for smartphone app
-            let pre_transform = if surface_capa
-                .supported_transforms
-                .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
-            {
-                vk::SurfaceTransformFlagsKHR::IDENTITY
-            } else {
-                surface_capa.current_transform
-            };
-
-            // Present mode list of all available
-            let present_mode_list = surface_loader
-                .get_physical_device_surface_present_modes(phy_device, surface)
-                .unwrap();
-
-            // Select present mode based on preferred present mode
-            let present_mode = present_mode_list
-                .iter()
-                .cloned()
-                .find(|&mode| mode == pref.pref_present_mode)
-                .unwrap_or(vk::PresentModeKHR::FIFO);
-
-            (
-                surface_format,
-                surface_capa,
-                img_count,
-                surface_res,
-                pre_transform,
-                present_mode_list,
-                present_mode,
-            )
-        }
-    }
-
-    /// Function for creating swapchain
-    /// First get loader and then all the prop. After that
-    /// create with loader.
-
-    pub fn create_swapchain(
-        surface: vk::SurfaceKHR,
-        img_count: u32,
-        surface_format: &vk::SurfaceFormatKHR,
-        surface_res: vk::Extent2D,
-        pre_transform: vk::SurfaceTransformFlagsKHR,
-        present_mode: vk::PresentModeKHR,
-        swapchain_loader: &Swapchain,
-    ) -> vk::SwapchainKHR {
-        unsafe {
-            log::info!("Creating Swapchain ...");
-
-            let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
-                .surface(surface)
-                .min_image_count(img_count)
-                .image_color_space(surface_format.color_space)
-                .image_format(surface_format.format)
-                .image_extent(surface_res)
-                .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-                .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .pre_transform(pre_transform)
-                .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-                .present_mode(present_mode)
-                .clipped(true)
-                .image_array_layers(1);
-
-            swapchain_loader
-                .create_swapchain(&swapchain_create_info, None)
-                .unwrap()
-        }
-    }
-
-    /// Create command pool for vulkan instance.
-    /// First create pool then allocate command buffer list
-    /// with setup and draw command buffer.
-
-    pub fn create_command_pool(
-        queue_family_index: u32,
-        device: &Device,
-    ) -> (
-        vk::CommandPool,
-        Vec<vk::CommandBuffer>,
-        vk::CommandBuffer,
-        vk::CommandBuffer,
-    ) {
-        unsafe {
-            log::info!("Creating CommandPool ...");
-            let pool_create_info = vk::CommandPoolCreateInfo::builder()
-                .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-                .queue_family_index(queue_family_index);
-
-            // Create command pool
-            let pool = device.create_command_pool(&pool_create_info, None).unwrap();
-
-            // Allocate command buffer list
-            let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
-                .command_buffer_count(2)
-                .command_pool(pool)
-                .level(vk::CommandBufferLevel::PRIMARY);
-
-            log::info!("Creating CommandBuffer ...");
-            let command_buffer_list = device
-                .allocate_command_buffers(&command_buffer_allocate_info)
-                .unwrap();
-
-            let setup_command_buffer = command_buffer_list[0];
-            let draw_command_buffer = command_buffer_list[1];
-
-            (
-                pool,
-                command_buffer_list,
-                setup_command_buffer,
-                draw_command_buffer,
-            )
-        }
-    }
-
-    /// Load the present image list.
-    /// Load img from swapchain and then create image view,
-    /// pointer to each image, for each image from swapchain.
-    /// These can be used to render onto.
-
-    pub fn load_present_img_list(
-        swapchain_loader: &Swapchain,
-        swapchain: vk::SwapchainKHR,
-        surface_format: &vk::SurfaceFormatKHR,
-        device: &Device,
-    ) -> (Vec<vk::Image>, Vec<vk::ImageView>) {
-        unsafe {
-            log::info!("Load PresentImgList ...");
-            let present_img_list = swapchain_loader.get_swapchain_images(swapchain).unwrap();
-            let present_img_view_list: Vec<vk::ImageView> = present_img_list
-                .iter()
-                .map(|&image| {
-                    let create_view_info = vk::ImageViewCreateInfo::builder()
-                        .view_type(vk::ImageViewType::TYPE_2D)
-                        .format(surface_format.format)
-                        // Change image channel here
-                        .components(vk::ComponentMapping {
-                            r: vk::ComponentSwizzle::R,
-                            g: vk::ComponentSwizzle::G,
-                            b: vk::ComponentSwizzle::B,
-                            a: vk::ComponentSwizzle::A,
-                        })
-                        // Change img range here
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                        .image(image);
-
-                    device.create_image_view(&create_view_info, None).unwrap()
-                })
-                .collect();
-
-            (present_img_list, present_img_view_list)
-        }
-    }
-
-    /// This function is for initializing the sync for render the render pipe.
-    /// Whe first create setup and draw fence. After that the present and render
-    /// semaphore. This may be expanded later on.
-
-    pub fn init_sync(device: &Device) -> (vk::Fence, vk::Fence, vk::Semaphore, vk::Semaphore) {
-        unsafe {
-            log::info!("Init Fence ...");
-            let fence_create_info =
-                vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
-
-            // Create fence
-            let setup_command_fence = device
-                .create_fence(&fence_create_info, None)
-                .expect("FENCE_CREATE_ERR");
-            let draw_command_fence = device
-                .create_fence(&fence_create_info, None)
-                .expect("FENCE_CREATE_ERR");
-
-            log::info!("Init Semaphore ...");
-            let semaphore_create_info = vk::SemaphoreCreateInfo::default();
-
-            // Create semaphore
-            let present_complete_semaphore = device
-                .create_semaphore(&semaphore_create_info, None)
-                .unwrap();
-            let rendering_complete_semaphore = device
-                .create_semaphore(&semaphore_create_info, None)
-                .unwrap();
-
-            (
-                setup_command_fence,
-                draw_command_fence,
-                present_complete_semaphore,
-                rendering_complete_semaphore,
-            )
-        }
-    }
-
-    /// Initialize vulkan instance with pref.
-    /// Return an instance object with all var initialized.
-    /// This will create the base for vulkan application upto fence and
-    /// semaphore creation without creating pipeline.
-
     pub fn init(event_loop: &EventLoop<()>, pref: &Pref) -> Self {
         unsafe {
             log::info!("Creating Window and EventLoop ...");
@@ -468,8 +176,6 @@ impl Interface {
                 .create_debug_utils_messenger(&debug_info, None)
                 .unwrap();
 
-            let surface_loader = Surface::new(&entry, &instance);
-
             let surface = ash_window::create_surface(
                 &entry,
                 &instance,
@@ -479,10 +185,12 @@ impl Interface {
             )
             .unwrap();
 
+            log::info!("Creating PhyDevice ...");
             let phy_device_list = instance
                 .enumerate_physical_devices()
                 .expect("ERR_NO_PHY_DEVICE");
 
+            let surface_loader = Surface::new(&entry, &instance);
             let (phy_device, queue_family_index) = phy_device_list
                 .iter()
                 .find_map(|phy_device| {
@@ -510,8 +218,7 @@ impl Interface {
                 .expect("NO_SUITABLE_PHY_DEVICE");
 
             let phy_device_prop = instance.get_physical_device_properties(phy_device);
-            let phy_device_memory_prop = instance.get_physical_device_memory_properties(phy_device);
-            let phy_device_feature = instance.get_physical_device_features(phy_device);
+            let phy_device_mem_porp = instance.get_physical_device_memory_properties(phy_device);
 
             let device_ext_list = [
                 Swapchain::name().as_ptr(),
@@ -529,11 +236,12 @@ impl Interface {
             let priority = [1.0];
 
             log::info!("Get QueueList ...");
-            let queue_info = vk::DeviceQueueCreateInfo::builder()
+            let queue_info: vk::DeviceQueueCreateInfoBuilder = vk::DeviceQueueCreateInfo::builder()
                 .queue_family_index(queue_family_index)
                 .queue_priorities(&priority);
 
-            let mut dynamic_rendering_feature = vk::PhysicalDeviceDynamicRenderingFeaturesKHR::builder().dynamic_rendering(true);
+            let mut dynamic_rendering_feature =
+                vk::PhysicalDeviceDynamicRenderingFeaturesKHR::builder().dynamic_rendering(true);
 
             let device_create_info = vk::DeviceCreateInfo::builder()
                 .queue_create_infos(std::slice::from_ref(&queue_info))
@@ -542,31 +250,68 @@ impl Interface {
                 .push_next(&mut dynamic_rendering_feature);
 
             let device: Device = instance
-                .create_device(phy_device, &device_create_info, None, )
+                .create_device(phy_device, &device_create_info, None)
                 .unwrap();
 
             let present_queue = device.get_device_queue(queue_family_index, 0);
 
-            let (
-                surface_format,
-                surface_capa,
-                img_count,
-                surface_res,
-                pre_transform,
-                present_mode_list,
-                present_mode,
-            ) = Self::load_surface(&surface_loader, phy_device, surface, pref);
+            let surface_capa = surface_loader
+                .get_physical_device_surface_capabilities(phy_device, surface)
+                .unwrap();
 
-            let swapchain_loader = Swapchain::new(&instance, &device);
-            let swapchain = Self::create_swapchain(
-                surface,
-                img_count,
-                &surface_format,
-                surface_res,
-                pre_transform,
-                present_mode,
-                &swapchain_loader,
-            );
+            log::info!("Load SurfaceInfo ...");
+            let surface_format = surface_loader
+                .get_physical_device_surface_formats(phy_device, surface, )
+                .unwrap()[0];
+            
+            let mut swap_img_count = surface_capa.min_image_count + 1;
+            if surface_capa.max_image_count > 0 && swap_img_count > surface_capa.max_image_count {
+                swap_img_count = surface_capa.max_image_count;
+            }
+            
+            let dim = window.inner_size();
+            let surface_res = match surface_capa.current_extent.width {
+                std::u32::MAX => vk::Extent2D { width: dim.width, height: dim.height, },
+                _ => surface_capa.current_extent,
+            };
+
+            let pre_transform = 
+                if surface_capa.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::IDENTITY) {
+                    vk::SurfaceTransformFlagsKHR::IDENTITY
+                } else {
+                    surface_capa.current_transform
+                };
+
+            let present_mode_list = surface_loader
+                .get_physical_device_surface_present_modes(phy_device, surface, )
+                .unwrap();
+            
+            let present_mode = present_mode_list
+                .iter()
+                .cloned()
+                .find(| &mode | mode == pref.pref_present_mode)
+                .unwrap_or(vk::PresentModeKHR::FIFO);
+            
+            log::info!("Creating Swapchain ...");
+            let swapchain_loader = Swapchain::new(&instance, &device, );
+
+            let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
+                .surface(surface)
+                .min_image_count(swap_img_count)
+                .image_color_space(surface_format.color_space)
+                .image_format(surface_format.format)
+                .image_extent(surface_res)
+                .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .pre_transform(pre_transform)
+                .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+                .present_mode(present_mode)
+                .clipped(true)
+                .image_array_layers(1);
+
+            let swapchain = swapchain_loader
+                .create_swapchain(&swapchain_create_info, None, )
+                .unwrap();
 
             log::info!("Creating CommandPool ...");
             let pool_create_info = vk::CommandPoolCreateInfo::builder()
@@ -576,39 +321,64 @@ impl Interface {
             let pool = device.create_command_pool(&pool_create_info, None).unwrap();
 
             log::info!("Creating CommandBuffer ...");
-            let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+            let cmd_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
                 .command_buffer_count(2)
                 .command_pool(pool)
                 .level(vk::CommandBufferLevel::PRIMARY);
 
-            let command_buffer_list = device
-                .allocate_command_buffers(&command_buffer_allocate_info)
+            let cmd_buffer_list = device
+                .allocate_command_buffers(&cmd_buffer_allocate_info)
                 .unwrap();
 
-            let setup_command_buffer = command_buffer_list[0];
-            let draw_command_buffer = command_buffer_list[1];
-
-            let (present_img_list, present_img_view_list) =
-                Self::load_present_img_list(&swapchain_loader, swapchain, &surface_format, &device);
+            let setup_cmd_buffer = cmd_buffer_list[0];
+            let draw_cmd_buffer = cmd_buffer_list[1];
 
             log::info!("Init Fence ...");
             let fence_create_info =
                 vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
 
-            let draw_command_fence = device
+            let draw_cmd_fence = device
                 .create_fence(&fence_create_info, None)
                 .expect("FENCE_CREATE_ERR");
-            let setup_command_fence = device
+            let setup_cmd_fence = device
                 .create_fence(&fence_create_info, None)
                 .expect("FENCE_CREATE_ERR");
+
+                log::info!("Load PresentImgList ...");
+                let present_img_list = swapchain_loader.get_swapchain_images(swapchain).unwrap();
+                let present_img_view_list: Vec<vk::ImageView> = present_img_list
+                    .iter()
+                    .map(|&image| {
+                        let create_view_info = vk::ImageViewCreateInfo::builder()
+                            .view_type(vk::ImageViewType::TYPE_2D)
+                            .format(surface_format.format)
+                            // Change image channel ordering here
+                            .components(vk::ComponentMapping {
+                                r: vk::ComponentSwizzle::R,
+                                g: vk::ComponentSwizzle::G,
+                                b: vk::ComponentSwizzle::B,
+                                a: vk::ComponentSwizzle::A,
+                            })
+                            // Change img range here
+                            .subresource_range(vk::ImageSubresourceRange {
+                                aspect_mask: vk::ImageAspectFlags::COLOR,
+                                base_mip_level: 0,
+                                level_count: 1,
+                                base_array_layer: 0,
+                                layer_count: 1,
+                            })
+                            .image(image);
+                        device.create_image_view(&create_view_info, None).unwrap()
+                    })
+                    .collect();
 
             log::info!("Init Semaphore ...");
             let semaphore_create_info = vk::SemaphoreCreateInfo::default();
 
-            let present_complete_semaphore = device
+            let present_complete = device
                 .create_semaphore(&semaphore_create_info, None)
                 .unwrap();
-            let rendering_complete_semaphore = device
+            let render_complete = device
                 .create_semaphore(&semaphore_create_info, None)
                 .unwrap();
 
@@ -616,72 +386,163 @@ impl Interface {
             Interface {
                 entry,
                 instance,
-                device,
-                surface_loader,
-                swapchain_loader,
+
                 debug_util_loader,
+                debug_call_back,
+
                 window,
                 monitor_list,
                 monitor,
-                debug_call_back,
+
+                surface_loader,
+                surface,
 
                 phy_device,
                 phy_device_prop,
-                phy_device_memory_prop,
-                phy_device_feature,
+                phy_device_mem_porp,
 
                 queue_family_index,
+                device,
                 present_queue,
 
-                surface_capa,
+                surface_format: surface_format,
                 pre_transform,
+                swap_img_count,
 
-                surface,
-                surface_format,
                 surface_res,
-
-                swapchain,
-                img_count,
-                present_mode_list,
                 present_mode,
+
+                swapchain_loader,
+                swapchain,
 
                 present_img_list,
                 present_img_view_list,
 
                 pool,
-                command_buffer_list,
-                draw_command_buffer,
-                setup_command_buffer,
+                setup_cmd_buffer,
+                draw_cmd_buffer,
 
-                present_complete_semaphore,
-                rendering_complete_semaphore,
+                present_complete,
+                render_complete,
 
-                draw_command_fence,
-                setup_command_fence,
+                draw_cmd_fence,
+                setup_cmd_fence,
             }
         }
     }
 
-    /// Function for creating memory. Find suitable
-    /// type index for memory req. Evaluate all available and then
-    /// select suitable type and return index.
+    pub fn init_swapchain(
+        surface_loader: &Surface,
+        phy_device: vk::PhysicalDevice,
+        surface: vk::SurfaceKHR,
+        window: &Window,
+        pref: &Pref,
+        swap_img_count: u32,
+        surface_format: vk::SurfaceFormatKHR,
+        pre_transform: vk::SurfaceTransformFlagsKHR,
+        swapchain_loader: &Swapchain,
+        device: &Device,
+    ) -> (
+        vk::Extent2D,
+        vk::PresentModeKHR,
+        vk::SwapchainKHR,
+        Vec<vk::Image>,
+        Vec<vk::ImageView>,
+    ) {
+        unsafe {
+            let surface_capa = surface_loader
+                .get_physical_device_surface_capabilities(phy_device, surface)
+                .unwrap();
+
+            log::info!("Init Swapchain ...");
+            let dim = window.inner_size();
+            let surface_res = match surface_capa.current_extent.width {
+                std::u32::MAX => vk::Extent2D {
+                    width: dim.width,
+                    height: dim.height,
+                },
+                _ => surface_capa.current_extent,
+            };
+
+            let present_mode_list = surface_loader
+                .get_physical_device_surface_present_modes(phy_device, surface)
+                .unwrap();
+
+            let present_mode = present_mode_list
+                .iter()
+                .cloned()
+                .find(|&mode| mode == pref.pref_present_mode)
+                .unwrap_or(vk::PresentModeKHR::FIFO);
+
+            let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
+                .surface(surface)
+                .min_image_count(swap_img_count)
+                .image_color_space(surface_format.color_space)
+                .image_format(surface_format.format)
+                .image_extent(surface_res)
+                .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .pre_transform(pre_transform)
+                .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+                .present_mode(present_mode)
+                .clipped(true)
+                .image_array_layers(1);
+
+            let swapchain = swapchain_loader
+                .create_swapchain(&swapchain_create_info, None)
+                .unwrap();
+
+            log::info!("Load PresentImgList ...");
+            let present_img_list = swapchain_loader.get_swapchain_images(swapchain).unwrap();
+            let present_img_view_list: Vec<vk::ImageView> = present_img_list
+                .iter()
+                .map(|&image| {
+                    let create_view_info = vk::ImageViewCreateInfo::builder()
+                        .view_type(vk::ImageViewType::TYPE_2D)
+                        .format(surface_format.format)
+                        // Change image channel ordering here
+                        .components(vk::ComponentMapping {
+                            r: vk::ComponentSwizzle::R,
+                            g: vk::ComponentSwizzle::G,
+                            b: vk::ComponentSwizzle::B,
+                            a: vk::ComponentSwizzle::A,
+                        })
+                        // Change img range here
+                        .subresource_range(vk::ImageSubresourceRange {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            base_mip_level: 0,
+                            level_count: 1,
+                            base_array_layer: 0,
+                            layer_count: 1,
+                        })
+                        .image(image);
+                    device.create_image_view(&create_view_info, None).unwrap()
+                })
+                .collect();
+
+            (
+                surface_res,
+                present_mode,
+                swapchain,
+                present_img_list,
+                present_img_view_list,
+            )
+        }
+    }
 
     pub fn find_memorytype_index(
         &self,
         memory_req: &vk::MemoryRequirements,
         flag: vk::MemoryPropertyFlags,
     ) -> Option<u32> {
-        // Get all available
-        self.phy_device_memory_prop.memory_types
-            [..self.phy_device_memory_prop.memory_type_count as _]
+        self.phy_device_mem_porp.memory_types[..self.phy_device_mem_porp.memory_type_count as _]
             .iter()
             .enumerate()
-            // Find suitable type
             .find(|(index, memory_type)| {
                 (1 << index) & memory_req.memory_type_bits != 0
                     && memory_type.property_flags & flag == flag
             })
-            .map(|(index, _)| index as _)
+            .map(|(index, _memory_type)| index as _)
     }
 
     pub fn wait_for_gpu(&self) -> Result<(), Box<dyn Error>> {

@@ -1,7 +1,7 @@
 use std::{
     borrow::BorrowMut,
     io::Write,
-    mem, thread,
+    thread,
     time::{Duration, Instant},
 };
 
@@ -10,7 +10,7 @@ use env_logger::fmt::{Color, Formatter};
 use input::Input;
 use interface::Interface;
 use log::Record;
-use octree::{Octree, TreeNode};
+use octree::Octree;
 use pipe::Pipe;
 use uniform::Uniform;
 use winit::{
@@ -19,8 +19,6 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     platform::run_return::EventLoopExtRunReturn,
 };
-
-use crate::octree::Light;
 
 mod input;
 mod interface;
@@ -127,11 +125,11 @@ impl Render {
 
         let input = Input::new();
         let mut uniform = Uniform::default();
-
-        let interface = Interface::init(&event_loop, &pref);
         let mut octree = Octree::default();
         octree.test_scene();
-        let graphic_pipe = Pipe::init_render(&interface, &mut uniform, &octree, );
+
+        let interface = Interface::init(&event_loop, &pref);
+        let graphic_pipe = Pipe::init(&interface, &mut uniform, &octree);
 
         Render {
             state,
@@ -178,8 +176,6 @@ impl Render {
                         event: WindowEvent::CursorMoved { position, .. },
                         ..
                     } => {
-                        /*
-                        
                         self.input.handle_mouse_input(position, &mut self.uniform);
                         self.interface.window.set_cursor_visible(false);
                         self.interface
@@ -189,8 +185,6 @@ impl Render {
                                 self.uniform.resolution.y / 2.0,
                             ))
                             .unwrap();
-
-                        */
                     }
 
                     Event::WindowEvent {
@@ -235,8 +229,6 @@ impl Render {
                                 .draw(&self.interface, &self.pref)
                                 .expect("RENDER_FAILED");
                             self.state.frame_time = start.elapsed();
-
-                            // self.interface.window.set_title(format!("{} - FrameTime {} - Per Second {}", NAME, self.state.frame_time.as_millis(), 1000 / self.state.frame_time.as_millis()).as_str());
                         }
                     }
 
