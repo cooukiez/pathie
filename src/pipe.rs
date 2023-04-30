@@ -35,13 +35,15 @@ pub struct BufferSet {
     pub buffer_mem: vk::DeviceMemory,
 }
 
+pub struct Shader {
+    code: Vec<u32>,
+    module: vk::ShaderModule,
+}
+
 pub struct Pipe {
     pub render_res: vk::Extent2D,
     pub image_target_list: Vec<ImageTarget>,
 
-    pub index_data: Vec<u32>,
-    pub index_buffer: BufferSet,
-    pub vertex_buffer: BufferSet,
     pub uniform_buffer: BufferSet,
     pub octree_buffer: BufferSet,
     pub light_buffer: BufferSet,
@@ -50,15 +52,11 @@ pub struct Pipe {
     pub desc_set_layout_list: Vec<vk::DescriptorSetLayout>,
     pub descriptor_set_list: Vec<vk::DescriptorSet>,
 
-    pub vertex_code: Vec<u32>,
-    pub frag_code: Vec<u32>,
-    pub vertex_shader_module: vk::ShaderModule,
-    pub fragment_shader_module: vk::ShaderModule,
-    pub pipeline_layout: vk::PipelineLayout,
+    pub primary_ray_code: Vec<u32>,
+    pub primary_ray_module: vk::ShaderModule,
 
-    pub viewport: Vec<vk::Viewport>,
-    pub scissor: Vec<vk::Rect2D>,
-    pub graphic_pipeline: vk::Pipeline,
+    pub pipe_layout: vk::PipelineLayout,
+    pub pipe: vk::Pipeline,
 }
 
 impl Pipe {
@@ -73,46 +71,6 @@ impl Pipe {
                 .iter()
                 .map(|_| ImageTarget::new(interface, render_res))
                 .collect();
-
-            log::info!("Creating IndexBuffer ...");
-            let index_data = vec![0u32, 1, 2, 2, 3, 0];
-            let index_buffer = BufferSet::new(
-                interface,
-                align_of::<u32>() as u64,
-                std::mem::size_of_val(&index_data) as u64,
-                vk::BufferUsageFlags::INDEX_BUFFER,
-                vk::SharingMode::EXCLUSIVE,
-                &index_data,
-            );
-
-            log::info!("Creating VertexBuffer ...");
-            let vertex_data = [
-                Vertex {
-                    pos: [-1.0, -1.0, 0.0, 1.0],
-                    uv: [0.0, 0.0],
-                },
-                Vertex {
-                    pos: [-1.0, 1.0, 0.0, 1.0],
-                    uv: [0.0, 1.0],
-                },
-                Vertex {
-                    pos: [1.0, 1.0, 0.0, 1.0],
-                    uv: [1.0, 1.0],
-                },
-                Vertex {
-                    pos: [1.0, -1.0, 0.0, 1.0],
-                    uv: [1.0, 0.0],
-                },
-            ];
-
-            let vertex_buffer = BufferSet::new(
-                interface,
-                align_of::<Vertex>() as u64,
-                std::mem::size_of_val(&vertex_data) as u64,
-                vk::BufferUsageFlags::VERTEX_BUFFER,
-                vk::SharingMode::EXCLUSIVE,
-                &vertex_data,
-            );
 
             log::info!("Creating UniformBuffer ...");
             let uniform_data = uniform.clone();
@@ -147,29 +105,36 @@ impl Pipe {
                 &light_data,
             );
 
-            let descriptor_pool = Self::create_descriptor_pool(1, 2, 3, interface);
+            let descriptor_pool = Self::create_descriptor_pool(1, 1, 2, 4, interface);
 
             log::info!("Creating descriptor set layout list ...");
             let desc_set_layout_list: Vec<vk::DescriptorSetLayout> = vec![
+                // ImageTarget
+                Self::create_descriptor_set_layout(
+                    vk::DescriptorType::STORAGE_IMAGE,
+                    1,
+                    vk::ShaderStageFlags::COMPUTE,
+                    interface,
+                ),
                 // Uniform Set
                 Self::create_descriptor_set_layout(
                     vk::DescriptorType::UNIFORM_BUFFER,
                     1,
-                    vk::ShaderStageFlags::FRAGMENT,
+                    vk::ShaderStageFlags::COMPUTE,
                     interface,
                 ),
                 // Octree Set
                 Self::create_descriptor_set_layout(
                     vk::DescriptorType::STORAGE_BUFFER,
                     1,
-                    vk::ShaderStageFlags::FRAGMENT,
+                    vk::ShaderStageFlags::COMPUTE,
                     interface,
                 ),
                 // Light Set
                 Self::create_descriptor_set_layout(
                     vk::DescriptorType::STORAGE_BUFFER,
                     1,
-                    vk::ShaderStageFlags::FRAGMENT,
+                    vk::ShaderStageFlags::COMPUTE,
                     interface,
                 ),
             ];
@@ -183,223 +148,83 @@ impl Pipe {
                 .allocate_descriptor_sets(&desc_alloc_info)
                 .unwrap();
 
-            let uniform_buffer_descriptor = vk::DescriptorBufferInfo {
-                buffer: uniform_buffer.buffer,
-                offset: 0,
-                range: mem::size_of_val(&uniform_data) as u64,
-            };
-            let octree_buffer_descriptor = vk::DescriptorBufferInfo {
-                buffer: octree_buffer.buffer,
-                offset: 0,
-                range: (mem::size_of::<TreeNode>() * octree_data.len()) as u64,
-            };
-            let light_buffer_descriptor = vk::DescriptorBufferInfo {
-                buffer: light_buffer.buffer,
-                offset: 0,
-                range: (mem::size_of::<Light>() * light_data.len()) as u64,
-            };
-
             log::info!("Writing descriptor list ...");
-            let write_desc_set_list = [
-                vk::WriteDescriptorSet {
-                    dst_set: descriptor_set_list[0],
-                    descriptor_count: 1,
-                    descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-                    p_buffer_info: &uniform_buffer_descriptor,
-                    ..Default::default()
-                },
-                vk::WriteDescriptorSet {
-                    dst_set: descriptor_set_list[1],
-                    descriptor_count: 1,
-                    descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
-                    p_buffer_info: &octree_buffer_descriptor,
-                    ..Default::default()
-                },
-                vk::WriteDescriptorSet {
-                    dst_set: descriptor_set_list[2],
-                    descriptor_count: 1,
-                    descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
-                    p_buffer_info: &light_buffer_descriptor,
-                    ..Default::default()
-                },
-            ];
-
-            interface
-                .device
-                .update_descriptor_sets(&write_desc_set_list, &[]);
+            uniform_buffer.describe_in_gpu(
+                interface,
+                mem::size_of_val(&uniform_data) as u64,
+                descriptor_set_list[1],
+                0,
+                vk::DescriptorType::UNIFORM_BUFFER,
+            );
+            octree_buffer.describe_in_gpu(
+                interface,
+                (mem::size_of::<TreeNode>() * octree_data.len()) as u64,
+                descriptor_set_list[2],
+                0,
+                vk::DescriptorType::STORAGE_BUFFER,
+            );
+            light_buffer.describe_in_gpu(
+                interface,
+                (mem::size_of::<Light>() * light_data.len()) as u64,
+                descriptor_set_list[3],
+                0,
+                vk::DescriptorType::STORAGE_BUFFER,
+            );
 
             log::info!("Getting ShaderCode ...");
-            let mut vertex_spv_file = Cursor::new(&include_bytes!("../shader/vert.spv")[..]);
-            let mut frag_spv_file = Cursor::new(&include_bytes!("../shader/frag.spv")[..]);
+            let mut primary_ray_spv_file = Cursor::new(&include_bytes!("../shader/comp.spv")[..]);
 
-            let vertex_code = read_spv(&mut vertex_spv_file).expect("ERR_READ_VERTEX_SPV");
-            let vertex_shader_info = vk::ShaderModuleCreateInfo::builder().code(&vertex_code);
+            let primary_ray_code =
+                read_spv(&mut primary_ray_spv_file).expect("ERR_READ_VERTEX_SPV");
+            let primary_ray_info = vk::ShaderModuleCreateInfo::builder().code(&primary_ray_code);
 
-            let frag_code = read_spv(&mut frag_spv_file).expect("ERR_READ_FRAG_SPV");
-            let frag_shader_info = vk::ShaderModuleCreateInfo::builder().code(&frag_code);
-
-            let vertex_shader_module = interface
+            let primary_ray_module = interface
                 .device
-                .create_shader_module(&vertex_shader_info, None)
+                .create_shader_module(&primary_ray_info, None)
                 .expect("ERR_VERTEX_MODULE");
-
-            let fragment_shader_module = interface
-                .device
-                .create_shader_module(&frag_shader_info, None)
-                .expect("ERR_FRAG_MODULE");
 
             let layout_create_info =
                 vk::PipelineLayoutCreateInfo::builder().set_layouts(&desc_set_layout_list);
 
             log::info!("Creating PipelineLayout ...");
-            let pipeline_layout = interface
+            let pipe_layout = interface
                 .device
                 .create_pipeline_layout(&layout_create_info, None)
                 .unwrap();
 
             log::info!("Stage Creation ...");
             let shader_entry_name = CString::new("main").unwrap();
-            let shader_stage_info_list = [
-                vk::PipelineShaderStageCreateInfo {
-                    module: vertex_shader_module,
-                    p_name: shader_entry_name.as_ptr(),
-                    stage: vk::ShaderStageFlags::VERTEX,
-                    ..Default::default()
-                },
-                vk::PipelineShaderStageCreateInfo {
-                    module: fragment_shader_module,
-                    p_name: shader_entry_name.as_ptr(),
-                    stage: vk::ShaderStageFlags::FRAGMENT,
-                    ..Default::default()
-                },
-            ];
-
-            let vertex_input_binding_description_list = [vk::VertexInputBindingDescription {
-                binding: 0,
-                stride: mem::size_of::<Vertex>() as u32,
-                input_rate: vk::VertexInputRate::VERTEX,
-            }];
-
-            let vertex_input_attribute_description_list = [
-                vk::VertexInputAttributeDescription {
-                    location: 0,
-                    binding: 0,
-                    format: vk::Format::R32G32B32A32_SFLOAT,
-                    offset: offset_of!(Vertex, pos) as u32,
-                },
-                vk::VertexInputAttributeDescription {
-                    location: 1,
-                    binding: 0,
-                    format: vk::Format::R32G32_SFLOAT,
-                    offset: offset_of!(Vertex, uv) as u32,
-                },
-            ];
-
-            let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
-                .vertex_attribute_descriptions(&vertex_input_attribute_description_list)
-                .vertex_binding_descriptions(&vertex_input_binding_description_list);
-
-            let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo {
-                topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+            let shader_stage = vk::PipelineShaderStageCreateInfo {
+                module: primary_ray_module,
+                p_name: shader_entry_name.as_ptr(),
+                stage: vk::ShaderStageFlags::COMPUTE,
                 ..Default::default()
             };
 
-            log::info!("Viewport and Scissor ...");
-            let viewport = vec![vk::Viewport {
-                width: render_res.width as f32,
-                height: render_res.height as f32,
-                max_depth: 1.0,
-
-                ..Default::default()
-            }];
-
-            let scissor = vec![render_res.into()];
-            let viewport_state_info = vk::PipelineViewportStateCreateInfo::builder()
-                .scissors(&scissor)
-                .viewports(&viewport);
-
-            log::info!("Rasterization ...");
-            let rasterization_info = vk::PipelineRasterizationStateCreateInfo {
-                front_face: vk::FrontFace::COUNTER_CLOCKWISE,
-                line_width: 1.0,
-                polygon_mode: vk::PolygonMode::FILL,
-                ..Default::default()
-            };
-            let multisample_state_info = vk::PipelineMultisampleStateCreateInfo::builder()
-                .rasterization_samples(vk::SampleCountFlags::TYPE_1);
-
-            log::info!("Blending ...");
-            let color_blend_attachment_state_list = [vk::PipelineColorBlendAttachmentState {
-                blend_enable: 0,
-
-                src_color_blend_factor: vk::BlendFactor::SRC_COLOR,
-                dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_DST_COLOR,
-
-                color_blend_op: vk::BlendOp::ADD,
-                src_alpha_blend_factor: vk::BlendFactor::ZERO,
-                dst_alpha_blend_factor: vk::BlendFactor::ZERO,
-                alpha_blend_op: vk::BlendOp::ADD,
-
-                color_write_mask: vk::ColorComponentFlags::RGBA,
-            }];
-
-            let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
-                .logic_op(vk::LogicOp::CLEAR)
-                .attachments(&color_blend_attachment_state_list);
-
-            log::info!("Creating DynamicState ...");
-            let dynamic_state = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-            let dynamic_state_info =
-                vk::PipelineDynamicStateCreateInfo::builder().dynamic_states(&dynamic_state);
-
-            let format_list = [interface.surface_format.format];
-            let mut pipeline_rendering = vk::PipelineRenderingCreateInfoKHR::builder()
-                .color_attachment_formats(&format_list);
-
-            log::info!("Pipe incoming ...");
-            let graphic_pipeline_info_list = vk::GraphicsPipelineCreateInfo::builder()
-                .stages(&shader_stage_info_list)
-                .vertex_input_state(&vertex_input_state_info)
-                .input_assembly_state(&vertex_input_assembly_state_info)
-                .viewport_state(&viewport_state_info)
-                .rasterization_state(&rasterization_info)
-                .multisample_state(&multisample_state_info)
-                .color_blend_state(&color_blend_state)
-                .dynamic_state(&dynamic_state_info)
-                .layout(pipeline_layout)
-                .push_next(&mut pipeline_rendering)
+            let compute_pipe_info = vk::ComputePipelineCreateInfo::builder()
+                .stage(shader_stage)
+                .layout(pipe_layout)
                 .build();
 
-            let graphic_pipeline_list = interface
+            let pipe = interface
                 .device
-                .create_graphics_pipelines(
-                    vk::PipelineCache::null(),
-                    &[graphic_pipeline_info_list],
-                    None,
-                )
-                .unwrap();
+                .create_compute_pipelines(vk::PipelineCache::null(), &[compute_pipe_info], None)
+                .expect("ERROR_CREATE_PIPELINE")[0];
 
             log::info!("Rendering initialisation finished ...");
             Pipe {
                 render_res,
                 image_target_list,
-                index_data,
-                index_buffer,
-                vertex_buffer,
                 uniform_buffer,
                 octree_buffer,
                 light_buffer,
                 descriptor_pool,
                 desc_set_layout_list,
                 descriptor_set_list,
-                vertex_code,
-                frag_code,
-                vertex_shader_module,
-                fragment_shader_module,
-                pipeline_layout,
-                viewport,
-                scissor,
-                graphic_pipeline: graphic_pipeline_list[0],
+                primary_ray_code,
+                primary_ray_module,
+                pipe_layout,
+                pipe,
             }
         }
     }
@@ -411,6 +236,7 @@ impl Pipe {
     /// Max set is the max amount of set in the pool.
 
     pub fn create_descriptor_pool(
+        image_desc_count: u32,
         uniform_desc_count: u32,
         storage_desc_count: u32,
         max_set: u32,
@@ -419,6 +245,10 @@ impl Pipe {
         unsafe {
             // Specify descriptor count for each storage type
             let descriptor_size_list = [
+                vk::DescriptorPoolSize {
+                    ty: vk::DescriptorType::STORAGE_IMAGE,
+                    descriptor_count: image_desc_count,
+                },
                 vk::DescriptorPoolSize {
                     ty: vk::DescriptorType::UNIFORM_BUFFER,
                     descriptor_count: uniform_desc_count,
@@ -518,12 +348,10 @@ impl Pipe {
                 .end_command_buffer(draw_cmd_buffer)
                 .expect("ERR_END_CMD_BUFFER");
 
-            let command_buffer_list: Vec<vk::CommandBuffer> = vec![draw_cmd_buffer];
-
             let submit_info = vk::SubmitInfo::builder()
-                .wait_semaphores(&[present_complete])
                 .wait_dst_stage_mask(&[vk::PipelineStageFlags::BOTTOM_OF_PIPE])
-                .command_buffers(&command_buffer_list)
+                .wait_semaphores(&[present_complete])
+                .command_buffers(&[draw_cmd_buffer])
                 .signal_semaphores(&[render_complete])
                 .build();
 
@@ -531,6 +359,59 @@ impl Pipe {
                 .device
                 .queue_submit(interface.present_queue, &[submit_info], draw_cmd_fence)
                 .expect("QUEUE_SUBMIT_FAILED");
+        }
+    }
+
+    pub fn first_img_barrier(
+        &self,
+        image: &ImageTarget,
+        present_image: vk::Image,
+        interface: &Interface,
+        cmd_buffer: vk::CommandBuffer,
+    ) {
+        unsafe {
+            let basic_subresource_range = vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            };
+
+            let comp_write = vk::ImageMemoryBarrier::builder()
+                .image(image.image_target)
+                .old_layout(vk::ImageLayout::UNDEFINED)
+                .new_layout(vk::ImageLayout::GENERAL)
+                .subresource_range(basic_subresource_range.clone())
+                .dst_access_mask(vk::AccessFlags::SHADER_WRITE)
+                .build();
+
+            let comp_transfer = vk::ImageMemoryBarrier::builder()
+                .image(image.image_target)
+                .old_layout(vk::ImageLayout::GENERAL)
+                .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                .subresource_range(basic_subresource_range.clone())
+                .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+                .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
+                .build();
+
+            let swap_transfer = vk::ImageMemoryBarrier::builder()
+                .image(present_image)
+                .old_layout(vk::ImageLayout::UNDEFINED)
+                .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                .subresource_range(basic_subresource_range.clone())
+                .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                .build();
+
+            interface.device.cmd_pipeline_barrier(
+                cmd_buffer,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::PipelineStageFlags::ALL_COMMANDS,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[comp_write, comp_transfer, swap_transfer],
+            )
         }
     }
 
@@ -585,12 +466,48 @@ impl Pipe {
             interface.device.cmd_blit_image(
                 interface.draw_cmd_buffer,
                 src_img,
-                vk::ImageLayout::UNDEFINED,
+                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                 dst_img,
-                vk::ImageLayout::UNDEFINED,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 &[blit],
                 pref.img_filter,
             );
+        }
+    }
+
+    pub fn sec_img_barrier(
+        &self,
+        present_image: vk::Image,
+        interface: &Interface,
+        cmd_buffer: vk::CommandBuffer,
+    ) {
+        unsafe {
+            let basic_subresource_range = vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            };
+
+            let swap_present = vk::ImageMemoryBarrier::builder()
+                .image(present_image)
+                .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+                .subresource_range(basic_subresource_range.clone())
+                .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                .dst_access_mask(vk::AccessFlags::MEMORY_READ)
+                .build();
+
+            interface.device.cmd_pipeline_barrier(
+                cmd_buffer,
+                vk::PipelineStageFlags::ALL_COMMANDS,
+                vk::PipelineStageFlags::TOP_OF_PIPE,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[swap_present],
+            )
         }
     }
 
@@ -608,82 +525,44 @@ impl Pipe {
                     interface.draw_cmd_buffer,
                     interface.present_complete,
                     interface.render_complete,
-                    |_| {
-                        let clear_value = [vk::ClearValue {
-                            color: vk::ClearColorValue {
-                                float32: [0.0, 0.0, 0.0, 0.0],
-                            },
-                        }];
+                    |cmd_buffer| {
+                        self.image_target_list[present_index as usize].describe_in_gpu(
+                            interface,
+                            vk::ImageLayout::GENERAL,
+                            self.descriptor_set_list[0],
+                            0,
+                            vk::DescriptorType::STORAGE_IMAGE,
+                        );
 
-                        let color_attachment_info = vk::RenderingAttachmentInfoKHR::builder()
-                            .image_view(self.image_target_list[present_index as usize].image_view)
-                            .load_op(vk::AttachmentLoadOp::CLEAR)
-                            .store_op(vk::AttachmentStoreOp::STORE)
-                            .clear_value(clear_value[0])
-                            .build();
-
-                        let color_attachment_list = [color_attachment_info];
-
-                        // Begin Draw
-                        let rendering_info = vk::RenderingInfoKHR::builder()
-                            .render_area(vk::Rect2D {
-                                offset: vk::Offset2D { x: 0, y: 0 },
-                                extent: self.render_res,
-                            })
-                            .layer_count(1)
-                            .color_attachments(&color_attachment_list);
-
-                        // Pipe Rendering Part
-                        interface
-                            .device
-                            .cmd_begin_rendering(interface.draw_cmd_buffer, &rendering_info);
+                        // Dispatch Compute Pipe
+                        interface.device.cmd_bind_pipeline(
+                            cmd_buffer,
+                            vk::PipelineBindPoint::COMPUTE,
+                            self.pipe,
+                        );
                         interface.device.cmd_bind_descriptor_sets(
-                            interface.draw_cmd_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.pipeline_layout,
+                            cmd_buffer,
+                            vk::PipelineBindPoint::COMPUTE,
+                            self.pipe_layout,
                             0,
                             &self.descriptor_set_list[..],
                             &[],
                         );
-                        interface.device.cmd_bind_pipeline(
-                            interface.draw_cmd_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.graphic_pipeline,
-                        );
-                        interface.device.cmd_set_viewport(
-                            interface.draw_cmd_buffer,
-                            0,
-                            &self.viewport,
-                        );
-                        interface.device.cmd_set_scissor(
-                            interface.draw_cmd_buffer,
-                            0,
-                            &self.scissor,
-                        );
-                        interface.device.cmd_bind_vertex_buffers(
-                            interface.draw_cmd_buffer,
-                            0,
-                            &[self.vertex_buffer.buffer],
-                            &[0],
-                        );
-                        interface.device.cmd_bind_index_buffer(
-                            interface.draw_cmd_buffer,
-                            self.index_buffer.buffer,
-                            0,
-                            vk::IndexType::UINT32,
-                        );
-                        interface.device.cmd_draw_indexed(
-                            interface.draw_cmd_buffer,
-                            self.index_data.len() as u32,
-                            1,
-                            0,
-                            0,
+                        interface.device.cmd_dispatch(
+                            cmd_buffer,
+                            interface.surface_res.width,
+                            interface.surface_res.height,
                             1,
                         );
-                        interface
-                            .device
-                            .cmd_end_rendering(interface.draw_cmd_buffer);
 
+                        // First Image Barrier
+                        self.first_img_barrier(
+                            &self.image_target_list[present_index as usize],
+                            interface.present_img_list[present_index as usize],
+                            interface,
+                            cmd_buffer,
+                        );
+                        // Copy image memory
                         self.copy_image(
                             interface,
                             pref,
@@ -691,6 +570,11 @@ impl Pipe {
                             interface.present_img_list[present_index as usize],
                             self.render_res,
                             interface.surface_res,
+                        );
+                        self.sec_img_barrier(
+                            interface.present_img_list[present_index as usize],
+                            interface,
+                            cmd_buffer,
                         );
                     },
                 );
@@ -802,16 +686,6 @@ impl Pipe {
                 .iter()
                 .map(|_| ImageTarget::new(interface, self.render_res))
                 .collect();
-
-            self.viewport = vec![vk::Viewport {
-                width: self.render_res.width as f32,
-                height: self.render_res.height as f32,
-                max_depth: 1.0,
-
-                ..Default::default()
-            }];
-
-            self.scissor = vec![self.render_res.into()];
         }
     }
 }
@@ -831,7 +705,7 @@ impl ImageTarget {
                 .array_layers(1)
                 .samples(vk::SampleCountFlags::TYPE_1)
                 .tiling(vk::ImageTiling::OPTIMAL)
-                .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC)
+                .usage(vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::TRANSFER_SRC)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
                 .image_type(vk::ImageType::TYPE_2D)
@@ -895,6 +769,34 @@ impl ImageTarget {
                 image_mem,
                 image_view,
             }
+        }
+    }
+
+    pub fn describe_in_gpu(
+        &self,
+        interface: &Interface,
+        image_layout: vk::ImageLayout,
+        dst_set: vk::DescriptorSet,
+        dst_binding: u32,
+        descriptor_type: vk::DescriptorType,
+    ) {
+        unsafe {
+            let image_descriptor = vk::DescriptorImageInfo {
+                image_view: self.image_view,
+                image_layout: image_layout,
+                ..Default::default()
+            };
+
+            let write_info = vk::WriteDescriptorSet {
+                dst_set,
+                dst_binding,
+                descriptor_count: 1,
+                descriptor_type,
+                p_image_info: &image_descriptor,
+                ..Default::default()
+            };
+
+            interface.device.update_descriptor_sets(&[write_info], &[]);
         }
     }
 
@@ -992,6 +894,34 @@ impl BufferSet {
             aligned_slice.copy_from_slice(&data.clone()[..]);
 
             interface.device.unmap_memory(self.buffer_mem);
+        }
+    }
+
+    pub fn describe_in_gpu(
+        &self,
+        interface: &Interface,
+        range: u64,
+        dst_set: vk::DescriptorSet,
+        dst_binding: u32,
+        descriptor_type: vk::DescriptorType,
+    ) {
+        unsafe {
+            let buffer_descriptor = vk::DescriptorBufferInfo {
+                buffer: self.buffer,
+                offset: 0,
+                range,
+            };
+
+            let write_info = vk::WriteDescriptorSet {
+                dst_set,
+                dst_binding,
+                descriptor_count: 1,
+                descriptor_type,
+                p_buffer_info: &buffer_descriptor,
+                ..Default::default()
+            };
+
+            interface.device.update_descriptor_sets(&[write_info], &[]);
         }
     }
 }
