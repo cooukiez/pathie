@@ -1,0 +1,41 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_ARB_shading_language_420pack : enable
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_scalar_block_layout : enable
+
+layout (local_size_x = 4, local_size_y = 4) in;
+layout (binding = 0, rgba8) uniform image2D computeImage;
+
+layout (std430, binding = 1) uniform Uniform {
+    vec4 pos;
+
+    vec2 res;
+    vec2 mouse;
+
+    float rootSpan;
+
+    uint time;
+} uniformBuffer;
+
+struct TreeNode {
+    uint children[8];
+
+    // 0 = empty | 1 = subdivide | 2 = full
+    uint nodeType;
+    uint parent;
+    vec4 baseColor; // ToDo -> Add transparency
+};
+
+layout (std430, binding = 2) buffer OctreeData { TreeNode octreeData[40000]; };
+
+struct Light {
+    vec4 pos;
+    uint index;
+};
+
+layout (binding = 3) readonly buffer LightData { Light lightData[2000]; };
+
+void main() {
+    imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), vec4(1));
+}
