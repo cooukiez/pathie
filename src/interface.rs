@@ -30,6 +30,7 @@ pub struct Interface {
     pub phy_device: vk::PhysicalDevice,
     pub phy_device_prop: vk::PhysicalDeviceProperties,
     pub phy_device_mem_prop: vk::PhysicalDeviceMemoryProperties,
+    pub phy_device_feature: vk::PhysicalDeviceFeatures,
 
     pub queue_family_index: u32,
     pub device: Device,
@@ -71,12 +72,7 @@ macro_rules! offset_of {
     }};
 }
 
-unsafe extern "system" fn vulkan_debug_callback(
-    flag: vk::DebugUtilsMessageSeverityFlagsEXT,
-    msg_type: vk::DebugUtilsMessageTypeFlagsEXT,
-    callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-    _: *mut c_void,
-) -> vk::Bool32 {
+unsafe extern "system" fn vulkan_debug_callback(flag: vk::DebugUtilsMessageSeverityFlagsEXT, msg_type: vk::DebugUtilsMessageTypeFlagsEXT, callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT, _: *mut c_void) -> vk::Bool32 {
     use vk::DebugUtilsMessageSeverityFlagsEXT as Flag;
     let message = CStr::from_ptr((*callback_data).p_message);
 
@@ -220,6 +216,7 @@ impl Interface {
 
             let phy_device_prop = instance.get_physical_device_properties(phy_device);
             let phy_device_mem_prop = instance.get_physical_device_memory_properties(phy_device);
+            let phy_device_feature = instance.get_physical_device_features(phy_device);
 
             let queue_family_index = queue_family_index as u32;
             let device_extension_list = [
@@ -398,6 +395,7 @@ impl Interface {
                 phy_device,
                 phy_device_prop,
                 phy_device_mem_prop,
+                phy_device_feature,
 
                 queue_family_index,
                 device,
@@ -429,6 +427,56 @@ impl Interface {
         }
     }
 
+    pub fn swap_draw_next<Function: FnOnce(u32)>(
+        &self,
+        function: Function,
+    ) -> Result<bool, Box<dyn Error>> {
+        unsafe {
+            let next_image = self.swapchain_loader.acquire_next_image(
+                self.swapchain,
+                std::u64::MAX,
+                self.present_complete,
+                vk::Fence::null(),
+            );
+
+            let present_index = match next_image {
+                Ok((present_index, _)) => present_index,
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                    return Ok(true);
+                }
+                Err(error) => panic!("ERROR_AQUIRE_IMAGE -> {}", error,),
+            };
+
+            function(present_index);
+
+            let present_info = vk::PresentInfoKHR {
+                wait_semaphore_count: 1,
+                p_wait_semaphores: &self.render_complete,
+                swapchain_count: 1,
+                p_swapchains: &self.swapchain,
+                p_image_indices: &present_index,
+                ..Default::default()
+            };
+
+            let present_result = self
+                .swapchain_loader
+                .queue_present(self.present_queue, &present_info);
+
+            match present_result {
+                Ok(is_suboptimal) if is_suboptimal => {
+                    return Ok(true);
+                }
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                    return Ok(true);
+                }
+                Err(error) => panic!("ERROR_PRESENT_SWAP -> {}", error,),
+                _ => {}
+            }
+
+            Ok(false)
+        }
+    }
+
     /// Function to get the resolution
     /// at which to render. The resolution or scale factor
     /// can be changed in pref.
@@ -457,11 +505,7 @@ impl Interface {
         (surface_res, render_res)
     }
 
-    pub fn find_memorytype_index(
-        &self,
-        memory_req: &vk::MemoryRequirements,
-        flag: vk::MemoryPropertyFlags,
-    ) -> Option<u32> {
+    pub fn find_memorytype_index(&self, memory_req: &vk::MemoryRequirements, flag: vk::MemoryPropertyFlags) -> Option<u32> {
         self.phy_device_mem_prop.memory_types[..self.phy_device_mem_prop.memory_type_count as _]
             .iter()
             .enumerate()

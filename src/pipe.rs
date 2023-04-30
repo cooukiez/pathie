@@ -7,7 +7,7 @@ use std::{
 
 use ash::{
     util::{read_spv, Align},
-    vk
+    vk, Device,
 };
 
 use crate::{
@@ -144,7 +144,6 @@ impl Pipe {
                 DEFAULT_UNIFORM_BUFFER_SIZE,
                 vk::BufferUsageFlags::STORAGE_BUFFER,
                 vk::SharingMode::EXCLUSIVE,
-
                 &light_data,
             );
 
@@ -472,6 +471,69 @@ impl Pipe {
         }
     }
 
+    /// Submit command buffer with
+    /// sync setup. With draw command buffer and
+    /// present queue.
+
+    pub fn record_submit_cmd<Function: FnOnce(vk::CommandBuffer)>(
+        &self,
+        interface: &Interface,
+        draw_cmd_fence: vk::Fence,
+        draw_cmd_buffer: vk::CommandBuffer,
+        present_complete: vk::Semaphore,
+        render_complete: vk::Semaphore,
+        function: Function,
+    ) {
+        unsafe {
+            interface
+                .device
+                .wait_for_fences(&[draw_cmd_fence], true, std::u64::MAX)
+                .expect("DEVICE_LOST");
+
+            interface
+                .device
+                .reset_fences(&[draw_cmd_fence])
+                .expect("FENCE_RESET_FAILED");
+
+            interface
+                .device
+                .reset_command_buffer(
+                    draw_cmd_buffer,
+                    vk::CommandBufferResetFlags::RELEASE_RESOURCES,
+                )
+                .expect("ERR_RESET_CMD_BUFFER");
+
+            let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
+                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+
+            interface
+                .device
+                .begin_command_buffer(draw_cmd_buffer, &command_buffer_begin_info)
+                .expect("ERR_BEGIN_CMD_BUFFER");
+
+            function(draw_cmd_buffer);
+
+            interface
+                .device
+                .end_command_buffer(draw_cmd_buffer)
+                .expect("ERR_END_CMD_BUFFER");
+
+            let command_buffer_list: Vec<vk::CommandBuffer> = vec![draw_cmd_buffer];
+
+            let submit_info = vk::SubmitInfo::builder()
+                .wait_semaphores(&[present_complete])
+                .wait_dst_stage_mask(&[vk::PipelineStageFlags::BOTTOM_OF_PIPE])
+                .command_buffers(&command_buffer_list)
+                .signal_semaphores(&[render_complete])
+                .build();
+
+            interface
+                .device
+                .queue_submit(interface.present_queue, &[submit_info], draw_cmd_fence)
+                .expect("QUEUE_SUBMIT_FAILED");
+        }
+    }
+
     /// Function for blitting one image to another image with possibile
     /// scaling implemented. This function is for fast usage
     /// and not for changing the copy setting.
@@ -539,176 +601,100 @@ impl Pipe {
 
     pub fn draw(&self, interface: &Interface, pref: &Pref) -> Result<bool, Box<dyn Error>> {
         unsafe {
-            let next_image = interface.swapchain_loader.acquire_next_image(
-                interface.swapchain,
-                std::u64::MAX,
-                interface.present_complete,
-                vk::Fence::null(),
-            );
-
-            let present_index = match next_image {
-                Ok((present_index, _)) => present_index,
-                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    return Ok(true);
-                }
-                Err(error) => panic!("ERROR_AQUIRE_IMAGE -> {}", error,),
-            };
-
-            let clear_value = [vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 0.0],
-                },
-            }];
-
-            interface
-                .device
-                .wait_for_fences(&[interface.draw_cmd_fence], true, std::u64::MAX)
-                .expect("DEVICE_LOST");
-
-            interface
-                .device
-                .reset_fences(&[interface.draw_cmd_fence])
-                .expect("FENCE_RESET_FAILED");
-
-            interface
-                .device
-                .reset_command_buffer(
-                    interface.draw_cmd_buffer,
-                    vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-                )
-                .expect("ERR_RESET_CMD_BUFFER");
-
-            let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
-                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-
-            interface
-                .device
-                .begin_command_buffer(interface.draw_cmd_buffer, &command_buffer_begin_info)
-                .expect("ERR_BEGIN_CMD_BUFFER");
-
-            let color_attachment_info = vk::RenderingAttachmentInfoKHR::builder()
-                .image_view(self.image_target_list[present_index as usize].image_view)
-                .load_op(vk::AttachmentLoadOp::CLEAR)
-                .store_op(vk::AttachmentStoreOp::STORE)
-                .clear_value(clear_value[0])
-                .build();
-
-            let color_attachment_list = [color_attachment_info];
-
-            // Begin Draw
-            let rendering_info = vk::RenderingInfoKHR::builder()
-                .render_area(vk::Rect2D {
-                    offset: vk::Offset2D { x: 0, y: 0 },
-                    extent: self.render_res,
-                })
-                .layer_count(1)
-                .color_attachments(&color_attachment_list);
-
-            // Pipe Rendering Part
-            interface
-                .device
-                .cmd_begin_rendering(interface.draw_cmd_buffer, &rendering_info);
-            interface.device.cmd_bind_descriptor_sets(
-                interface.draw_cmd_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline_layout,
-                0,
-                &self.descriptor_set_list[..],
-                &[],
-            );
-            interface.device.cmd_bind_pipeline(
-                interface.draw_cmd_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.graphic_pipeline,
-            );
-            interface
-                .device
-                .cmd_set_viewport(interface.draw_cmd_buffer, 0, &self.viewport);
-            interface
-                .device
-                .cmd_set_scissor(interface.draw_cmd_buffer, 0, &self.scissor);
-            interface.device.cmd_bind_vertex_buffers(
-                interface.draw_cmd_buffer,
-                0,
-                &[self.vertex_buffer.buffer],
-                &[0],
-            );
-            interface.device.cmd_bind_index_buffer(
-                interface.draw_cmd_buffer,
-                self.index_buffer.buffer,
-                0,
-                vk::IndexType::UINT32,
-            );
-            interface.device.cmd_draw_indexed(
-                interface.draw_cmd_buffer,
-                self.index_data.len() as u32,
-                1,
-                0,
-                0,
-                1,
-            );
-            interface
-                .device
-                .cmd_end_rendering(interface.draw_cmd_buffer);
-
-            self.copy_image(
-                interface,
-                pref,
-                self.image_target_list[present_index as usize].image_target,
-                interface.present_img_list[present_index as usize],
-                self.render_res,
-                interface.surface_res,
-            );
-
-            // Finish Draw
-            interface
-                .device
-                .end_command_buffer(interface.draw_cmd_buffer)
-                .expect("ERR_END_CMD_BUFFER");
-
-            let command_buffer_list: Vec<vk::CommandBuffer> = vec![interface.draw_cmd_buffer];
-
-            let submit_info = vk::SubmitInfo::builder()
-                .wait_semaphores(&[interface.present_complete])
-                .wait_dst_stage_mask(&[vk::PipelineStageFlags::BOTTOM_OF_PIPE])
-                .command_buffers(&command_buffer_list)
-                .signal_semaphores(&[interface.render_complete])
-                .build();
-
-            interface
-                .device
-                .queue_submit(
-                    interface.present_queue,
-                    &[submit_info],
+            interface.swap_draw_next(|present_index| {
+                self.record_submit_cmd(
+                    interface,
                     interface.draw_cmd_fence,
-                )
-                .expect("QUEUE_SUBMIT_FAILED");
+                    interface.draw_cmd_buffer,
+                    interface.present_complete,
+                    interface.render_complete,
+                    |_| {
+                        let clear_value = [vk::ClearValue {
+                            color: vk::ClearColorValue {
+                                float32: [0.0, 0.0, 0.0, 0.0],
+                            },
+                        }];
 
-            let present_info = vk::PresentInfoKHR {
-                wait_semaphore_count: 1,
-                p_wait_semaphores: &interface.render_complete,
-                swapchain_count: 1,
-                p_swapchains: &interface.swapchain,
-                p_image_indices: &present_index,
-                ..Default::default()
-            };
+                        let color_attachment_info = vk::RenderingAttachmentInfoKHR::builder()
+                            .image_view(self.image_target_list[present_index as usize].image_view)
+                            .load_op(vk::AttachmentLoadOp::CLEAR)
+                            .store_op(vk::AttachmentStoreOp::STORE)
+                            .clear_value(clear_value[0])
+                            .build();
 
-            let present_result = interface
-                .swapchain_loader
-                .queue_present(interface.present_queue, &present_info);
+                        let color_attachment_list = [color_attachment_info];
 
-            match present_result {
-                Ok(is_suboptimal) if is_suboptimal => {
-                    return Ok(true);
-                }
-                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    return Ok(true);
-                }
-                Err(error) => panic!("ERROR_PRESENT_SWAP -> {}", error,),
-                _ => {}
-            }
+                        // Begin Draw
+                        let rendering_info = vk::RenderingInfoKHR::builder()
+                            .render_area(vk::Rect2D {
+                                offset: vk::Offset2D { x: 0, y: 0 },
+                                extent: self.render_res,
+                            })
+                            .layer_count(1)
+                            .color_attachments(&color_attachment_list);
 
-            Ok(false)
+                        // Pipe Rendering Part
+                        interface
+                            .device
+                            .cmd_begin_rendering(interface.draw_cmd_buffer, &rendering_info);
+                        interface.device.cmd_bind_descriptor_sets(
+                            interface.draw_cmd_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            self.pipeline_layout,
+                            0,
+                            &self.descriptor_set_list[..],
+                            &[],
+                        );
+                        interface.device.cmd_bind_pipeline(
+                            interface.draw_cmd_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            self.graphic_pipeline,
+                        );
+                        interface.device.cmd_set_viewport(
+                            interface.draw_cmd_buffer,
+                            0,
+                            &self.viewport,
+                        );
+                        interface.device.cmd_set_scissor(
+                            interface.draw_cmd_buffer,
+                            0,
+                            &self.scissor,
+                        );
+                        interface.device.cmd_bind_vertex_buffers(
+                            interface.draw_cmd_buffer,
+                            0,
+                            &[self.vertex_buffer.buffer],
+                            &[0],
+                        );
+                        interface.device.cmd_bind_index_buffer(
+                            interface.draw_cmd_buffer,
+                            self.index_buffer.buffer,
+                            0,
+                            vk::IndexType::UINT32,
+                        );
+                        interface.device.cmd_draw_indexed(
+                            interface.draw_cmd_buffer,
+                            self.index_data.len() as u32,
+                            1,
+                            0,
+                            0,
+                            1,
+                        );
+                        interface
+                            .device
+                            .cmd_end_rendering(interface.draw_cmd_buffer);
+
+                        self.copy_image(
+                            interface,
+                            pref,
+                            self.image_target_list[present_index as usize].image_target,
+                            interface.present_img_list[present_index as usize],
+                            self.render_res,
+                            interface.surface_res,
+                        );
+                    },
+                );
+            })
         }
     }
 
@@ -747,7 +733,8 @@ impl Pipe {
                 .get_physical_device_surface_capabilities(interface.phy_device, interface.surface)
                 .unwrap();
 
-            (interface.surface_res, self.render_res) = Interface::get_res(&interface.window, pref, &surface_capa);
+            (interface.surface_res, self.render_res) =
+                Interface::get_res(&interface.window, pref, &surface_capa);
 
             uniform.apply_resolution(self.render_res);
 
@@ -781,7 +768,7 @@ impl Pipe {
                 .swapchain_loader
                 .get_swapchain_images(interface.swapchain)
                 .unwrap();
-            
+
             interface.present_img_view_list = interface
                 .present_img_list
                 .iter()
@@ -983,7 +970,7 @@ impl BufferSet {
             Self { buffer, buffer_mem }
         }
     }
-    
+
     pub fn update<Type: Copy>(&self, interface: &Interface, data: &[Type]) {
         unsafe {
             let buffer_ptr = interface
