@@ -480,6 +480,7 @@ impl Interface {
     /// Function to get the resolution
     /// at which to render. The resolution or scale factor
     /// can be changed in pref.
+    /// First return is surface and other one is render res.
 
     pub fn get_res(window: &Window, pref: &Pref, surface_capa: &vk::SurfaceCapabilitiesKHR) -> (vk::Extent2D, vk::Extent2D) {
         // Select new Dimension

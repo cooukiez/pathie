@@ -13,10 +13,10 @@
 #define dir(rot) vec3(cos(rot.x) * cos(rot.y), sin(rot.y), sin(rot.x) * cos(rot.y))
 #define rad(degree) vec2(3.14 * degree / 180.0)
 
-layout (local_size_x = 1, local_size_y = 1) in;
-layout (binding = 0, rgba8) uniform image2D computeImage;
+layout (local_size_x = 16, local_size_y = 16) in;
+layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 
-layout (std430, binding = 1) uniform Uniform {
+layout (std430, set = 1, binding = 0) uniform Uniform {
     vec4 pos;
 
     vec2 res;
@@ -36,14 +36,14 @@ struct TreeNode {
     vec4 baseColor; // ToDo -> Add transparency
 };
 
-layout (std430, binding = 2) buffer OctreeData { TreeNode octreeData[40000]; };
+layout (std430, set = 2, binding = 0) buffer OctreeData { TreeNode octreeData[40000]; };
 
 struct Light {
     vec4 pos;
     uint index;
 };
 
-layout (binding = 3) readonly buffer LightData { Light lightData[2000]; };
+layout (set = 3, binding = 0) readonly buffer LightData { Light lightData[2000]; };
 
 
 struct Ray {
@@ -279,6 +279,7 @@ Intersection genShadowRay(Intersection lastIntSec) {
 }
 
 void main() {
+    imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), vec4(0));
     vec2 coord = gl_GlobalInvocationID.xy;
     vec2 res = uniformBuffer.res;
     vec2 mouse = uniformBuffer.mouse;
@@ -295,7 +296,7 @@ void main() {
     TreeNode node = octreeData[intSec.info.index];
 
     if (intSec.intersect) {
-        Intersection shadowIntSec = genShadowRay(intSec);
-        imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), node.baseColor * 1 - shadowIntSec.dist / 500.0);
+        // Intersection shadowIntSec = genShadowRay(intSec);
+        imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), node.baseColor * 1);
     }
 }

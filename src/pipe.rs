@@ -7,13 +7,12 @@ use std::{
 
 use ash::{
     util::{read_spv, Align},
-    vk, Device,
+    vk
 };
 
 use crate::{
     interface::Interface,
     octree::{Light, Octree, TreeNode},
-    offset_of,
     uniform::Uniform,
     Pref, DEFAULT_STORAGE_BUFFER_SIZE, DEFAULT_UNIFORM_BUFFER_SIZE,
 };
@@ -27,6 +26,7 @@ struct Vertex {
 pub struct ImageTarget {
     image_target: vk::Image,
     image_mem: vk::DeviceMemory,
+    sampler: vk::Sampler,
     image_view: vk::ImageView,
 }
 
@@ -60,9 +60,13 @@ pub struct Pipe {
 }
 
 impl Pipe {
-    pub fn init(interface: &Interface, uniform: &mut Uniform, octree: &Octree) -> Self {
+    pub fn init(interface: &Interface, pref: &Pref, uniform: &mut Uniform, octree: &Octree) -> Self {
         unsafe {
-            let render_res = interface.surface_res;
+            let surface_capa = interface.surface_loader
+                .get_physical_device_surface_capabilities(interface.phy_device, interface.surface)
+                .unwrap();
+
+            let (_, render_res) = Interface::get_res(&interface.window, pref, &surface_capa);
             uniform.apply_resolution(render_res);
 
             log::info!("Getting ImageTarget List ...");
@@ -516,7 +520,12 @@ impl Pipe {
     /// pipe onto image target and finally blit to swapchain
     /// image. Then end draw.
 
-    pub fn draw(&self, interface: &Interface, pref: &Pref) -> Result<bool, Box<dyn Error>> {
+    pub fn draw(
+        &self,
+        interface: &Interface,
+        pref: &Pref,
+        uniform: &Uniform,
+    ) -> Result<bool, Box<dyn Error>> {
         unsafe {
             interface.swap_draw_next(|present_index| {
                 self.record_submit_cmd(
@@ -532,6 +541,13 @@ impl Pipe {
                             self.descriptor_set_list[0],
                             0,
                             vk::DescriptorType::STORAGE_IMAGE,
+                        );
+                        self.uniform_buffer.describe_in_gpu(
+                            interface,
+                            mem::size_of_val(uniform) as u64,
+                            self.descriptor_set_list[1],
+                            0,
+                            vk::DescriptorType::UNIFORM_BUFFER,
                         );
 
                         // Dispatch Compute Pipe
@@ -550,8 +566,8 @@ impl Pipe {
                         );
                         interface.device.cmd_dispatch(
                             cmd_buffer,
-                            interface.surface_res.width,
-                            interface.surface_res.height,
+                            self.render_res.width / 16,
+                            self.render_res.height / 16,
                             1,
                         );
 
@@ -738,6 +754,22 @@ impl ImageTarget {
                 .bind_image_memory(image_target, image_mem, 0)
                 .expect("UNABLE_TO_BIND_MEM");
 
+            let sampler_info = vk::SamplerCreateInfo::builder()
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR)
+                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .mip_lod_bias(0.0)
+                .max_anisotropy(1.0)
+                .compare_op(vk::CompareOp::NEVER)
+                .min_lod(0.0)
+                .max_lod(1.0)
+                .border_color(vk::BorderColor::FLOAT_OPAQUE_WHITE);
+
+            let sampler = interface.device.create_sampler(&sampler_info, None).unwrap();
+
             // Prepare ImageView Creation and bind Image
             let image_view_info = vk::ImageViewCreateInfo::builder()
                 .view_type(vk::ImageViewType::TYPE_2D)
@@ -767,6 +799,7 @@ impl ImageTarget {
             Self {
                 image_target,
                 image_mem,
+                sampler,
                 image_view,
             }
         }
@@ -783,8 +816,8 @@ impl ImageTarget {
         unsafe {
             let image_descriptor = vk::DescriptorImageInfo {
                 image_view: self.image_view,
-                image_layout: image_layout,
-                ..Default::default()
+                image_layout,
+                sampler: self.sampler,
             };
 
             let write_info = vk::WriteDescriptorSet {

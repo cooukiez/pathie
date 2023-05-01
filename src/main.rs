@@ -100,7 +100,7 @@ impl Render {
         let pref = Pref {
             pref_present_mode: vk::PresentModeKHR::IMMEDIATE,
             img_filter: vk::Filter::LINEAR,
-            img_scale: 2.0,
+            img_scale: 1.0,
 
             name: env!("CARGO_PKG_NAME").to_string(),
             engine_name: "Engine".to_string(),
@@ -110,7 +110,7 @@ impl Render {
                 height: 600,
             },
 
-            use_render_res: false,
+            use_render_res: true,
             render_res: vk::Extent2D {
                 width: 1920,
                 height: 1080,
@@ -129,7 +129,7 @@ impl Render {
         octree.test_scene();
 
         let interface = Interface::init(&event_loop, &pref);
-        let graphic_pipe = Pipe::init(&interface, &mut uniform, &octree);
+        let graphic_pipe = Pipe::init(&interface, &pref, &mut uniform, &octree);
 
         Render {
             state,
@@ -226,7 +226,7 @@ impl Render {
                             let start = Instant::now();
                             self.state.out_of_date = self
                                 .graphic_pipe
-                                .draw(&self.interface, &self.pref)
+                                .draw(&self.interface, &self.pref, &self.uniform)
                                 .expect("RENDER_FAILED");
                             self.state.frame_time = start.elapsed();
                         }
