@@ -218,7 +218,7 @@ Intersection traverseRay(Ray ray, PosInfo info, TraverseProp prop, int skip) {
     }
 
     if (gl_GlobalInvocationID.xy.x < 1 && gl_GlobalInvocationID.xy.y < 1) {
-        debugPrintfEXT("\nFin %d %f", curStep, intSec.dist);
+        // debugPrintfEXT("\nFin %d %f", curStep, intSec.dist);
     }
 
     intSec.info = info;
@@ -257,7 +257,7 @@ Intersection genShadowRay(Intersection lastIntSec) {
     TraverseProp prop = TraverseProp(maxDepth, maxDistance, maxSearchDepth);
 
     if (gl_GlobalInvocationID.xy.x < 1 && gl_GlobalInvocationID.xy.y < 1) {
-        debugPrintfEXT("\nIn %v3f %v3f", vec3(light.pos), lastIntSec.info.posOnEdge);
+        // debugPrintfEXT("\nIn %v3f %v3f", vec3(light.pos), lastIntSec.info.posOnEdge);
     }
 
     float expectedDist = distance(origin, vec3(light.pos));
