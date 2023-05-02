@@ -27,7 +27,7 @@ mod pipe;
 mod service;
 mod uniform;
 
-const DEFAULT_STORAGE_BUFFER_SIZE: u64 = 134217728;
+const DEFAULT_STORAGE_BUFFER_SIZE: u64 = 1342177280;
 const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 
 pub struct RenderState {

@@ -1,0 +1,99 @@
+pub fn move_layer_up(&mut self, data: &Vec<TreeNode>, dir_mask: Vector3<f32>, ) {
+    // Compute the rest ( because of moving up ) into LocalOrigin
+    let new_origin_on_edge = 
+        floor_vec_three(self.origin_on_edge / (self.cur_span / 2.0)) * (self.cur_span * 2.0);
+    
+    self.local_origin += self.origin_on_edge - new_origin_on_edge;
+    self.origin_on_edge = new_origin_on_edge;
+
+    self.cur_recursion -= 1;
+    self.cur_span *= 2.0;
+
+    // Use earlier saved mask and move in dir
+    self.mask_in_parent[self.cur_recursion] = 
+        add_dir_to_mask(self.mask_in_parent[self.cur_recursion], dir_mask, );
+
+    // Temp save parent of parent of CurNode
+    let parent_of_parent = 
+        data[data[self.cur_index].parent as usize];
+    
+    // Moved mask into SpaceIndex and get global index of Child
+    let next_space_index = 
+        pos_to_index(self.mask_in_parent[self.cur_recursion], 2, );
+    self.cur_index = parent_of_parent
+        .children[next_space_index] as usize;
+}
+
+// Ground
+for x in 0..100 {
+    for z in 0..100 {
+        let base_color = Vector4::new(1.0, 1.0, 1.0, 0.0);
+        self.insert_node(
+            Vector3::new(100.0 + x as f32, 100.0, 100.0 + z as f32),
+            base_color,
+            2,
+        );
+    }
+}
+
+// GreenWall
+for z in 0..100 {
+    for y in 0..100 {
+        let base_color = Vector4::new(0.0, 1.0, 0.0, 0.0);
+        self.insert_node(
+            Vector3::new(100.0, 100.0 + y as f32, 100.0 + z as f32),
+            base_color,
+            2,
+        );
+    }
+}
+
+// RedWall
+for z in 0..100 {
+    for y in 0..100 {
+        let base_color = Vector4::new(1.0, 0.0, 0.0, 0.0);
+        self.insert_node(
+            Vector3::new(200.0, 100.0 + y as f32, 100.0 + z as f32),
+            base_color,
+            2,
+        );
+    }
+}
+
+// BackWall
+for x in 0..100 {
+    for y in 0..100 {
+        let base_color = Vector4::new(1.0, 1.0, 1.0, 0.0);
+        self.insert_node(
+            Vector3::new(100.0 + x as f32, 100.0 + y as f32, 200.0),
+            base_color,
+            2,
+        );
+    }
+}
+
+// Ceilling
+for x in 0..100 {
+    for z in 0..100 {
+        let base_color = Vector4::new(1.0, 1.0, 1.0, 0.0);
+        self.insert_node(
+            Vector3::new(100.0 + x as f32, 200.0, 100.0 + z as f32),
+            base_color,
+            2,
+        );
+    }
+}
+
+// Box
+for x in 0..20 {
+    for z in 0..20 {
+        for y in 0..20 {
+            let base_color = Vector4::new(0.0, 0.0, 1.0, 0.0);
+            self.insert_node(
+                Vector3::new(140.0 + x as f32, 100.0 + y as f32, 140.0 + z as f32),
+                base_color,
+                2,
+            );
+        }
+    }
+}
