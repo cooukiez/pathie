@@ -88,7 +88,7 @@ impl Pipe {
             );
 
             log::info!("Creating OctreeBuffer ...");
-            let octree_data = octree.data.clone();
+            let octree_data = octree.node_data.clone();
             let octree_buffer = BufferSet::new(
                 interface,
                 align_of::<TreeNode>() as u64,
