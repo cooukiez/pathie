@@ -1,9 +1,28 @@
 use cgmath::{Array, Vector2, Vector3, Vector4};
 
+#[macro_export]
 macro_rules! sqr {
     ($num : expr) => {{
         $num * $num
     }};
+}
+
+#[macro_export]
+macro_rules! cub {
+    ($num : expr) => {{
+        $num * $num * $num
+    }};
+}
+
+pub type TwoDeeVec<Type> = Vec<Vec<Type>>;
+pub type ThreeDeeVec<Type> = Vec<Vec<Vec<Type>>>;
+
+pub fn vec_two_dee<Type: std::clone::Clone>(side_len: usize, content: Type) -> TwoDeeVec<Type> {
+    vec![vec![content; side_len]; side_len]
+}
+
+pub fn vec_three_dee<Type: std::clone::Clone>(side_len: usize, content: Type) -> ThreeDeeVec<Type> {
+    vec![vec![vec![content; side_len]; side_len]; side_len]
 }
 
 pub trait Mask {

@@ -2,12 +2,20 @@ use cgmath::{Vector3, Vector4};
 use noise::{Fbm, NoiseFn, Perlin};
 use rand::Rng;
 
-use crate::service::{Mask, Vector};
+use crate::{
+    cub,
+    service::{vec_three_dee, Mask, ThreeDeeVec, Vector},
+};
 
-pub const MAX_DEPTH: usize = 8;
+pub const MAX_DEPTH: usize = 10;
 pub const ROOT_SPAN: f32 = (1 << MAX_DEPTH) as f32;
-pub const MICRO_GROUP_LEN: usize = 16;
-pub const MICRO_GROUP_SIZE: usize = MICRO_GROUP_LEN * MICRO_GROUP_LEN * MICRO_GROUP_LEN;
+
+// MG = MicroGroup
+
+// At which depth does micro group start
+pub const MG_DEPTH: usize = 8;
+pub const MG_LEN: usize = (ROOT_SPAN as i32 / (2 as i32).pow(MG_DEPTH as u32)) as usize;
+pub const MG_SIZE: usize = cub!(MG_LEN);
 
 // In struct, Vector four is used because of memory alignment in vulkan.
 // Vector three is aligned as vec four in vulkan but as vec three in rust.
@@ -18,12 +26,14 @@ pub const MICRO_GROUP_SIZE: usize = MICRO_GROUP_LEN * MICRO_GROUP_LEN * MICRO_GR
 pub struct TreeNode {
     pub children: [u32; 8],
 
-    // 0 = empty | 1 = subdivide | 2 = MicroGroup
+    // 0 = empty | 1 = subdivide | 2 = leaf | 3 = MicroGroup
     pub node_type: u32,
     pub parent: u32,
+    pub micro_group: u32,
 
-    pub padding: [u32; 2],
+    pub padding: [u32; 1],
 
+    // Store material here later on
     pub base_color: Vector4<f32>,
 }
 
@@ -31,7 +41,8 @@ pub struct TreeNode {
 #[derive(Clone, Debug, Copy)]
 pub struct MicroGroup {
     // Store material info in each cell
-    pub data: [u32; MICRO_GROUP_SIZE],
+    // ? Replace with four comp. vec
+    pub data: [u32; MG_SIZE],
 
     // First three comp. offset from 0,0
     // Last comp. is parent in octree
@@ -83,7 +94,7 @@ impl TreeNode {
 
     pub fn set(&mut self, base_color: Vector4<f32>, node_type: u32) {
         self.node_type = node_type;
-        self.base_color = base_color / MICRO_GROUP_LEN as f32;
+        self.base_color = base_color;
     }
 
     pub fn get_child_mask(cur_span: f32, local_origin: Vector3<f32>) -> Vector3<f32> {
@@ -105,12 +116,9 @@ impl Octree {
         let mut node = node_data[pos_info.index()];
 
         if node.node_type == 1 {
-            node.base_color += base_color.clone() / pos_info.span / MICRO_GROUP_LEN as f32;
+            node.base_color += base_color.clone() / pos_info.span;
         } else {
-            node.set(
-                base_color.clone() / pos_info.span / MICRO_GROUP_LEN as f32,
-                1,
-            );
+            node.set(base_color.clone() / pos_info.span, 1);
 
             for index in 0..8 {
                 node.children[index] = node_data.len() as u32;
@@ -119,34 +127,6 @@ impl Octree {
         }
 
         node_data[pos_info.index()] = node;
-    }
-
-    pub fn insert_into_micro_group(
-        node_data: &mut Vec<TreeNode>,
-        micro_group_data: &mut Vec<MicroGroup>,
-        pos_info: &PosInfo,
-        base_color: Vector4<f32>,
-    ) {
-        let mut node = node_data[pos_info.index()];
-
-        if node.node_type != 2 {
-            node_data[pos_info.index()].set(base_color.clone(), 2);
-
-            node.children[0] = micro_group_data.len() as u32;
-
-            micro_group_data.push(MicroGroup {
-                loc_data: pos_info
-                    .pos_on_edge
-                    .truncate()
-                    .extend(pos_info.index() as f32),
-                ..Default::default()
-            });
-        }
-
-        micro_group_data[node.children[0] as usize].data[pos_info
-            .local_pos
-            .truncate()
-            .to_index(MICRO_GROUP_LEN as f32)] = base_color.truncate().to_index(256.0) as u32;
     }
 
     pub fn node_at_pos(&mut self, pos: Vector3<f32>) -> PosInfo {
@@ -190,9 +170,98 @@ impl Octree {
             pos_info.move_into_child(&self.node_data);
         }
 
-        Self::insert_into_micro_group(&mut self.node_data, &mut self.micro_group_data, &pos_info, base_color);
+        self.node_data[pos_info.index()].set(base_color.clone(), node_type);
 
         pos_info
+    }
+
+    /// Recurse octree from depth to MAX_DEPTH. Will collect
+    /// leaf node_list in spactially correct order.
+
+    pub fn recurse_tree_and_collect_leaf(
+        node_data: &Vec<TreeNode>,
+        pos_info: &PosInfo,
+        leaf_children: &ThreeDeeVec<TreeNode>,
+    ) -> ThreeDeeVec<TreeNode> {
+        // Get current node
+        let cur_node = node_data[pos_info.index()];
+        let mut leaf_children = leaf_children.clone();
+
+        cur_node.children.iter().for_each(|&child_idx| {
+            let child = node_data[child_idx as usize];
+            // New position information
+            let new_pos_info = PosInfo {
+                index: child_idx,
+                depth: pos_info.depth + 1,
+                span: pos_info.span / 2.0,
+                // Ignore 4. comp.
+                local_pos: pos_info.local_pos + Vector4::from([pos_info.span / 2.0; 4]),
+                ..Default::default()
+            };
+
+            // Nodetype leaf -> save and return
+            if child.node_type == 2 {
+                leaf_children[new_pos_info.local_pos.x as usize]
+                    [new_pos_info.local_pos.y as usize][new_pos_info.local_pos.z as usize] = child;
+
+            // Nodetype subdivide and not MAX_DEPTH -> further recurse
+            } else if child.node_type == 1 && (pos_info.depth as usize) < MAX_DEPTH {
+                leaf_children =
+                    Self::recurse_tree_and_collect_leaf(node_data, &new_pos_info, &leaf_children);
+            }
+        });
+
+        leaf_children
+    }
+
+    /// Need for depth to be at MG_DEPTH
+
+    pub fn branch_to_mg(node_data: &Vec<TreeNode>) {
+        let mut pos_info = PosInfo {
+            span: ROOT_SPAN,
+            index: 0,
+
+            local_pos: Vector4::default(),
+            pos_on_edge: Vector4::default(),
+
+            ..Default::default()
+        };
+
+        for _ in 1..MG_DEPTH + 1 {
+            pos_info.move_into_child(&node_data);
+        }
+
+        // The Node which the MicroGroup is based on or consume
+
+        let test_leaf_list = vec_three_dee(MG_LEN, TreeNode::default());
+        Self::recurse_tree_and_collect_leaf(node_data, &pos_info, &test_leaf_list);
+    }
+
+    pub fn insert_into_micro_group(
+        node_data: &mut Vec<TreeNode>,
+        micro_group_data: &mut Vec<MicroGroup>,
+        pos_info: &PosInfo,
+        base_color: Vector4<f32>,
+    ) {
+        let mut node = node_data[pos_info.index()];
+
+        if node.node_type != 2 {
+            node_data[pos_info.index()].set(base_color.clone(), 2);
+
+            node.children[0] = micro_group_data.len() as u32;
+
+            micro_group_data.push(MicroGroup {
+                loc_data: pos_info
+                    .pos_on_edge
+                    .truncate()
+                    .extend(pos_info.index() as f32),
+                ..Default::default()
+            });
+        }
+
+        micro_group_data[node.children[0] as usize].data
+            [pos_info.local_pos.truncate().to_index(MG_LEN as f32)] =
+            base_color.truncate().to_index(256.0) as u32;
     }
 
     pub fn test_scene(&mut self) {
@@ -214,6 +283,8 @@ impl Octree {
                 );
             }
         }
+
+        Self::branch_to_mg(&self.node_data);
     }
 }
 
@@ -248,7 +319,8 @@ impl Default for TreeNode {
             children: [0; 8],
             node_type: 0,
             parent: 0,
-            padding: [0; 2],
+            micro_group: 0,
+            padding: [0; 1],
         }
     }
 }
@@ -256,7 +328,7 @@ impl Default for TreeNode {
 impl Default for MicroGroup {
     fn default() -> Self {
         Self {
-            data: [0; MICRO_GROUP_SIZE],
+            data: [0; MG_SIZE],
             loc_data: Vector4::default(),
         }
     }

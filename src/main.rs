@@ -90,7 +90,7 @@ fn main() {
     thread::spawn(|| loop {});
 
     let mut render = Render::get_render();
-    render.execute(Instant::now());
+    // render.execute(Instant::now());
 }
 
 impl Render {

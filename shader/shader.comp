@@ -91,5 +91,5 @@ uint maskToIndex(vec3 mask) {
 }
 
 void main() {
-    imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), vec4(0));
+    imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), vec4(1));
 }
