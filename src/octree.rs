@@ -233,8 +233,8 @@ impl Octree {
 
         // The Node which the MicroGroup is based on or consume
 
-        let test_leaf_list = vec_three_dee(MG_LEN, TreeNode::default());
-        Self::recurse_tree_and_collect_leaf(node_data, &pos_info, &test_leaf_list);
+        let mut test_leaf_list = vec_three_dee(MG_LEN, TreeNode::default());
+        test_leaf_list = Self::recurse_tree_and_collect_leaf(node_data, &pos_info, &test_leaf_list);
     }
 
     pub fn insert_into_micro_group(
@@ -283,6 +283,17 @@ impl Octree {
                 );
             }
         }
+
+        self.insert_node(
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector4::new(
+                rng.gen_range(0.0..1.0),
+                rng.gen_range(0.0..1.0),
+                rng.gen_range(0.0..1.0),
+                1.0,
+            ),
+            2,
+        );
 
         Self::branch_to_mg(&self.node_data);
     }
