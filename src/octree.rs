@@ -181,8 +181,8 @@ impl Octree {
     pub fn recurse_tree_and_collect_leaf(
         node_data: &Vec<TreeNode>,
         pos_info: &PosInfo,
-        leaf_children: &ThreeDeeVec<TreeNode>,
-    ) -> ThreeDeeVec<TreeNode> {
+        leaf_children: &Vec<TreeNode>,
+    ) -> Vec<TreeNode> {
         // Get current node
         let cur_node = node_data[pos_info.index()];
         let mut leaf_children = leaf_children.clone();
@@ -201,8 +201,7 @@ impl Octree {
 
             // Nodetype leaf -> save and return
             if child.node_type == 2 {
-                leaf_children[new_pos_info.local_pos.x as usize]
-                    [new_pos_info.local_pos.y as usize][new_pos_info.local_pos.z as usize] = child;
+                leaf_children[new_pos_info.local_pos.truncate().to_index(MG_LEN as f32)] = child;
 
             // Nodetype subdivide and not MAX_DEPTH -> further recurse
             } else if child.node_type == 1 && (pos_info.depth as usize) < MAX_DEPTH {
@@ -233,7 +232,7 @@ impl Octree {
 
         // The Node which the MicroGroup is based on or consume
 
-        let mut test_leaf_list = vec_three_dee(MG_LEN, TreeNode::default());
+        let mut test_leaf_list = vec![TreeNode::default(); MG_SIZE];
         test_leaf_list = Self::recurse_tree_and_collect_leaf(node_data, &pos_info, &test_leaf_list);
     }
 
@@ -306,6 +305,46 @@ impl PosInfo {
     pub fn node(&self, node_data: &Vec<TreeNode>) -> TreeNode {
         node_data[self.index()].clone()
     }
+    pub fn parent(&self, node_data: &Vec<TreeNode>) -> TreeNode {
+        node_data[self.node(node_data).parent as usize].clone()
+    }
+
+    pub fn neighbor(&self, node_data: &Vec<TreeNode>, dir_mask: &Vector3<f32>) -> PosInfo {
+        let mut pos_info = self.clone();
+
+        for depth in self.depth as usize..MAX_DEPTH {
+            let new_mask = self.mask_info[depth].truncate() + dir_mask.clone();
+
+            // Check if move up
+            if new_mask.any(|num| num > 1.0 || num < 0.0) {
+                pos_info.move_up(node_data);
+            } else {
+                // Stop moving up and get next node
+                let space_index = dir_mask.to_index(2.0);
+                pos_info.index = self.parent(node_data).children[space_index] as u32;
+
+                // Start moving down
+                while pos_info.node(node_data).node_type == 1 {
+                    pos_info.move_into_child(node_data);
+                }
+
+                break;
+            }
+        }
+
+        pos_info
+    }
+
+    pub fn move_up(&mut self, node_data: &Vec<TreeNode>) {
+        let pos_mask = self.mask_info[self.depth as usize];
+        self.pos_on_edge -= pos_mask * self.span;
+        self.local_pos += pos_mask * self.span;
+
+        self.span *= 2.0;
+        self.depth -= 1;
+
+        self.index = self.node(node_data).parent;
+    }
 
     pub fn move_into_child(&mut self, node_data: &Vec<TreeNode>) {
         self.span *= 0.5;
@@ -319,7 +358,7 @@ impl PosInfo {
         self.mask_info[self.depth as usize] = (child_mask.clone()).extend(0.0);
         let space_index = child_mask.to_index(2.0);
 
-        self.index = node_data[self.index()].children[space_index] as u32;
+        self.index = self.node(node_data).children[space_index] as u32;
     }
 }
 
