@@ -87,6 +87,8 @@ pub trait Vector {
     fn boundary(&self, min: Self, max: Self) -> Self;
 
     fn default() -> Self;
+
+    fn any(&self, condition: fn(f32) -> bool) -> bool;
 }
 
 impl Vector for Vector4<f32> {
@@ -134,6 +136,10 @@ impl Vector for Vector4<f32> {
             w: 0.0,
         }
     }
+
+    fn any(&self, condition: fn(f32) -> bool) -> bool {
+        condition(self.x) || condition(self.y) || condition(self.z) || condition(self.w)
+    }
 }
 
 impl Vector for Vector3<f32> {
@@ -176,6 +182,10 @@ impl Vector for Vector3<f32> {
             z: 0.0,
         }
     }
+
+    fn any(&self, condition: fn(f32) -> bool) -> bool {
+        condition(self.x) || condition(self.y) || condition(self.z)
+    }
 }
 
 impl Vector for Vector2<f32> {
@@ -209,5 +219,9 @@ impl Vector for Vector2<f32> {
 
     fn default() -> Self {
         Self { x: 0.0, y: 0.0 }
+    }
+
+    fn any(&self, condition: fn(f32) -> bool) -> bool {
+        condition(self.x) || condition(self.y)
     }
 }
