@@ -179,16 +179,17 @@ impl Octree {
     /// leaf node_list in spactially correct order.
 
     pub fn recurse_tree_and_collect_leaf(
-        node_data: &Vec<TreeNode>,
+        &self,
         pos_info: &PosInfo,
-        leaf_children: &ThreeDeeVec<TreeNode>,
-    ) -> ThreeDeeVec<TreeNode> {
+        branch_root_span: f32,
+        leaf_children: &Vec<TreeNode>,
+    ) -> Vec<TreeNode> {
         // Get current node
-        let cur_node = node_data[pos_info.index()];
+        let cur_node = self.node_data[pos_info.index()];
         let mut leaf_children = leaf_children.clone();
 
         cur_node.children.iter().for_each(|&child_idx| {
-            let child = node_data[child_idx as usize];
+            let child = self.node_data[child_idx as usize];
             // New position information
             let new_pos_info = PosInfo {
                 index: child_idx,
@@ -201,13 +202,12 @@ impl Octree {
 
             // Nodetype leaf -> save and return
             if child.node_type == 2 {
-                leaf_children[new_pos_info.local_pos.x as usize]
-                    [new_pos_info.local_pos.y as usize][new_pos_info.local_pos.z as usize] = child;
+                leaf_children[new_pos_info.local_pos.truncate().to_index(branch_root_span)]= child;
 
             // Nodetype subdivide and not MAX_DEPTH -> further recurse
             } else if child.node_type == 1 && (pos_info.depth as usize) < MAX_DEPTH {
                 leaf_children =
-                    Self::recurse_tree_and_collect_leaf(node_data, &new_pos_info, &leaf_children);
+                    self.recurse_tree_and_collect_leaf(&new_pos_info, branch_root_span, &leaf_children);
             }
         });
 
@@ -236,7 +236,6 @@ impl Octree {
         let mut test_leaf_list = vec_three_dee(MG_LEN, TreeNode::default());
         test_leaf_list = Self::recurse_tree_and_collect_leaf(node_data, &pos_info, &test_leaf_list);
     }
-
     pub fn insert_into_micro_group(
         node_data: &mut Vec<TreeNode>,
         micro_group_data: &mut Vec<MicroGroup>,
