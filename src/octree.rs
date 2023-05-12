@@ -202,12 +202,15 @@ impl Octree {
 
             // Nodetype leaf -> save and return
             if child.node_type == 2 {
-                leaf_children[new_pos_info.local_pos.truncate().to_index(branch_root_span)]= child;
+                leaf_children[new_pos_info.local_pos.truncate().to_index(branch_root_span)] = child;
 
             // Nodetype subdivide and not MAX_DEPTH -> further recurse
             } else if child.node_type == 1 && (pos_info.depth as usize) < MAX_DEPTH {
-                leaf_children =
-                    self.recurse_tree_and_collect_leaf(&new_pos_info, branch_root_span, &leaf_children);
+                leaf_children = self.recurse_tree_and_collect_leaf(
+                    &new_pos_info,
+                    branch_root_span,
+                    &leaf_children,
+                );
             }
         });
 
@@ -234,7 +237,8 @@ impl Octree {
         // The Node which the MicroGroup is based on or consume
 
         let mut test_leaf_list = vec![TreeNode::default(); MG_SIZE];
-        test_leaf_list = self.recurse_tree_and_collect_leaf(&pos_info, MG_LEN as f32, &test_leaf_list);
+        test_leaf_list =
+            self.recurse_tree_and_collect_leaf(&pos_info, MG_LEN as f32, &test_leaf_list);
     }
     pub fn insert_into_micro_group(
         node_data: &mut Vec<TreeNode>,
@@ -309,10 +313,15 @@ impl PosInfo {
         node_data[self.node(node_data).parent as usize].clone()
     }
 
-    pub fn neighbor(&self, node_data: &Vec<TreeNode>, dir_mask: &Vector3<f32>) -> PosInfo {
+    pub fn neighbor(
+        &self,
+        node_data: &Vec<TreeNode>,
+        max_depth: usize,
+        dir_mask: &Vector3<f32>,
+    ) -> Option<PosInfo> {
         let mut pos_info = self.clone();
 
-        for depth in self.depth as usize..MAX_DEPTH {
+        for depth in self.depth as usize..max_depth {
             let new_mask = self.mask_info[depth].truncate() + dir_mask.clone();
 
             // Check if move up
@@ -328,11 +337,11 @@ impl PosInfo {
                     pos_info.move_into_child(node_data);
                 }
 
-                break;
+                return Some(pos_info);
             }
         }
 
-        pos_info
+        None
     }
 
     pub fn move_up(&mut self, node_data: &Vec<TreeNode>) {
