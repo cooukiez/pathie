@@ -240,32 +240,6 @@ impl Octree {
         test_leaf_list =
             self.recurse_tree_and_collect_leaf(&pos_info, MG_LEN as f32, &test_leaf_list);
     }
-    pub fn insert_into_micro_group(
-        node_data: &mut Vec<TreeNode>,
-        micro_group_data: &mut Vec<MicroGroup>,
-        pos_info: &PosInfo,
-        base_color: Vector4<f32>,
-    ) {
-        let mut node = node_data[pos_info.index()];
-
-        if node.node_type != 2 {
-            node_data[pos_info.index()].set(base_color.clone(), 2);
-
-            node.children[0] = micro_group_data.len() as u32;
-
-            micro_group_data.push(MicroGroup {
-                loc_data: pos_info
-                    .pos_on_edge
-                    .truncate()
-                    .extend(pos_info.index() as f32),
-                ..Default::default()
-            });
-        }
-
-        micro_group_data[node.children[0] as usize].data
-            [pos_info.local_pos.truncate().to_index(MG_LEN as f32)] =
-            base_color.truncate().to_index(256.0) as u32;
-    }
 
     pub fn test_scene(&mut self) {
         let fbm = Fbm::<Perlin>::new(0);
