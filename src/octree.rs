@@ -10,12 +10,9 @@ use crate::{
 pub const MAX_DEPTH: usize = 10;
 pub const ROOT_SPAN: f32 = (1 << MAX_DEPTH) as f32;
 
-// MG = MicroGroup
+// Obj = Object or vox_object
 
-// At which depth does micro group start
-pub const MG_DEPTH: usize = 8;
-pub const MG_LEN: usize = (ROOT_SPAN as i32 / (2 as i32).pow(MG_DEPTH as u32)) as usize;
-pub const MG_SIZE: usize = cub!(MG_LEN);
+pub const OBJ_MAX_NODE: usize = 4096;
 
 // In struct, Vector four is used because of memory alignment in vulkan.
 // Vector three is aligned as vec four in vulkan but as vec three in rust.
@@ -37,27 +34,6 @@ pub struct TreeNode {
     pub base_color: Vector4<f32>,
 }
 
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct MicroGroup {
-    // Store material info in each cell
-    // ? Replace with four comp. vec
-    pub data: [u32; MG_SIZE],
-
-    // First three comp. offset from 0,0
-    // Last comp. is parent in octree
-    pub loc_data: Vector4<f32>,
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct Light {
-    pub pos: Vector3<f32>,
-    pub index: u32,
-
-    pub padding: [u32; 3],
-}
-
 #[derive(Clone, Debug)]
 pub struct Ray {
     pub origin: Vector3<f32>,
@@ -76,11 +52,16 @@ pub struct PosInfo {
     pub depth: i32,
 }
 
-pub struct Octree {
+pub struct WorldOctree {
     // RootIndex = 0
     pub node_data: Vec<TreeNode>, // Octree as List
-    pub micro_group_data: Vec<MicroGroup>,
-    pub light_data: Vec<Light>,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct Object {
+    // RootIndex = 0
+    pub node_data: [TreeNode; OBJ_MAX_NODE], // Object Octree as List
 }
 
 impl TreeNode {
@@ -217,30 +198,6 @@ impl Octree {
         leaf_children
     }
 
-    /// Need for depth to be at MG_DEPTH
-
-    pub fn branch_to_mg(&self, node_data: &Vec<TreeNode>) {
-        let mut pos_info = PosInfo {
-            span: ROOT_SPAN,
-            index: 0,
-
-            local_pos: Vector4::default(),
-            pos_on_edge: Vector4::default(),
-
-            ..Default::default()
-        };
-
-        for _ in 1..MG_DEPTH + 1 {
-            pos_info.move_into_child(&node_data);
-        }
-
-        // The Node which the MicroGroup is based on or consume
-
-        let mut test_leaf_list = vec![TreeNode::default(); MG_SIZE];
-        test_leaf_list =
-            self.recurse_tree_and_collect_leaf(&pos_info, MG_LEN as f32, &test_leaf_list);
-    }
-
     pub fn test_scene(&mut self) {
         let fbm = Fbm::<Perlin>::new(0);
 
@@ -271,8 +228,6 @@ impl Octree {
             ),
             2,
         );
-
-        self.branch_to_mg(&self.node_data);
     }
 }
 
