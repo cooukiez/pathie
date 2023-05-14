@@ -51,15 +51,6 @@ pub struct Octree {
     pub root_span: f32,
 }
 
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct Object {
-    // RootIndex = 0
-    // Octree is restricted to certain size bc of mem alignment
-    pub node_data: [TreeNode; MAX_NODE], // Octree as List
-    pub root_span: f32,
-}
-
 impl TreeNode {
     pub fn new(parent: usize) -> TreeNode {
         TreeNode {
@@ -86,11 +77,11 @@ impl Octree {
     /// account. If node has no children, create them.
 
     pub fn create_children(
-        node_data: &mut Vec<TreeNode>,
+        &mut self,
         pos_info: &PosInfo,
         base_color: Vector4<f32>,
     ) {
-        let mut node = node_data[pos_info.index()];
+        let mut node = self.node_data[pos_info.index()];
 
         if node.node_type == 1 {
             node.base_color += base_color.clone() / pos_info.span;
@@ -98,20 +89,20 @@ impl Octree {
             node.set(base_color.clone() / pos_info.span, 1);
 
             for index in 0..8 {
-                node.children[index] = node_data.len() as u32;
-                node_data.push(TreeNode::new(pos_info.index()));
+                node.children[index] = self.node_data.len() as u32;
+                self.node_data.push(TreeNode::new(pos_info.index()));
             }
         }
 
-        node_data[pos_info.index()] = node;
+        self.node_data[pos_info.index()] = node;
     }
 
-    pub fn node_at_pos(&mut self, pos: Vector3<f32>) -> PosInfo {
+    pub fn node_at_pos(&self, pos: Vector3<f32>) -> PosInfo {
         let mut pos_info = PosInfo {
-            span: ROOT_SPAN,
+            span: self.root_span,
 
-            local_pos: (pos % ROOT_SPAN).extend(0.0),
-            pos_on_edge: (pos - (pos % ROOT_SPAN)).extend(0.0),
+            local_pos: (pos % self.root_span).extend(0.0),
+            pos_on_edge: (pos - (pos % self.root_span)).extend(0.0),
 
             ..Default::default()
         };
@@ -134,16 +125,16 @@ impl Octree {
         node_type: u32,
     ) -> PosInfo {
         let mut pos_info = PosInfo {
-            span: ROOT_SPAN,
+            span: self.root_span,
 
-            local_pos: (insert_pos % ROOT_SPAN).extend(0.0),
-            pos_on_edge: (insert_pos - (insert_pos % ROOT_SPAN)).extend(0.0),
+            local_pos: (insert_pos % self.root_span).extend(0.0),
+            pos_on_edge: (insert_pos - (insert_pos % self.root_span)).extend(0.0),
 
             ..Default::default()
         };
 
         for _ in 1..MAX_DEPTH {
-            Self::create_children(&mut self.node_data, &pos_info, base_color.clone());
+            self.create_children(&pos_info, base_color.clone());
             pos_info.move_into_child(&self.node_data);
         }
 
@@ -296,24 +287,6 @@ impl PosInfo {
     }
 }
 
-impl Object {
-    pub fn from_octree(octree: &Octree) -> Object {
-        if octree.node_data.len() < OBJ_MAX_NODE {
-            octree.node_data.append(&mut vec![
-                TreeNode::default();
-                (OBJ_MAX_NODE - octree.node_data.len()) as usize
-            ]);
-        }
-        let node_data: [TreeNode; OBJ_MAX_NODE] =
-            octree.node_data[0..OBJ_MAX_NODE].try_into().unwrap();
-
-        Self {
-            node_data,
-            root_span: octree.root_span,
-        }
-    }
-}
-
 impl Default for TreeNode {
     fn default() -> Self {
         Self {
@@ -355,15 +328,6 @@ impl Default for Octree {
     fn default() -> Self {
         Self {
             node_data: vec![TreeNode::default()],
-            root_span: (1 << MAX_DEPTH) as f32,
-        }
-    }
-}
-
-impl Default for Object {
-    fn default() -> Self {
-        Self {
-            node_data: [TreeNode::default(); OBJ_MAX_NODE],
             root_span: (1 << MAX_DEPTH) as f32,
         }
     }

@@ -12,7 +12,7 @@ use ash::{
 
 use crate::{
     interface::Interface,
-    octree::{Light, Octree, TreeNode},
+    octree::{Octree, TreeNode},
     uniform::Uniform,
     Pref, DEFAULT_STORAGE_BUFFER_SIZE, DEFAULT_UNIFORM_BUFFER_SIZE,
 };
