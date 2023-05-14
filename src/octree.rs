@@ -2,17 +2,10 @@ use cgmath::{Vector3, Vector4};
 use noise::{Fbm, NoiseFn, Perlin};
 use rand::Rng;
 
-use crate::{
-    cub,
-    service::{vec_three_dee, Mask, ThreeDeeVec, Vector},
-};
+use crate::service::{Mask, Vector};
 
 pub const MAX_DEPTH: usize = 10;
-pub const ROOT_SPAN: f32 = (1 << MAX_DEPTH) as f32;
-
-// Obj = Object or vox_object
-
-pub const OBJ_MAX_NODE: usize = 4096;
+pub const MAX_NODE: usize = 8192;
 
 // In struct, Vector four is used because of memory alignment in vulkan.
 // Vector three is aligned as vec four in vulkan but as vec three in rust.
@@ -52,16 +45,19 @@ pub struct PosInfo {
     pub depth: i32,
 }
 
-pub struct WorldOctree {
+pub struct Octree {
     // RootIndex = 0
     pub node_data: Vec<TreeNode>, // Octree as List
+    pub root_span: f32,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Object {
     // RootIndex = 0
-    pub node_data: [TreeNode; OBJ_MAX_NODE], // Object Octree as List
+    // Octree is restricted to certain size bc of mem alignment
+    pub node_data: [TreeNode; MAX_NODE], // Octree as List
+    pub root_span: f32,
 }
 
 impl TreeNode {
@@ -300,6 +296,24 @@ impl PosInfo {
     }
 }
 
+impl Object {
+    pub fn from_octree(octree: &Octree) -> Object {
+        if octree.node_data.len() < OBJ_MAX_NODE {
+            octree.node_data.append(&mut vec![
+                TreeNode::default();
+                (OBJ_MAX_NODE - octree.node_data.len()) as usize
+            ]);
+        }
+        let node_data: [TreeNode; OBJ_MAX_NODE] =
+            octree.node_data[0..OBJ_MAX_NODE].try_into().unwrap();
+
+        Self {
+            node_data,
+            root_span: octree.root_span,
+        }
+    }
+}
+
 impl Default for TreeNode {
     fn default() -> Self {
         Self {
@@ -309,25 +323,6 @@ impl Default for TreeNode {
             parent: 0,
             micro_group: 0,
             padding: [0; 1],
-        }
-    }
-}
-
-impl Default for MicroGroup {
-    fn default() -> Self {
-        Self {
-            data: [0; MG_SIZE],
-            loc_data: Vector4::default(),
-        }
-    }
-}
-
-impl Default for Light {
-    fn default() -> Self {
-        Self {
-            pos: Vector3::default(),
-            index: 0,
-            padding: [0; 3],
         }
     }
 }
@@ -350,7 +345,7 @@ impl Default for PosInfo {
             pos_on_edge: Vector4::default(),
 
             index: 0,
-            span: ROOT_SPAN,
+            span: 0.0,
             depth: 0,
         }
     }
@@ -358,14 +353,18 @@ impl Default for PosInfo {
 
 impl Default for Octree {
     fn default() -> Self {
-        log::info!(
-            "Creating Octree with RootSpan [ {} ] -> VoxSpan is 1.0 ...",
-            ROOT_SPAN
-        );
         Self {
             node_data: vec![TreeNode::default()],
-            micro_group_data: vec![],
-            light_data: vec![],
+            root_span: (1 << MAX_DEPTH) as f32,
+        }
+    }
+}
+
+impl Default for Object {
+    fn default() -> Self {
+        Self {
+            node_data: [TreeNode::default(); OBJ_MAX_NODE],
+            root_span: (1 << MAX_DEPTH) as f32,
         }
     }
 }
