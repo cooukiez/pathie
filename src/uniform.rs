@@ -3,7 +3,7 @@ use std::time::Duration;
 use ash::vk;
 use cgmath::{Vector2, Vector3, Vector4};
 
-use crate::{octree::ROOT_SPAN, service::Vector};
+use crate::{service::Vector};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -21,6 +21,10 @@ pub struct Uniform {
 
 // Simple Data storage
 impl Uniform {
+    pub fn new(root_span: f32) -> Self {
+        Self { root_span, ..Default::default() }
+    }
+
     pub fn apply_resolution(&mut self, resolution: vk::Extent2D) {
         self.resolution = Vector2::new(resolution.width as f32, resolution.height as f32);
     }
@@ -49,7 +53,7 @@ impl Default for Uniform {
             resolution: Vector2::default(),
             mouse_pos: Vector2::default(),
 
-            root_span: ROOT_SPAN,
+            root_span: 0.0,
 
             time: 0,
 

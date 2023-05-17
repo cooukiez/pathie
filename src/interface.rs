@@ -221,7 +221,7 @@ impl Interface {
             let queue_family_index = queue_family_index as u32;
             let device_extension_list = [
                 Swapchain::name().as_ptr(),
-                DynamicRendering::name().as_ptr(),
+                // DynamicRendering::name().as_ptr(),
                 #[cfg(any(target_os = "macos", target_os = "ios",))]
                 KhrPortabilitySubsetFn::name().as_ptr(),
             ];

@@ -38,14 +38,6 @@ struct TreeNode {
 
 layout (std430, set = 2, binding = 0) buffer OctreeData { TreeNode octreeData[40000]; };
 
-struct Light {
-    vec4 pos;
-    uint index;
-};
-
-layout (set = 3, binding = 0) readonly buffer LightData { Light lightData[2000]; };
-
-
 struct Ray {
     vec3 origin;
     vec3 dir;
@@ -91,5 +83,19 @@ uint maskToIndex(vec3 mask) {
 }
 
 void main() {
-    imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), vec4(1));
+    vec2 coord = gl_GlobalInvocationID.xy;
+    vec2 res = uniformBuffer.res;
+    vec2 mouse = uniformBuffer.mouse;
+
+    vec2 screenPos = (res - coord * 2.0) / res.y;
+
+    vec3 origin = uniformBuffer.pos.xyz;
+    vec3 dir = normalize(vec3(screenPos, 1.0));
+    vec3 invDir = 1.0 / max(abs(dir), 0.001);
+
+    for (int i = 0; i < 300; i++) {
+        origin = rayCubeIntersect(origin, dir, invDir, origin.x);
+    }
+
+    imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), vec4(origin,0));
 }

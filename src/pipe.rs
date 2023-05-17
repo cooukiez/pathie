@@ -14,7 +14,7 @@ use crate::{
     interface::Interface,
     octree::{Octree, TreeNode},
     uniform::Uniform,
-    Pref, DEFAULT_STORAGE_BUFFER_SIZE, DEFAULT_UNIFORM_BUFFER_SIZE,
+    Pref, DEFAULT_STORAGE_BUFFER_SIZE,
 };
 
 #[derive(Clone, Debug, Copy)]
@@ -46,7 +46,6 @@ pub struct Pipe {
 
     pub uniform_buffer: BufferSet,
     pub octree_buffer: BufferSet,
-    pub light_buffer: BufferSet,
 
     pub descriptor_pool: vk::DescriptorPool,
     pub desc_set_layout_list: Vec<vk::DescriptorSetLayout>,
@@ -98,17 +97,6 @@ impl Pipe {
                 &octree_data,
             );
 
-            log::info!("Creating LightingBuffer ...");
-            let light_data = octree.light_data.clone();
-            let light_buffer = BufferSet::new(
-                interface,
-                align_of::<Light>() as u64,
-                DEFAULT_UNIFORM_BUFFER_SIZE,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-                vk::SharingMode::EXCLUSIVE,
-                &light_data,
-            );
-
             let descriptor_pool = Self::create_descriptor_pool(1, 1, 2, 4, interface);
 
             log::info!("Creating descriptor set layout list ...");
@@ -128,13 +116,6 @@ impl Pipe {
                     interface,
                 ),
                 // Octree Set
-                Self::create_descriptor_set_layout(
-                    vk::DescriptorType::STORAGE_BUFFER,
-                    1,
-                    vk::ShaderStageFlags::COMPUTE,
-                    interface,
-                ),
-                // Light Set
                 Self::create_descriptor_set_layout(
                     vk::DescriptorType::STORAGE_BUFFER,
                     1,
@@ -164,13 +145,6 @@ impl Pipe {
                 interface,
                 (mem::size_of::<TreeNode>() * octree_data.len()) as u64,
                 descriptor_set_list[2],
-                0,
-                vk::DescriptorType::STORAGE_BUFFER,
-            );
-            light_buffer.describe_in_gpu(
-                interface,
-                (mem::size_of::<Light>() * light_data.len()) as u64,
-                descriptor_set_list[3],
                 0,
                 vk::DescriptorType::STORAGE_BUFFER,
             );
@@ -221,7 +195,6 @@ impl Pipe {
                 image_target_list,
                 uniform_buffer,
                 octree_buffer,
-                light_buffer,
                 descriptor_pool,
                 desc_set_layout_list,
                 descriptor_set_list,

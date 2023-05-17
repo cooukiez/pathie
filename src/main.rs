@@ -90,7 +90,7 @@ fn main() {
     thread::spawn(|| loop {});
 
     let mut render = Render::get_render();
-    // render.execute(Instant::now());
+    render.execute(Instant::now());
 }
 
 impl Render {
@@ -123,9 +123,11 @@ impl Render {
             frame_time: Duration::ZERO,
         };
 
-        let input = Input::new();
-        let mut uniform = Uniform::default();
         let mut octree = Octree::default();
+
+        let input = Input::new();
+        let mut uniform = Uniform::new(octree.root_span);
+        
         octree.test_scene();
 
         let interface = Interface::init(&event_loop, &pref);
