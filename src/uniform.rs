@@ -3,7 +3,7 @@ use std::time::Duration;
 use ash::vk;
 use cgmath::{Vector2, Vector3, Vector4};
 
-use crate::{service::Vector};
+use crate::service::Vector;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
