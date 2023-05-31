@@ -157,6 +157,7 @@ impl Octree {
         }
 
         self.leaf_data[pos_info.index()].set(&Material { base_color });
+        let test = pos_info.is_subdiv();
 
         pos_info
     }
