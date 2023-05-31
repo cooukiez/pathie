@@ -89,6 +89,10 @@ impl Leaf {
             ..Default::default()
         }
     }
+
+    pub fn set(&mut self, mat: &Material) {
+        self.mat = mat.clone();
+    }
 }
 
 impl Octree {
@@ -152,7 +156,7 @@ impl Octree {
             pos_info.move_into_child(&self.branch_data);
         }
 
-        self.node_data[pos_info.index()].set(base_color.clone(), node_type);
+        self.leaf_data[pos_info.index()].set(&Material { base_color });
 
         pos_info
     }
