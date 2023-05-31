@@ -268,7 +268,6 @@ impl PosInfo {
         self.span *= 2.0;
         self.depth -= 1;
 
-
         // New index is parent
         self.index = self.parent_idx(octree);
     }
