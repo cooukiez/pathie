@@ -215,12 +215,16 @@ impl PosInfo {
         self.index >= 0
     }
 
-    pub fn parent(&self, octree: &Octree) -> Subdivide {
+    pub fn parent_idx(&self, octree: &Octree) -> i32 {
         if self.is_subdiv() {
-            octree.branch_data[self.as_subdiv(&octree.branch_data).parent as usize]
+            self.as_subdiv(&octree.branch_data).parent
         } else {
-            octree.branch_data[self.as_leaf(&octree.leaf_data).parent as usize]
+            self.as_leaf(&octree.leaf_data).parent
         }
+    }
+
+    pub fn parent(&self, octree: &Octree) -> Subdivide {
+        octree.branch_data[self.parent_idx(octree) as usize]
     }
 
     /// Function not tested
@@ -238,7 +242,7 @@ impl PosInfo {
 
             // Check if move up
             if new_mask.any(|num| num > 1.0 || num < 0.0) {
-                pos_info.move_up(&octree.branch_data);
+                pos_info.move_up(octree);
             } else {
                 // Stop moving up and get next node
                 let space_index = dir_mask.to_index(2.0);
@@ -256,7 +260,7 @@ impl PosInfo {
         None
     }
 
-    pub fn move_up(&mut self, branch_data: &Vec<Subdivide>) {
+    pub fn move_up(&mut self, octree: &Octree) {
         let pos_mask = self.mask_info[self.depth_idx()];
         self.pos_on_edge -= pos_mask * self.span;
         self.local_pos += pos_mask * self.span;
@@ -264,7 +268,9 @@ impl PosInfo {
         self.span *= 2.0;
         self.depth -= 1;
 
-        self.index = self.branch_info[self.depth_idx()].parent;
+
+        // New index is parent
+        self.index = self.parent_idx(octree);
     }
 
     /// Expect child to be subdivide
@@ -273,14 +279,16 @@ impl PosInfo {
         self.span *= 0.5;
         self.depth += 1;
 
+        // Get which child node to choose
         let child_mask = Subdivide::get_child_mask(self.span, self.local_pos.truncate());
 
         self.pos_on_edge += (child_mask * self.span).extend(0.0);
         self.local_pos -= (child_mask * self.span).extend(0.0);
 
-        self.mask_info[self.depth as usize] = (child_mask.clone()).extend(0.0);
+        self.mask_info[self.depth_idx()] = (child_mask.clone()).extend(0.0);
         let space_index = child_mask.to_index(2.0);
 
+        // New Index is child node, Save branch info about parent
         self.index = self.as_subdiv(branch_data).children[space_index] as i32;
         self.branch_info[self.depth_idx()] = self.as_subdiv(branch_data);
     }
