@@ -61,7 +61,7 @@ pub struct PosInfo {
 pub struct Octree {
     // RootIndex = 0
     pub branch_data: Vec<Subdivide>, // All subdivide as list
-    pub leaf_data: Vec<Leaf>,      // Leaf node list
+    pub leaf_data: Vec<Leaf>,        // Leaf node list
     pub root_span: f32,
 }
 
@@ -105,7 +105,7 @@ impl Octree {
         if pos_info.is_leaf() {
             self.leaf_data.remove(pos_info.index());
             let mut subdiv = Subdivide::default();
-            
+
             for index in 0..8 {
                 subdiv.children[index] = -(self.leaf_data.len() as i32);
                 self.leaf_data.push(Leaf::new(pos_info.index()));
@@ -136,12 +136,7 @@ impl Octree {
         pos_info
     }
 
-    pub fn insert_node(
-        &mut self,
-        insert_pos: Vector3<f32>,
-        base_color: Vector4<f32>,
-        node_type: u32,
-    ) -> PosInfo {
+    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, base_color: Vector4<f32>) -> PosInfo {
         let mut pos_info = PosInfo {
             span: self.root_span,
 
@@ -157,7 +152,6 @@ impl Octree {
         }
 
         self.leaf_data[pos_info.index()].set(&Material { base_color });
-        let test = pos_info.is_subdiv();
 
         pos_info
     }
@@ -177,7 +171,6 @@ impl Octree {
                         rng.gen_range(0.0..1.0),
                         1.0,
                     ),
-                    2,
                 );
             }
         }
@@ -190,7 +183,6 @@ impl Octree {
                 rng.gen_range(0.0..1.0),
                 1.0,
             ),
-            2,
         );
     }
 }
@@ -319,7 +311,7 @@ impl Default for Subdivide {
 
 impl Default for Leaf {
     fn default() -> Self {
-        Self {  
+        Self {
             mat: Material::default(),
             parent: 0,
             padding: [0; 3],
@@ -345,7 +337,7 @@ impl Default for PosInfo {
             local_pos: Vector4::default(),
             pos_on_edge: Vector4::default(),
 
-            index: 0,
+            index: -1,
             span: 0.0,
             depth: 0,
         }
@@ -355,8 +347,8 @@ impl Default for PosInfo {
 impl Default for Octree {
     fn default() -> Self {
         Self {
-            branch_data: vec![Subdivide::default()],
-            leaf_data: vec![Leaf::default()],
+            branch_data: vec![],
+            leaf_data: vec![Leaf::default(); 2],
             root_span: (1 << MAX_DEPTH) as f32,
         }
     }
