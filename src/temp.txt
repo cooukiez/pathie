@@ -97,3 +97,46 @@ for x in 0..20 {
         }
     }
 }
+
+/// Recurse octree from depth to MAX_DEPTH. Will collect
+/// leaf node_list in spactially correct order.
+
+pub fn branch_to_array(
+    &self,
+    pos_info: &PosInfo,
+    branch_root_span: f32,
+    branch_data: &Vec<Subdivide>,
+) -> Vec<Leaf> {
+    // Get current node
+    let cur_node = self.tree_data[pos_info.index()];
+    let mut branch_data = branch_data.clone();
+
+    cur_node.children.iter().for_each(|&child_idx| {
+        let child = self.[child_idx as usize];
+        
+        // New position information
+        let new_pos_info = PosInfo {
+            index: child_idx,
+            depth: pos_info.depth + 1,3,
+            span: pos_info.span / 2.0,
+            // Ignore 4. comp.
+            local_pos: pos_info.local_pos + Vector4::from([pos_info.span / 2.0; 4]),
+            ..Default::default()
+        };
+
+        // Nodetype leaf -> save and return
+        if child.node_type == 2 {
+            leaf_children[new_pos_info.local_pos.truncate().to_index(branch_root_span)] = child;
+
+        // Nodetype subdivide and not MAX_DEPTH -> further recurse
+        } else if child.node_type == 1 && (pos_info.depth as usize) < MAX_DEPTH {
+            leaf_children = self.recurse_tree_and_collect_leaf(
+                &new_pos_info,
+                branch_root_span,
+                &leaf_children,
+            );
+        }
+    });
+
+    leaf_children
+}

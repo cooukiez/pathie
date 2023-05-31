@@ -20,8 +20,8 @@ pub struct Material {
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Subdivide {
-    // Store index, 0 = empty | > 0 = full -> leaf or subdiv
-    pub children: [u32; 8],
+    // Store index, 0 = empty | > 0 = full -> subdiv or leaf
+    pub children: [i32; 8],
     // Store index, 0 = empty | 1 = full, store compact with bitshifting
     pub basic_children: u32,
 
@@ -52,14 +52,14 @@ pub struct PosInfo {
     pub local_pos: Vector4<f32>,   // Origin in CurNode
     pub pos_on_edge: Vector4<f32>, // Origin on first edge of CurNode
 
-    pub index: u32,
+    pub index: i32,
     pub span: f32,
     pub depth: i32,
 }
 
 pub struct Octree {
     // RootIndex = 0
-    pub tree_data: Vec<Subdivide>, // All subdivide as list
+    pub branch_data: Vec<Subdivide>, // All subdivide as list
     pub leaf_data: Vec<Leaf>,      // Leaf node list
     pub root_span: f32,
 }
@@ -70,10 +70,6 @@ impl Subdivide {
             parent: parent as u32,
             ..Default::default()
         }
-    }
-
-    pub fn has_children(&self) -> bool {
-        self.children[0] > 0
     }
 
     pub fn get_child_mask(cur_span: f32, local_origin: Vector3<f32>) -> Vector3<f32> {
@@ -87,12 +83,12 @@ impl Octree {
     /// material of the node to take LOD effect into
     /// account. If node has no children, create them.
 
-    pub fn create_children(&mut self, pos_info: &PosInfo) {
+    pub fn create_subdiv_children(&mut self, pos_info: &PosInfo) {
         let mut node = self.tree_data[pos_info.index()];
 
         if !node.has_children() {
             for index in 0..8 {
-                node.children[index] = self.tree_data.len() as u32;
+                node.children[index] = self.tree_data.len() as i32;
                 self.tree_data.push(Subdivide::new(pos_info.index()));
             }
         }
@@ -137,55 +133,13 @@ impl Octree {
         };
 
         for _ in 1..MAX_DEPTH {
-            self.create_children(&pos_info, base_color.clone());
-            pos_info.move_into_child(&self.node_data);
+            self.create_subdiv_children(&pos_info);
+            pos_info.move_into_child(&self.tree_data);
         }
 
         self.node_data[pos_info.index()].set(base_color.clone(), node_type);
 
         pos_info
-    }
-
-    /// Recurse octree from depth to MAX_DEPTH. Will collect
-    /// leaf node_list in spactially correct order.
-
-    pub fn recurse_tree_and_collect_leaf(
-        &self,
-        pos_info: &PosInfo,
-        branch_root_span: f32,
-        leaf_children: &Vec<TreeNode>,
-    ) -> Vec<TreeNode> {
-        // Get current node
-        let cur_node = self.node_data[pos_info.index()];
-        let mut leaf_children = leaf_children.clone();
-
-        cur_node.children.iter().for_each(|&child_idx| {
-            let child = self.node_data[child_idx as usize];
-            // New position information
-            let new_pos_info = PosInfo {
-                index: child_idx,
-                depth: pos_info.depth + 1,
-                span: pos_info.span / 2.0,
-                // Ignore 4. comp.
-                local_pos: pos_info.local_pos + Vector4::from([pos_info.span / 2.0; 4]),
-                ..Default::default()
-            };
-
-            // Nodetype leaf -> save and return
-            if child.node_type == 2 {
-                leaf_children[new_pos_info.local_pos.truncate().to_index(branch_root_span)] = child;
-
-            // Nodetype subdivide and not MAX_DEPTH -> further recurse
-            } else if child.node_type == 1 && (pos_info.depth as usize) < MAX_DEPTH {
-                leaf_children = self.recurse_tree_and_collect_leaf(
-                    &new_pos_info,
-                    branch_root_span,
-                    &leaf_children,
-                );
-            }
-        });
-
-        leaf_children
     }
 
     pub fn test_scene(&mut self) {
@@ -225,11 +179,17 @@ impl PosInfo {
     pub fn index(&self) -> usize {
         self.index as usize
     }
-    pub fn node(&self, node_data: &Vec<Subdivide>) -> Subdivide {
-        node_data[self.index()].clone()
+
+    pub fn as_leaf(&self, leaf_data: &Vec<Leaf>) -> Leaf {
+        leaf_data[self.index()]
     }
-    pub fn parent(&self, node_data: &Vec<Subdivide>) -> Subdivide {
-        node_data[self.node(node_data).parent as usize].clone()
+
+    pub fn as_subdiv(&self, branch_data: &Vec<Subdivide>) -> Subdivide {
+        branch_data[self.index()]
+    }
+
+    pub fn has_children(&self) -> bool {
+        self.children[0] > 0
     }
 
     /// Function not tested
@@ -265,18 +225,9 @@ impl PosInfo {
         None
     }
 
-    pub fn move_up(&mut self, tree_data: &Vec<Subdivide>) {
-        let pos_mask = self.mask_info[self.depth as usize];
-        self.pos_on_edge -= pos_mask * self.span;
-        self.local_pos += pos_mask * self.span;
+    /// Expect child to be subdivide
 
-        self.span *= 2.0;
-        self.depth -= 1;
-
-        self.index = self.node(tree_data).parent;
-    }
-
-    pub fn move_into_child(&mut self, tree_data: &Vec<Subdivide>) {
+    pub fn move_into_child(&mut self, branch_data: &Vec<Subdivide>) {
         self.span *= 0.5;
         self.depth += 1;
 
@@ -288,7 +239,7 @@ impl PosInfo {
         self.mask_info[self.depth as usize] = (child_mask.clone()).extend(0.0);
         let space_index = child_mask.to_index(2.0);
 
-        self.index = self.node(tree_data).children[space_index] as u32;
+        self.index = self.as_subdiv(branch_data).children[space_index] as i32;
     }
 }
 
@@ -313,7 +264,7 @@ impl Default for Subdivide {
 
 impl Default for Leaf {
     fn default() -> Self {
-        Self {
+        Self {  
             mat: Material::default(),
             parent: 0,
             padding: [0; 3],
