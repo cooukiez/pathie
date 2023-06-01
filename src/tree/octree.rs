@@ -71,7 +71,7 @@ impl Octree {
 
         for _ in 1..MAX_DEPTH {
             self.create_children(&pos_info);
-            pos_info.move_into_child(&self.branch_data);
+            pos_info.move_into_child(&self.  );
         }
 
         self.leaf_data[pos_info.index()].set(&Material { base_color });
@@ -113,8 +113,7 @@ impl Octree {
 impl Default for Octree {
     fn default() -> Self {
         Self {
-            branch_data: vec![Subdivide::default(); 1],
-            leaf_data: vec![Leaf::default(); 2],
+            octant_data: vec![Octant::default()],
             root_span: (1 << MAX_DEPTH) as f32,
         }
     }
