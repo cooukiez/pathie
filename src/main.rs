@@ -10,8 +10,8 @@ use env_logger::fmt::{Color, Formatter};
 use input::Input;
 use interface::Interface;
 use log::Record;
-use octree::Octree;
 use pipe::Pipe;
+use tree::octree::Octree;
 use uniform::Uniform;
 use winit::{
     dpi::PhysicalPosition,
@@ -22,7 +22,7 @@ use winit::{
 
 mod input;
 mod interface;
-mod octree;
+mod tree;
 mod pipe;
 mod service;
 mod uniform;

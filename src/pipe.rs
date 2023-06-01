@@ -12,7 +12,7 @@ use ash::{
 
 use crate::{
     interface::Interface,
-    octree::{Octree, Subdivide},
+    tree::{octree::{Octree}, octant::Subdivide},
     uniform::Uniform,
     Pref, DEFAULT_STORAGE_BUFFER_SIZE,
 };
