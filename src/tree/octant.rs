@@ -14,32 +14,30 @@ pub struct Material {
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
-pub struct Subdivide {
+pub struct Octant {
     // Store index, 0 = empty | > 0 = full -> subdiv or leaf
-    pub children: [i32; 8],
+    pub children: [u32; 8],
     // Store index, 0 = empty | 1 = full, store compact with bitshifting
     pub basic_children: u32,
 
-    pub parent: i32,
-    pub padding: [u32; 2],
-}
+    pub parent: u32,
+    // 0 = Empty | 1 = Subdivide | 2 = Full
+    pub node_type: u32,
+    pub padding: [u32; 1],
 
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct Leaf {
-    // Store material here later on
     pub mat: Material,
-
-    pub parent: i32,
-    pub padding: [u32; 3],
 }
 
-impl Subdivide {
-    pub fn new(parent: usize) -> Subdivide {
-        Subdivide {
-            parent: parent as i32,
+impl Octant {
+    pub fn new(parent: usize) -> Octant {
+        Octant {
+            parent: parent as u32,
             ..Default::default()
         }
+    }
+
+    pub fn set(&mut self, mat: &Material) {
+        self.mat = mat.clone();
     }
 
     pub fn has_children(&self) -> bool {
@@ -51,19 +49,6 @@ impl Subdivide {
     }
 }
 
-impl Leaf {
-    pub fn new(parent: usize) -> Leaf {
-        Self {
-            parent: parent as i32,
-            ..Default::default()
-        }
-    }
-
-    pub fn set(&mut self, mat: &Material) {
-        self.mat = mat.clone();
-    }
-}
-
 impl Default for Material {
     fn default() -> Self {
         Self {
@@ -72,23 +57,15 @@ impl Default for Material {
     }
 }
 
-impl Default for Subdivide {
+impl Default for Octant {
     fn default() -> Self {
         Self {
             children: [0; 8],
             basic_children: 0,
             parent: 0,
-            padding: [0; 2],
-        }
-    }
-}
-
-impl Default for Leaf {
-    fn default() -> Self {
-        Self {
+            node_type: 0,
+            padding: [0; 1],
             mat: Material::default(),
-            parent: 0,
-            padding: [0; 3],
         }
     }
 }

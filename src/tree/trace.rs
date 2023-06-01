@@ -2,7 +2,7 @@ use cgmath::{Vector3, Vector4};
 
 use crate::service::{Mask, Vector};
 
-use super::{octant::{Subdivide, Leaf}, octree::MAX_DEPTH};
+use super::{octant::{Octant}, octree::MAX_DEPTH};
 
 #[derive(Clone, Debug)]
 pub struct Ray {
@@ -12,62 +12,44 @@ pub struct Ray {
 
 #[derive(Clone, Debug)]
 pub struct PosInfo {
-    pub branch_info: [Subdivide; MAX_DEPTH], // Store visited branch
+    pub branch_info: [Octant; MAX_DEPTH], // Store visited branch
     pub mask_info: [Vector4<f32>; MAX_DEPTH], // Position in parent at depth
 
     pub local_pos: Vector4<f32>,   // Origin in CurNode
     pub pos_on_edge: Vector4<f32>, // Origin on first edge of CurNode
 
     // Index positive -> Subdivide | Index negative -> Leaf
-    pub index: i32,
+    pub index: u32,
     pub span: f32,
-    pub depth: i32,
+    pub depth: u32,
 }
 
 impl PosInfo {
     pub fn index(&self) -> usize {
-        log::info!("{}", (self.index * 1));
-        (self.index * self.index.signum()) as usize
+        self.index as usize
+    }
+
+    pub fn octant(&self, octant_data: &Vec<Octant>) -> Octant {
+        octant_data[self.index()]
+    }
+
+    pub fn parent_idx(&self, octant_data: &Vec<Octant>) -> usize {
+        self.octant(octant_data).parent as usize
+    }
+
+    pub fn parent(&self, octant_data: &Vec<Octant>) -> Octant {
+        octant_data[self.parent_idx(octant_data)]
     }
 
     pub fn depth_idx(&self) -> usize {
         self.depth as usize
     }
 
-    pub fn as_leaf(&self, leaf_data: &Vec<Leaf>) -> Leaf {
-        leaf_data[self.index()]
-    }
-
-    pub fn as_subdiv(&self, branch_data: &Vec<Subdivide>) -> Subdivide {
-        branch_data[self.index()]
-    }
-
-    pub fn is_leaf(&self) -> bool {
-        self.index < 0
-    }
-
-    pub fn is_subdiv(&self) -> bool {
-        self.index > 0
-    }    
-
-    pub fn parent_idx(&self, branch_data: &Vec<Subdivide>, leaf_data: &Vec<Leaf>) -> i32 {
-        if self.is_subdiv() {
-            self.as_subdiv(branch_data).parent
-        } else {
-            self.as_leaf(leaf_data).parent
-        }
-    }
-
-    pub fn parent(&self, branch_data: &Vec<Subdivide>, leaf_data: &Vec<Leaf>) -> Subdivide {
-        branch_data[self.parent_idx(branch_data, leaf_data) as usize]
-    }
-
     /// Function not tested
 
     pub fn neighbor(
         &self,
-        branch_data: &Vec<Subdivide>,
-        leaf_data: &Vec<Leaf>,
+        octant_data: &Vec<Octant>,
         max_depth: usize,
         dir_mask: &Vector3<f32>,
     ) -> Option<PosInfo> {
@@ -78,15 +60,15 @@ impl PosInfo {
 
             // Check if move up
             if new_mask.any(|num| num > 1.0 || num < 0.0) {
-                pos_info.move_up(branch_data, leaf_data);
+                pos_info.move_up(octant_data);
             } else {
                 // Stop moving up and get next node
                 let space_index = dir_mask.to_index(2.0);
-                pos_info.index = self.parent(branch_data, leaf_data).children[space_index];
+                pos_info.index = self.parent(octant_data).children[space_index];
 
                 // Start moving down
-                while pos_info.is_subdiv() {
-                    pos_info.move_into_child(branch_data);
+                while pos_info.octant(octant_data).has_children() {
+                    pos_info.move_into_child(octant_data);
                 }
 
                 return Some(pos_info);
@@ -96,7 +78,7 @@ impl PosInfo {
         None
     }
 
-    pub fn move_up(&mut self, branch_data: &Vec<Subdivide>, leaf_data: &Vec<Leaf>) {
+    pub fn move_up(&mut self, octant_data: &Vec<Octant>) {
         let pos_mask = self.mask_info[self.depth_idx()];
         self.pos_on_edge -= pos_mask * self.span;
         self.local_pos += pos_mask * self.span;
@@ -105,20 +87,19 @@ impl PosInfo {
         self.depth -= 1;
 
         // New index is parent
-        self.index = self.parent_idx(branch_data, leaf_data);
+        self.index = self.octant(octant_data).parent;
     }
 
     /// Expect child to be subdivide
 
-    pub fn move_into_child(&mut self, branch_data: &Vec<Subdivide>) {
-        let test = self.as_subdiv(branch_data);
-        self.branch_info[self.depth_idx()] = self.as_subdiv(branch_data);
+    pub fn move_into_child(&mut self, octant_data: &Vec<Octant>) {
+        self.branch_info[self.depth_idx()] = self.octant(octant_data);
 
         self.span *= 0.5;
         self.depth += 1;
 
         // Get which child node to choose
-        let child_mask = Subdivide::get_child_mask(self.span, self.local_pos.truncate());
+        let child_mask = Octant::get_child_mask(self.span, self.local_pos.truncate());
 
         self.pos_on_edge += (child_mask * self.span).extend(0.0);
         self.local_pos -= (child_mask * self.span).extend(0.0);
@@ -127,8 +108,6 @@ impl PosInfo {
         let space_index = child_mask.to_index(2.0);
 
         // New Index is child node
-        log::info!("{}", self.as_subdiv(branch_data).children[space_index]);
-
         self.index = self.branch_info[self.depth_idx()].children[space_index];
     }
 }
@@ -146,13 +125,13 @@ impl Default for Ray {
 impl Default for PosInfo {
     fn default() -> Self {
         Self {
-            branch_info: [Subdivide::default(); MAX_DEPTH],
+            branch_info: [Octant::default(); MAX_DEPTH],
             mask_info: [Vector4::default(); MAX_DEPTH],
 
             local_pos: Vector4::default(),
             pos_on_edge: Vector4::default(),
 
-            index: -1,
+            index: 0,
             span: 0.0,
             depth: 0,
         }

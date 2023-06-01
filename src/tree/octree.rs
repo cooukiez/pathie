@@ -2,7 +2,7 @@ use cgmath::{Vector3, Vector4};
 use noise::{Fbm, NoiseFn, Perlin};
 use rand::Rng;
 
-use super::{octant::{Subdivide, Leaf, Material}, trace::PosInfo};
+use super::{octant::{Octant, Material}, trace::PosInfo};
 
 pub const MAX_DEPTH: usize = 10;
 pub const MAX_NODE: usize = 8192;
@@ -11,8 +11,7 @@ pub const MAX_NODE: usize = 8192;
 
 pub struct Octree {
     // RootIndex = 0
-    pub branch_data: Vec<Subdivide>, // All subdivide as list
-    pub leaf_data: Vec<Leaf>,        // Leaf node list
+    pub octant_data: Vec<Octant>,
     pub root_span: f32,
 }
 
