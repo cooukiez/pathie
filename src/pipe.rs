@@ -12,7 +12,7 @@ use ash::{
 
 use crate::{
     interface::Interface,
-    tree::{octree::{Octree}, octant::Subdivide},
+    tree::{octree::{Octree}, octant::Octant},
     uniform::Uniform,
     Pref, DEFAULT_STORAGE_BUFFER_SIZE,
 };
@@ -87,10 +87,10 @@ impl Pipe {
             );
 
             log::info!("Creating OctreeBuffer ...");
-            let octree_data = octree.branch_data.clone();
+            let octree_data = octree.octant_data.clone();
             let octree_buffer = BufferSet::new(
                 interface,
-                align_of::<Subdivide>() as u64,
+                align_of::<Octant>() as u64,
                 DEFAULT_STORAGE_BUFFER_SIZE,
                 vk::BufferUsageFlags::STORAGE_BUFFER,
                 vk::SharingMode::EXCLUSIVE,
@@ -143,7 +143,7 @@ impl Pipe {
             );
             octree_buffer.describe_in_gpu(
                 interface,
-                (mem::size_of::<Subdivide>() * octree_data.len()) as u64,
+                (mem::size_of::<Octant>() * octree_data.len()) as u64,
                 descriptor_set_list[2],
                 0,
                 vk::DescriptorType::STORAGE_BUFFER,

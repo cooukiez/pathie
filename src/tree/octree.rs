@@ -2,12 +2,13 @@ use cgmath::{Vector3, Vector4};
 use noise::{Fbm, NoiseFn, Perlin};
 use rand::Rng;
 
-use super::{octant::{Octant, Material}, trace::PosInfo};
+use super::{
+    octant::{Material, Octant},
+    trace::PosInfo,
+};
 
 pub const MAX_DEPTH: usize = 10;
 pub const MAX_NODE: usize = 8192;
-
-
 
 pub struct Octree {
     // RootIndex = 0
@@ -22,19 +23,17 @@ impl Octree {
     /// account. If node has no children, create them.
 
     pub fn create_children(&mut self, pos_info: &PosInfo) {
-        if pos_info.is_leaf() {
-            self.leaf_data.remove(pos_info.index());
-            let mut subdiv = Subdivide::default();
+        if !pos_info.octant(&self.octant_data).has_children() {
+            let mut new_octant = Octant::default();
 
             for index in 0..8 {
-                log::info!("new leaf index {}", -(self.leaf_data.len() as i32));
-                subdiv.children[index] = -(self.leaf_data.len() as i32);
-                self.leaf_data.push(Leaf::new(pos_info.index()));
+                new_octant.children[index] = self.octant_data.len() as u32;
+                self.octant_data.push(Octant::new(pos_info.index()));
             }
 
-            log::info!("new children {:?}", subdiv.children);
+            log::info!("new children {:?}", new_octant.children);
 
-            self.branch_data.push(subdiv);
+            self.octant_data.push(new_octant);
         }
     }
 
@@ -49,8 +48,8 @@ impl Octree {
         };
 
         for _ in 1..MAX_DEPTH {
-            if pos_info.is_subdiv() {
-                pos_info.move_into_child(&self.branch_data);
+            if pos_info.octant(&self.octant_data).has_children() {
+                pos_info.move_into_child(&self.octant_data);
             } else {
                 break;
             }
@@ -59,7 +58,7 @@ impl Octree {
         pos_info
     }
 
-    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, base_color: Vector4<f32>) -> PosInfo {
+    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, mat: &Material) -> PosInfo {
         let mut pos_info = PosInfo {
             span: self.root_span,
 
@@ -71,10 +70,10 @@ impl Octree {
 
         for _ in 1..MAX_DEPTH {
             self.create_children(&pos_info);
-            pos_info.move_into_child(&self.  );
+            pos_info.move_into_child(&self.octant_data);
         }
 
-        self.leaf_data[pos_info.index()].set(&Material { base_color });
+        self.octant_data[pos_info.index()].set(mat);
 
         pos_info
     }
@@ -88,24 +87,28 @@ impl Octree {
                 let y = (fbm.get([x as f64, z as f64]) + 1.0) * 1024.0;
                 self.insert_node(
                     Vector3::new(x as f32, y as f32, z as f32) * 2.0,
-                    Vector4::new(
-                        rng.gen_range(0.0..1.0),
-                        rng.gen_range(0.0..1.0),
-                        rng.gen_range(0.0..1.0),
-                        1.0,
-                    ),
+                    &Material {
+                        base_color: Vector4::new(
+                            rng.gen_range(0.0..1.0),
+                            rng.gen_range(0.0..1.0),
+                            rng.gen_range(0.0..1.0),
+                            1.0,
+                        ),
+                    },
                 );
             }
         }
 
         self.insert_node(
             Vector3::new(0.0, 0.0, 0.0),
-            Vector4::new(
-                rng.gen_range(0.0..1.0),
-                rng.gen_range(0.0..1.0),
-                rng.gen_range(0.0..1.0),
-                1.0,
-            ),
+            &Material {
+                base_color: Vector4::new(
+                    rng.gen_range(0.0..1.0),
+                    rng.gen_range(0.0..1.0),
+                    rng.gen_range(0.0..1.0),
+                    1.0,
+                ),
+            },
         );
     }
 }

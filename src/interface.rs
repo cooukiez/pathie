@@ -2,7 +2,7 @@ use crate::Pref;
 use ash::{
     extensions::{
         ext::DebugUtils,
-        khr::{DynamicRendering, Surface, Swapchain},
+        khr::{Surface, Swapchain},
     },
     vk::{self, SurfaceTransformFlagsKHR},
     Device, Entry, Instance,
