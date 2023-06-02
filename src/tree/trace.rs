@@ -2,7 +2,7 @@ use cgmath::{Vector3, Vector4};
 
 use crate::service::{Mask, Vector};
 
-use super::{octant::{Octant}, octree::MAX_DEPTH};
+use super::{octant::Octant, octree::MAX_DEPTH};
 
 #[derive(Clone, Debug)]
 pub struct Ray {
@@ -12,7 +12,7 @@ pub struct Ray {
 
 #[derive(Clone, Debug)]
 pub struct PosInfo {
-    pub branch_info: [Octant; MAX_DEPTH], // Store visited branch
+    pub branch_info: [Octant; MAX_DEPTH],     // Store visited branch
     pub mask_info: [Vector4<f32>; MAX_DEPTH], // Position in parent at depth
 
     pub local_pos: Vector4<f32>,   // Origin in CurNode
@@ -68,7 +68,9 @@ impl PosInfo {
 
                 // Start moving down
                 while pos_info.octant(octant_data).has_children() {
-                    pos_info.move_into_child(octant_data);
+                    pos_info.move_into_child(octant_data, |pos_info, space_idx| {
+                        pos_info.parent(octant_data).children[space_idx]
+                    });
                 }
 
                 return Some(pos_info);
@@ -92,7 +94,11 @@ impl PosInfo {
 
     /// Expect child to be subdivide
 
-    pub fn move_into_child(&mut self, octant_data: &Vec<Octant>) {
+    pub fn move_into_child<Function: FnOnce(&Self, usize) -> u32>(
+        &mut self,
+        octant_data: &Vec<Octant>,
+        select_idx: Function,
+    ) {
         self.branch_info[self.depth_idx()] = self.octant(octant_data);
 
         self.span *= 0.5;
@@ -107,11 +113,9 @@ impl PosInfo {
         self.mask_info[self.depth_idx()] = (child_mask.clone()).extend(0.0);
         let space_index = child_mask.to_index(2.0);
 
-        // New Index is child node
-        self.index = self.branch_info[self.depth_idx()].children[space_index];
+        self.index = select_idx(self, space_index);
     }
 }
-
 
 impl Default for Ray {
     fn default() -> Self {
