@@ -2,6 +2,8 @@ use cgmath::{Vector3, Vector4};
 use noise::{Fbm, NoiseFn, Perlin};
 use rand::Rng;
 
+use crate::service::Mask;
+
 use super::{
     octant::{Material, Octant},
     trace::PosInfo,
@@ -17,26 +19,6 @@ pub struct Octree {
 }
 
 impl Octree {
-    /// Create children for an existing node.
-    /// First add the material effect stuff divided by span to the
-    /// material of the node to take LOD effect into
-    /// account. If node has no children, create them.
-
-    pub fn create_children(&mut self, pos_info: &PosInfo) {
-        if !pos_info.octant(&self.octant_data).has_children() {
-            let mut new_octant = Octant::default();
-
-            for index in 0..8 {
-                new_octant.children[index] = self.octant_data.len() as u32;
-                self.octant_data.push(Octant::new(pos_info.index()));
-            }
-
-            log::info!("new children {:?}", new_octant.children);
-
-            self.octant_data.push(new_octant);
-        }
-    }
-
     pub fn node_at_pos(&self, pos: Vector3<f32>) -> PosInfo {
         let mut pos_info = PosInfo {
             span: self.root_span,
@@ -49,7 +31,9 @@ impl Octree {
 
         for _ in 1..MAX_DEPTH {
             if pos_info.octant(&self.octant_data).has_children() {
-                pos_info.move_into_child(&self.octant_data);
+                pos_info.move_into_child(&self.octant_data, |pos_info, space_idx| {
+                    pos_info.parent(&self.octant_data).children[space_idx]
+                });
             } else {
                 break;
             }
@@ -69,10 +53,25 @@ impl Octree {
         };
 
         for _ in 1..MAX_DEPTH {
-            self.create_children(&pos_info);
-            pos_info.move_into_child(&self.octant_data);
+            pos_info.move_into_child(&self.octant_data.clone(), |pos_info, space_idx| {
+                Octant::set_node_type(&mut self.octant_data, &pos_info, space_idx, 1);
+
+                pos_info.parent(&self.octant_data).children[space_idx] =
+                    self.octant_data.len() as u32;
+
+                self.octant_data.push(Octant::new(pos_info.index(), 0));
+
+                pos_info.parent(&self.octant_data).children[space_idx]
+            });
         }
 
+        Octant::set_node_type(
+            &mut self.octant_data,
+            &pos_info,
+            pos_info.mask_info.last().unwrap().truncate().to_index(2.0),
+            1,
+        );
+        
         self.octant_data[pos_info.index()].set(mat);
 
         pos_info

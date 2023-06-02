@@ -2,6 +2,8 @@ use cgmath::{Vector3, Vector4};
 
 use crate::service::Vector;
 
+use super::trace::PosInfo;
+
 // In struct, Vector four is used because of memory alignment in vulkan.
 // Vector three is aligned as vec four in vulkan but as vec three in rust.
 // This is problematic therefore we use vec four.
@@ -29,9 +31,10 @@ pub struct Octant {
 }
 
 impl Octant {
-    pub fn new(parent: usize) -> Octant {
+    pub fn new(parent: usize, node_type: u32) -> Octant {
         Octant {
             parent: parent as u32,
+            node_type,
             ..Default::default()
         }
     }
@@ -40,8 +43,23 @@ impl Octant {
         self.mat = mat.clone();
     }
 
+    pub fn set_node_type(octant_data: &mut Vec<Octant>, pos_info: &PosInfo, child_idx: usize, node_type: u32) {
+        octant_data[pos_info.index()].node_type = node_type;
+        let parent_idx = pos_info.parent_idx(octant_data);
+        let parent = &mut octant_data[parent_idx];
+        if node_type == 0 {
+            parent.basic_children |= 0 << child_idx;
+        } else {
+            parent.basic_children |= 1 << child_idx;
+        }
+    }
+
     pub fn has_children(&self) -> bool {
         self.children[0] > 0
+    }
+
+    pub fn is_subdiv(&self) -> bool {
+        self.node_type == 1
     }
 
     pub fn get_child_mask(cur_span: f32, local_origin: Vector3<f32>) -> Vector3<f32> {
@@ -61,7 +79,7 @@ impl Default for Octant {
     fn default() -> Self {
         Self {
             children: [0; 8],
-            basic_children: 0,
+            basic_children: 00000000,
             parent: 0,
             node_type: 0,
             padding: [0; 1],
