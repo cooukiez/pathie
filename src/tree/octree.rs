@@ -54,9 +54,11 @@ impl Octree {
 
         for _ in 1..MAX_DEPTH {
             pos_info.move_into_child(&self.octant_data.clone(), |pos_info, space_idx| {
+                log::info!("{} parent {} child {}", space_idx, pos_info.index, self.octant_data.len() as u32);
                 Octant::set_node_type(&mut self.octant_data, &pos_info, space_idx, 1);
 
-                pos_info.parent(&self.octant_data).children[space_idx] =
+                let parent_idx = pos_info.parent_idx(&self.octant_data);
+                self.octant_data[parent_idx].children[space_idx] =
                     self.octant_data.len() as u32;
 
                 self.octant_data.push(Octant::new(pos_info.index(), 0));
@@ -71,7 +73,7 @@ impl Octree {
             pos_info.mask_info.last().unwrap().truncate().to_index(2.0),
             1,
         );
-        
+
         self.octant_data[pos_info.index()].set(mat);
 
         pos_info
@@ -115,7 +117,7 @@ impl Octree {
 impl Default for Octree {
     fn default() -> Self {
         Self {
-            octant_data: vec![Octant::default()],
+            octant_data: vec![],
             root_span: (1 << MAX_DEPTH) as f32,
         }
     }

@@ -48,9 +48,9 @@ impl Octant {
         let parent_idx = pos_info.parent_idx(octant_data);
         let parent = &mut octant_data[parent_idx];
         if node_type == 0 {
-            parent.basic_children |= 0 << child_idx;
+            parent.basic_children |= 0 << 8 - child_idx;
         } else {
-            parent.basic_children |= 1 << child_idx;
+            parent.basic_children |= 1 << 8 - child_idx;
         }
     }
 
