@@ -31,7 +31,7 @@ impl PosInfo {
 
     pub fn octant(&self, octant_data: &Vec<Octant>) -> Octant {
         octant_data[self.index()]
-    }
+    }   
 
     pub fn parent_idx(&self, octant_data: &Vec<Octant>) -> usize {
         self.octant(octant_data).parent as usize
