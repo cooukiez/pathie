@@ -82,24 +82,19 @@ impl Octree {
 
     pub fn test_scene(&mut self) {
         let fbm = Fbm::<Perlin>::new(0);
+        let mut rng = rand::thread_rng(); 
 
-        let mut rng = rand::thread_rng();
-        for x in 0..1024 {
-            for z in 0..1024 {
-                let y = (fbm.get([x as f64, z as f64]) + 1.0) * 1024.0;
-                self.insert_node(
-                    Vector3::new(x as f32, y as f32, z as f32) * 2.0,
-                    &Material {
-                        base_color: Vector4::new(
-                            rng.gen_range(0.0..1.0),
-                            rng.gen_range(0.0..1.0),
-                            rng.gen_range(0.0..1.0),
-                            1.0,
-                        ),
-                    },
-                );
-            }
-        }
+        self.insert_node(
+            Vector3::new(0.0, 0.0, 0.0),
+            &Material {
+                base_color: Vector4::new(
+                    rng.gen_range(0.0..1.0),
+                    rng.gen_range(0.0..1.0),
+                    rng.gen_range(0.0..1.0),
+                    1.0,
+                ),
+            },
+        );
 
         self.insert_node(
             Vector3::new(0.0, 0.0, 0.0),
