@@ -56,7 +56,7 @@ impl Octree {
             pos_info.move_into_child(&self.octant_data.clone(), |pos_info, space_idx| {
                 if pos_info.octant(&self.octant_data).children[space_idx] == 0 {
                     log::info!("{} parent {} child {}", space_idx, pos_info.index, self.octant_data.len() as u32);
-                    Octant::set_node_type(&mut self.octant_data, &pos_info, space_idx, 1);
+                    self.octant_data[pos_info.index()].node_type = 1;
 
                     self.octant_data[pos_info.index()].children[space_idx] =
                         self.octant_data.len() as u32;
@@ -64,17 +64,12 @@ impl Octree {
                     self.octant_data.push(Octant::new(pos_info.index(), 0));
                 }
                 
+                Octant::update_basic_child(&mut self.octant_data, pos_info);
                 pos_info.octant(&self.octant_data).children[space_idx]
             });
         }
 
-        Octant::set_node_type(
-            &mut self.octant_data,
-            &pos_info,
-            pos_info.mask_info.last().unwrap().truncate().to_index(2.0),
-            1,
-        );
-
+        self.octant_data[pos_info.index()].node_type = 2;
         self.octant_data[pos_info.index()].set(mat);
 
         pos_info
@@ -97,7 +92,7 @@ impl Octree {
         );
 
         self.insert_node(
-            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(10.0, 10.0, 10.0),
             &Material {
                 base_color: Vector4::new(
                     rng.gen_range(0.0..1.0),

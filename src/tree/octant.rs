@@ -43,14 +43,16 @@ impl Octant {
         self.mat = mat.clone();
     }
 
-    pub fn set_node_type(octant_data: &mut Vec<Octant>, pos_info: &PosInfo, child_idx: usize, node_type: u32) {
-        octant_data[pos_info.index()].node_type = node_type;
+    pub fn update_basic_child(octant_data: &mut Vec<Octant>, pos_info: &PosInfo) {
         let parent_idx = pos_info.parent_idx(octant_data);
         let parent = &mut octant_data[parent_idx];
-        if node_type == 0 {
-            parent.basic_children |= 0 << 8 - child_idx;
-        } else {
-            parent.basic_children |= 1 << 8 - child_idx;
+
+        for (idx, child_idx) in parent.children.iter().enumerate() {
+            if child_idx.clone() > 0 {
+                parent.basic_children |= 1 << 7 - idx;
+            } else {
+                parent.basic_children |= 0 << 7 - idx;
+            }
         }
     }
 
