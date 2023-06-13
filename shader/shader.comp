@@ -16,28 +16,6 @@
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0, rgba8) uniform image2D computeImage;
 
-layout (std430, set = 1, binding = 0) uniform Uniform {
-    vec4 pos;
-
-    vec2 res;
-    vec2 mouse;
-
-    float rootSpan;
-
-    uint time;
-} uniformBuffer;
-
-struct TreeNode {
-    uint children[8];
-
-    // 0 = empty | 1 = subdivide | 2 = full
-    uint nodeType;
-    uint parent;
-    vec4 baseColor; // ToDo -> Add transparency
-};
-
-layout (std430, set = 2, binding = 0) buffer OctreeData { TreeNode octreeData[40000]; };
-
 struct Ray {
     vec3 origin;
     vec3 dir;
@@ -45,9 +23,29 @@ struct Ray {
     vec3 invRayDir; // Used for RayCube Intersection
 };
 
+struct Material {
+    vec3 baseColor;
+};
+
+struct Octant {
+    // Store index, 0 = empty | > 0 = full -> subdiv or leaf
+    uint children[8];
+    // Store index, 0 = empty | 1 = full, store compact with bitshifting
+    uint basicChildren;
+
+    uint parent;
+    // 0 = Empty | 1 = Subdivide | 2 = Full
+    uint nodeType;
+
+    uint[1] padding;
+    
+    Material mat;
+};
+
 // Position in Octree
 struct PosInfo {
-    vec3 maskInParent[maxDepth]; // Offset of array wrong
+    Octant branchInfo[maxDepth]; // Store visited branch
+    vec3 maskInParent[maxDepth]; // Position in parent at depth
 
     vec3 localPos; // Position within current Cell / Node
     vec3 posOnEdge; // RayOrigin on the Edge of the Node
@@ -72,6 +70,23 @@ struct TraverseProp {
     uint searchDepth;
 };
 
+layout (std430, set = 1, binding = 0) uniform Uniform {
+    vec4 pos;
+
+    vec2 res;
+    vec2 mouse;
+
+    float rootSpan;
+
+    uint time;
+
+    uint[2] padding;
+
+    PosInfo posInfo;
+} uniformBuffer;
+
+layout (std430, set = 2, binding = 0) buffer OctantData { Octant octantData[40000]; };
+
 // RayCube Intersection on inside of Cube
 vec3 rayCubeIntersect(vec3 origin, vec3 dir, vec3 invDir, float span) {
     return - (sign(dir) * (origin - span * 0.5) - span * 0.5) * invDir;
@@ -95,6 +110,10 @@ void main() {
 
     for (int i = 0; i < 1000; i++) {
         origin = rayCubeIntersect(origin, dir, invDir, origin.x * 100.0);
+    }
+
+    if (gl_GlobalInvocationID.xy.x < 10 && gl_GlobalInvocationID.xy.y < 10) {
+        debugPrintfEXT("\n%d", uniformBuffer.posInfo.index);
     }
 
     imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), vec4(origin,0));

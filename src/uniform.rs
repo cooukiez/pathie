@@ -3,7 +3,7 @@ use std::time::Duration;
 use ash::vk;
 use cgmath::{Vector2, Vector3, Vector4};
 
-use crate::service::Vector;
+use crate::{service::Vector, tree::{trace::PosInfo, octree::Octree}};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -17,6 +17,8 @@ pub struct Uniform {
     pub time: u32,
 
     pub padding: [u32; 2],
+
+    pub pos_info: PosInfo,
 }
 
 // Simple Data storage
@@ -29,8 +31,9 @@ impl Uniform {
         self.resolution = Vector2::new(resolution.width as f32, resolution.height as f32);
     }
 
-    pub fn apply_velocity(&mut self, velocity: Vector3<f32>) {
+    pub fn apply_velocity(&mut self, velocity: Vector3<f32>, octree: &Octree) {
         self.pos += velocity.extend(0.0);
+        self.pos_info = octree.node_at_pos(self.pos.truncate());
     }
 
     pub fn move_mouse(&mut self, mouse_velocity: Vector2<f32>) {
@@ -58,6 +61,8 @@ impl Default for Uniform {
             time: 0,
 
             padding: [0; 2],
+
+            pos_info: PosInfo::default(),
         }
     }
 }

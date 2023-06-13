@@ -4,24 +4,28 @@ use crate::service::{Mask, Vector};
 
 use super::{octant::Octant, octree::MAX_DEPTH};
 
-#[derive(Clone, Debug)]
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
 pub struct Ray {
     pub origin: Vector3<f32>,
     pub dir: Vector3<f32>,
 }
 
-#[derive(Clone, Debug)]
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
 pub struct PosInfo {
     pub branch_info: [Octant; MAX_DEPTH],     // Store visited branch
     pub mask_info: [Vector4<f32>; MAX_DEPTH], // Position in parent at depth
 
-    pub local_pos: Vector4<f32>,   // Origin in CurNode
+    pub local_pos: Vector4<f32>, // Origin in CurNode
     pub pos_on_edge: Vector4<f32>, // Origin on first edge of CurNode
 
     // Index positive -> Subdivide | Index negative -> Leaf
     pub index: u32,
     pub span: f32,
     pub depth: u32,
+
+    pub padding: [u32; 1],
 }
 
 impl PosInfo {
@@ -31,7 +35,7 @@ impl PosInfo {
 
     pub fn octant(&self, octant_data: &Vec<Octant>) -> Octant {
         octant_data[self.index()]
-    }   
+    }
 
     pub fn parent_idx(&self, octant_data: &Vec<Octant>) -> usize {
         self.octant(octant_data).parent as usize
@@ -138,6 +142,8 @@ impl Default for PosInfo {
             index: 0,
             span: 0.0,
             depth: 0,
+
+            padding: [0; 1],
         }
     }
 }

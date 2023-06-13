@@ -1,8 +1,5 @@
 use cgmath::{Vector3, Vector4};
-use noise::{Fbm, NoiseFn, Perlin};
 use rand::Rng;
-
-use crate::service::Mask;
 
 use super::{
     octant::{Material, Octant},
@@ -10,7 +7,6 @@ use super::{
 };
 
 pub const MAX_DEPTH: usize = 10;
-pub const MAX_NODE: usize = 8192;
 
 pub struct Octree {
     // RootIndex = 0
@@ -55,16 +51,22 @@ impl Octree {
         for _ in 1..MAX_DEPTH {
             pos_info.move_into_child(&self.octant_data.clone(), |pos_info, space_idx| {
                 if pos_info.octant(&self.octant_data).children[space_idx] == 0 {
-                    log::info!("{} parent {} child {}", space_idx, pos_info.index, self.octant_data.len() as u32);
+                    // Set Nodetype to be subdivide
                     self.octant_data[pos_info.index()].node_type = 1;
 
+                    // Create child at specified pos -> space_index
                     self.octant_data[pos_info.index()].children[space_idx] =
                         self.octant_data.len() as u32;
 
+                    // Add new child to octant data
                     self.octant_data.push(Octant::new(pos_info.index(), 0));
                 }
                 
-                Octant::update_basic_child(&mut self.octant_data, pos_info);
+                // Update basic children with bit shifting
+                let parent_idx = pos_info.parent_idx(&self.octant_data);
+                Octant::update_basic_children(&mut self.octant_data[parent_idx]);
+
+                // Return new child / move down
                 pos_info.octant(&self.octant_data).children[space_idx]
             });
         }
@@ -76,7 +78,7 @@ impl Octree {
     }
 
     pub fn test_scene(&mut self) {
-        let fbm = Fbm::<Perlin>::new(0);
+        // let fbm = Fbm::<Perlin>::new(0);
         let mut rng = rand::thread_rng(); 
 
         self.insert_node(

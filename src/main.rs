@@ -171,6 +171,7 @@ impl Render {
                             &state,
                             &self.interface,
                             &mut self.uniform,
+                            &self.octree,
                         )
                     }
 

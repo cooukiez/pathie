@@ -5,7 +5,7 @@ use winit::{
     window::Fullscreen,
 };
 
-use crate::{interface::Interface, uniform::Uniform};
+use crate::{interface::Interface, uniform::Uniform, tree::octree::Octree};
 
 const MOVEMENT_INC: f32 = 10.0;
 
@@ -57,16 +57,17 @@ impl Input {
         state: &ElementState,
         interface: &Interface,
         uniform: &mut Uniform,
+        octree: &Octree,
     ) {
         if state == &ElementState::Pressed {
             match self.binding_list[*keycode as usize] {
-                Action::FORWARD => uniform.apply_velocity(Vector3::new(0.0, 0.0, MOVEMENT_INC)),
-                Action::BACKWARD => uniform.apply_velocity(Vector3::new(0.0, 0.0, -MOVEMENT_INC)),
-                Action::LEFT => uniform.apply_velocity(Vector3::new(MOVEMENT_INC, 0.0, 0.0)),
-                Action::RIGHT => uniform.apply_velocity(Vector3::new(-MOVEMENT_INC, 0.0, 0.0)),
+                Action::FORWARD => uniform.apply_velocity(Vector3::new(0.0, 0.0, MOVEMENT_INC), octree),
+                Action::BACKWARD => uniform.apply_velocity(Vector3::new(0.0, 0.0, -MOVEMENT_INC), octree),
+                Action::LEFT => uniform.apply_velocity(Vector3::new(MOVEMENT_INC, 0.0, 0.0), octree),
+                Action::RIGHT => uniform.apply_velocity(Vector3::new(-MOVEMENT_INC, 0.0, 0.0), octree),
 
-                Action::JUMP => uniform.apply_velocity(Vector3::new(0.0, MOVEMENT_INC, 0.0)),
-                Action::SHIFT => uniform.apply_velocity(Vector3::new(0.0, -MOVEMENT_INC, 0.0)),
+                Action::JUMP => uniform.apply_velocity(Vector3::new(0.0, MOVEMENT_INC, 0.0), octree),
+                Action::SHIFT => uniform.apply_velocity(Vector3::new(0.0, -MOVEMENT_INC, 0.0), octree),
 
                 Action::FULLSCREEN => interface.window.set_fullscreen(Some(Fullscreen::Exclusive(
                     interface

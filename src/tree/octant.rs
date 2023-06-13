@@ -2,8 +2,6 @@ use cgmath::{Vector3, Vector4};
 
 use crate::service::Vector;
 
-use super::trace::PosInfo;
-
 // In struct, Vector four is used because of memory alignment in vulkan.
 // Vector three is aligned as vec four in vulkan but as vec three in rust.
 // This is problematic therefore we use vec four.
@@ -43,10 +41,7 @@ impl Octant {
         self.mat = mat.clone();
     }
 
-    pub fn update_basic_child(octant_data: &mut Vec<Octant>, pos_info: &PosInfo) {
-        let parent_idx = pos_info.parent_idx(octant_data);
-        let parent = &mut octant_data[parent_idx];
-
+    pub fn update_basic_children(parent: &mut Octant) {
         for (idx, child_idx) in parent.children.iter().enumerate() {
             if child_idx.clone() > 0 {
                 parent.basic_children |= 1 << 7 - idx;
