@@ -108,13 +108,7 @@ void main() {
     vec3 dir = normalize(vec3(screenPos, 1.0));
     vec3 invDir = 1.0 / max(abs(dir), 0.001);
 
-    for (int i = 0; i < 1000; i++) {
-        origin = rayCubeIntersect(origin, dir, invDir, origin.x * 100.0);
-    }
+    debugPrintfEXT("asd");
 
-    if (gl_GlobalInvocationID.xy.x < 10 && gl_GlobalInvocationID.xy.y < 10) {
-        debugPrintfEXT("\n%d", uniformBuffer.posInfo.index);
-    }
-
-    imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), vec4(origin,0));
+    imageStore(computeImage, ivec2(gl_GlobalInvocationID.xy), vec4(0,1,0,0));
 }

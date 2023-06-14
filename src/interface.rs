@@ -77,10 +77,10 @@ unsafe extern "system" fn vulkan_debug_callback(flag: vk::DebugUtilsMessageSever
     let message = CStr::from_ptr((*callback_data).p_message);
 
     match flag {
-        Flag::VERBOSE => log::debug!("[ {:?} ] {}", msg_type, message.to_str().unwrap(),),
-        Flag::INFO => log::debug!("[ {:?} ] {}", msg_type, message.to_str().unwrap(),),
-        Flag::WARNING => log::debug!("[ {:?} ] {}", msg_type, message.to_str().unwrap(),),
-        _ => log::debug!("[ {:?} ] {}", msg_type, message.to_str().unwrap(),),
+        Flag::VERBOSE => log::info!("[ {:?} ] {}", msg_type, message.to_str().unwrap(),),
+        Flag::INFO => log::info!("[ {:?} ] {}", msg_type, message.to_str().unwrap(),),
+        Flag::WARNING => log::info!("[ {:?} ] {}", msg_type, message.to_str().unwrap(),),
+        _ => log::info!("[ {:?} ] {}", msg_type, message.to_str().unwrap(),),
     }
 
     return vk::FALSE;
