@@ -1,4 +1,4 @@
-use crate::{set_bit, read_bitrange};
+use crate::{set_bit, read_bitrange, bitcheck};
 
 /// Bit 1 - 16 | Child offset
 /// Bit 17 - 24 | Child bitmask
@@ -32,10 +32,10 @@ impl Octant for u32 {
     }
 
     fn is_leaf(&self) -> bool {
-        (self >> 24) & 1
+        bitcheck!(self, 24)
     }
 
     fn is_subdiv(&self) -> bool {
-        (self >> 25) & 1
+        bitcheck!(self, 25)
     }
 }
