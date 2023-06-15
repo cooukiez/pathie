@@ -1,6 +1,6 @@
 use cgmath::{Vector3, Vector4};
 
-use crate::service::{Mask, Vector};
+use crate::vector::{Mask, Vector};
 
 use super::{octant::Octant, octree::MAX_DEPTH};
 

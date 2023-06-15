@@ -3,7 +3,7 @@ use std::time::Duration;
 use ash::vk;
 use cgmath::{Vector2, Vector3, Vector4};
 
-use crate::{service::Vector, tree::{trace::PosInfo, octree::Octree}};
+use crate::{vector::Vector, tree::{trace::PosInfo, octree::Octree}};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]

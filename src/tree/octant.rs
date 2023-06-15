@@ -1,86 +1,41 @@
-use cgmath::{Vector3, Vector4};
+use crate::{set_bit, read_bitrange};
 
-use crate::service::Vector;
+/// Bit 1 - 16 | Child offset
+/// Bit 17 - 24 | Child bitmask
+/// Bit 25 | Leaf?
+/// Bit 26 | Subdivide?
 
-// In struct, Vector four is used because of memory alignment in vulkan.
-// Vector three is aligned as vec four in vulkan but as vec three in rust.
-// This is problematic therefore we use vec four.
-
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct Material {
-    pub base_color: Vector4<f32>,
+pub trait Octant {
+    fn set(&self, leaf: u32, subdiv: u32) -> Self;
+    fn has_children(&self) -> bool;
+    fn is_subdiv(&self) -> bool;
+    fn is_leaf(&self) -> bool;
 }
 
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct Octant {
-    // Store index, 0 = empty | > 0 = full -> subdiv or leaf
-    pub children: [u32; 8],
-    // Store index, 0 = empty | 1 = full, store compact with bitshifting
-    pub basic_children: u32,
+impl Octant for u32 {
+    /// Set leaf and subdiv either
+    /// 0 for no / 1 for yes
 
-    pub parent: u32,
-    // 0 = Empty | 1 = Subdivide | 2 = Full
-    pub node_type: u32,
-    pub padding: [u32; 1],
+    fn set(&self, leaf: bool, subdiv: bool) -> Self {
+        let mut new = self.clone();
 
-    pub mat: Material,
-}
-
-impl Octant {
-    pub fn new(parent: usize, node_type: u32) -> Octant {
-        Octant {
-            parent: parent as u32,
-            node_type,
-            ..Default::default()
-        }
+        // Set 25 Bit with leaf value
+        new = set_bit!(new, 24, leaf);
+        // Set 26 Bit with subdiv value
+        new = set_bit!(new, 25, subdiv);
     }
 
-    pub fn set(&mut self, mat: &Material) {
-        self.mat = mat.clone();
+    fn has_children(&self) -> bool {
+        // Extract child bitmask bitrange from self
+        // Check if no value = 1
+        read_bitrange!(self, 17, 24) > 0
     }
 
-    pub fn update_basic_children(parent: &mut Octant) {
-        for (idx, child_idx) in parent.children.iter().enumerate() {
-            if child_idx.clone() > 0 {
-                parent.basic_children |= 1 << 7 - idx;
-            } else {
-                parent.basic_children |= 0 << 7 - idx;
-            }
-        }
+    fn is_leaf(&self) -> bool {
+        (self >> 24) & 1
     }
 
-    pub fn has_children(&self) -> bool {
-        self.children[0] > 0
-    }
-
-    pub fn is_subdiv(&self) -> bool {
-        self.node_type == 1
-    }
-
-    pub fn get_child_mask(cur_span: f32, local_origin: Vector3<f32>) -> Vector3<f32> {
-        local_origin.step(Vector3::from([cur_span; 3]))
-    }
-}
-
-impl Default for Material {
-    fn default() -> Self {
-        Self {
-            base_color: Vector4::default(),
-        }
-    }
-}
-
-impl Default for Octant {
-    fn default() -> Self {
-        Self {
-            children: [0; 8],
-            basic_children: 00000000,
-            parent: 0,
-            node_type: 0,
-            padding: [0; 1],
-            mat: Material::default(),
-        }
+    fn is_subdiv(&self) -> bool {
+        (self >> 25) & 1
     }
 }

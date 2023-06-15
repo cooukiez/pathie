@@ -1,18 +1,4 @@
-use cgmath::{Array, Vector2, Vector3, Vector4};
-
-#[macro_export]
-macro_rules! sqr {
-    ($num : expr) => {{
-        $num * $num
-    }};
-}
-
-#[macro_export]
-macro_rules! cub {
-    ($num : expr) => {{
-        $num * $num * $num
-    }};
-}
+use cgmath::{Array, Vector2, Vector3, Vector4, num_traits::Pow};
 
 pub type TwoDeeVec<Type> = Vec<Vec<Type>>;
 pub type ThreeDeeVec<Type> = Vec<Vec<Vec<Type>>>;
@@ -35,7 +21,7 @@ impl Mask for Vector3<f32> {
     fn to_index(&self, side_len: f32) -> usize {
         Self {
             x: ((self.x) % side_len),
-            y: ((self.y) % side_len) * sqr!(side_len),
+            y: ((self.y) % side_len) * side_len.pow(2),
             z: ((self.z) % side_len) * side_len,
         }
         .sum() as usize
@@ -44,9 +30,9 @@ impl Mask for Vector3<f32> {
     fn from_index(index: usize, side_len: f32) -> Self {
         let index = index as f32;
         Self {
-            x: (index % sqr!(side_len)) % side_len,
-            y: index / sqr!(side_len),
-            z: (index % sqr!(side_len)) / side_len,
+            x: (index % side_len.pow(2)) % side_len,
+            y: index / side_len.pow(2),
+            z: (index % side_len.pow(2)) / side_len,
         }
     }
 

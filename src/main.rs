@@ -24,7 +24,8 @@ mod input;
 mod interface;
 mod tree;
 mod pipe;
-mod service;
+mod bit;
+mod vector;
 mod uniform;
 
 const DEFAULT_STORAGE_BUFFER_SIZE: u64 = 1342177280;
