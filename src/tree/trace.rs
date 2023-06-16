@@ -1,8 +1,8 @@
 use cgmath::{Vector3, Vector4};
 
-use crate::vector::{Mask, Vector};
+use crate::{vector::{Mask, Vector}};
 
-use super::{octant::Octant, octree::MAX_DEPTH};
+use super::{octant::Octant};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -13,47 +13,49 @@ pub struct Ray {
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
-pub struct PosInfo {
-    pub branch_info: [Octant; MAX_DEPTH],     // Store visited branch
-    pub mask_info: [Vector4<f32>; MAX_DEPTH], // Position in parent at depth
+pub struct BranchInfo {
+    pub node: u32,
+    pub parent: u32,
 
+    pub index: u32,
+    pub parent_index: u32,
+
+    pub span: f32,
+
+    pub padding: [u32; 3],
+
+    pub mask_info: Vector4<f32>,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct PosInfo {
     pub local_pos: Vector4<f32>, // Origin in CurNode
     pub pos_on_edge: Vector4<f32>, // Origin on first edge of CurNode
 
-    // Index positive -> Subdivide | Index negative -> Leaf
-    pub index: u32,
-    pub span: f32,
     pub depth: u32,
 
-    pub padding: [u32; 1],
+    pub padding: [u32; 3],
 }
 
-impl PosInfo {
-    pub fn index(&self) -> usize {
+impl BranchInfo {
+    pub fn idx(&self) -> usize {
         self.index as usize
     }
 
-    pub fn octant(&self, octant_data: &Vec<Octant>) -> Octant {
-        octant_data[self.index()]
+    pub fn parent_idx(&self) -> usize {
+        self.parent_index as usize
     }
+}
 
-    pub fn parent_idx(&self, octant_data: &Vec<Octant>) -> usize {
-        self.octant(octant_data).parent as usize
-    }
-
-    pub fn parent(&self, octant_data: &Vec<Octant>) -> Octant {
-        octant_data[self.parent_idx(octant_data)]
-    }
-
+impl PosInfo {
     pub fn depth_idx(&self) -> usize {
         self.depth as usize
     }
 
-    /// Function not tested
-
     pub fn neighbor(
         &self,
-        octant_data: &Vec<Octant>,
+        octant_data: &Vec<u32>,
         max_depth: usize,
         dir_mask: &Vector3<f32>,
     ) -> Option<PosInfo> {
@@ -130,20 +132,32 @@ impl Default for Ray {
     }
 }
 
+impl Default for BranchInfo {
+    fn default() -> Self {
+        Self {
+            node: 0,
+            parent: 0,
+
+            index: 0,
+            parent_index: 0,
+
+            span: 0.0,
+            padding: [0; 3],
+
+            mask_info: Vector3::default(),
+        }
+    }
+}
+
 impl Default for PosInfo {
     fn default() -> Self {
         Self {
-            branch_info: [Octant::default(); MAX_DEPTH],
-            mask_info: [Vector4::default(); MAX_DEPTH],
-
             local_pos: Vector4::default(),
             pos_on_edge: Vector4::default(),
 
-            index: 0,
-            span: 0.0,
             depth: 0,
 
-            padding: [0; 1],
+            padding: [0; 3],
         }
     }
 }

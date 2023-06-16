@@ -1,8 +1,7 @@
-use cgmath::{Vector3, Vector4};
-use rand::Rng;
+use cgmath::{Vector3};
 
 use super::{
-    octant::{Material, Octant},
+    octant::{Octant},
     trace::PosInfo,
 };
 
@@ -10,7 +9,7 @@ pub const MAX_DEPTH: usize = 10;
 
 pub struct Octree {
     // RootIndex = 0
-    pub octant_data: Vec<Octant>,
+    pub octant_data: Vec<u32>,
     pub root_span: f32,
 }
 
@@ -38,7 +37,7 @@ impl Octree {
         pos_info
     }
 
-    pub fn insert_node(&mut self, insert_pos: Vector3<f32>, mat: &Material) -> PosInfo {
+    pub fn insert_node(&mut self, insert_pos: Vector3<f32>) -> PosInfo {
         let mut pos_info = PosInfo {
             span: self.root_span,
 
@@ -71,9 +70,6 @@ impl Octree {
             });
         }
 
-        self.octant_data[pos_info.index()].node_type = 2;
-        self.octant_data[pos_info.index()].set(mat);
-
         pos_info
     }
 
@@ -83,26 +79,10 @@ impl Octree {
 
         self.insert_node(
             Vector3::new(0.0, 0.0, 0.0),
-            &Material {
-                base_color: Vector4::new(
-                    rng.gen_range(0.0..1.0),
-                    rng.gen_range(0.0..1.0),
-                    rng.gen_range(0.0..1.0),
-                    1.0,
-                ),
-            },
         );
 
         self.insert_node(
             Vector3::new(10.0, 10.0, 10.0),
-            &Material {
-                base_color: Vector4::new(
-                    rng.gen_range(0.0..1.0),
-                    rng.gen_range(0.0..1.0),
-                    rng.gen_range(0.0..1.0),
-                    1.0,
-                ),
-            },
         );
     }
 }

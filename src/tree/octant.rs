@@ -10,6 +10,10 @@ pub trait Octant {
     fn has_children(&self) -> bool;
     fn is_subdiv(&self) -> bool;
     fn is_leaf(&self) -> bool;
+    fn child_bitmask(&self) -> u32;
+    fn child_offset(&self) -> u32;
+    fn parent_bitmask(&self) -> u32;
+    fn parent_child_offset(&self) -> u32;
 }
 
 impl Octant for u32 {
@@ -37,5 +41,21 @@ impl Octant for u32 {
 
     fn is_subdiv(&self) -> bool {
         bitcheck!(self, 25)
+    }
+
+    fn child_bitmask(&self) -> u32 {
+        read_bitrange!(self.node, 17, 24)
+    }
+
+    fn child_offset(&self) -> u32 {
+        read_bitrange!(self.node, 1, 16)
+    }
+
+    fn parent_bitmask(&self) -> u32 {
+        read_bitrange!(self.parent, 17, 24)
+    }
+
+    fn parent_child_offset(&self) -> u32 {
+        read_bitrange!(self.parent, 1, 16)
     }
 }
