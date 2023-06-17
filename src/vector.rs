@@ -1,4 +1,4 @@
-use cgmath::{Array, Vector2, Vector3, Vector4, num_traits::Pow};
+use cgmath::{Vector2, Vector3, Vector4};
 
 pub type TwoDeeVec<Type> = Vec<Vec<Type>>;
 pub type ThreeDeeVec<Type> = Vec<Vec<Vec<Type>>>;
@@ -9,40 +9,6 @@ pub fn vec_two_dee<Type: std::clone::Clone>(side_len: usize, content: Type) -> T
 
 pub fn vec_three_dee<Type: std::clone::Clone>(side_len: usize, content: Type) -> ThreeDeeVec<Type> {
     vec![vec![vec![content; side_len]; side_len]; side_len]
-}
-
-pub trait Mask {
-    fn to_index(&self, side_len: f32) -> usize;
-    fn from_index(index: usize, side_len: f32) -> Self;
-    fn add_dir(&self, dir: Self) -> Self;
-}
-
-impl Mask for Vector3<f32> {
-    fn to_index(&self, side_len: f32) -> usize {
-        Self {
-            x: ((self.x) % side_len),
-            y: ((self.y) % side_len) * side_len.pow(2),
-            z: ((self.z) % side_len) * side_len,
-        }
-        .sum() as usize
-    }
-
-    fn from_index(index: usize, side_len: f32) -> Self {
-        let index = index as f32;
-        Self {
-            x: (index % side_len.pow(2)) % side_len,
-            y: index / side_len.pow(2),
-            z: (index % side_len.pow(2)) / side_len,
-        }
-    }
-
-    fn add_dir(&self, dir: Self) -> Self {
-        Self {
-            x: (self.x - dir.x).abs(),
-            y: (self.y - dir.y).abs(),
-            z: (self.z - dir.z).abs(),
-        }
-    }
 }
 
 trait Num {

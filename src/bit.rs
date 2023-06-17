@@ -37,21 +37,21 @@ macro_rules! bitcheck {
         // that is needed to be read
         // Check if last bit is 1 with 'and' operator
 
-        ($num >> $bit) & 1
+        (($num >> $bit) & 1) != 0
     };
 }
 
 #[macro_export]
 macro_rules! set_bit {
-    ($value : expr, $bit : expr, $bit_value : expr) => {{
+    ($num : expr, $bit : expr, $bit_value : expr) => {{
         // When true set bit to 1
         // Operation to set bit is explained
         // above, same for clearing
 
         if $bit_value == true {
-            $value | (1 << $bit)
+            $num | (1 << $bit)
         } else {
-            $value & !(1 << $bit)
+            $num & !(1 << $bit)
         }
     }};
 }

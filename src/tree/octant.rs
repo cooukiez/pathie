@@ -1,4 +1,28 @@
-use crate::{set_bit, read_bitrange, bitcheck};
+use cgmath::Vector3;
+
+use crate::{read_bitrange, set_bit};
+
+pub trait Mask {
+    fn get_mask(&self, span: f32) -> u32;
+}
+
+impl Mask for Vector3<f32> {
+    fn get_mask(&self, span: f32) -> u32 {
+        set_bit!(
+            set_bit!(
+                set_bit!(
+                    0u32,
+                    1,
+                    (self.x > span)
+                ),
+                2,
+                (self.z > span)
+            ),
+            3,
+            (self.y > span)
+        )
+    }
+}
 
 /// Bit 1 - 16 | Child offset
 /// Bit 17 - 24 | Child bitmask
@@ -6,14 +30,10 @@ use crate::{set_bit, read_bitrange, bitcheck};
 /// Bit 26 | Subdivide?
 
 pub trait Octant {
-    fn set(&self, leaf: u32, subdiv: u32) -> Self;
+    fn set(&self, leaf: bool, subdiv: bool) -> Self;
     fn has_children(&self) -> bool;
     fn is_subdiv(&self) -> bool;
     fn is_leaf(&self) -> bool;
-    fn child_bitmask(&self) -> u32;
-    fn child_offset(&self) -> u32;
-    fn parent_bitmask(&self) -> u32;
-    fn parent_child_offset(&self) -> u32;
 }
 
 impl Octant for u32 {
@@ -27,6 +47,8 @@ impl Octant for u32 {
         new = set_bit!(new, 24, leaf);
         // Set 26 Bit with subdiv value
         new = set_bit!(new, 25, subdiv);
+
+        new
     }
 
     fn has_children(&self) -> bool {
@@ -41,21 +63,5 @@ impl Octant for u32 {
 
     fn is_subdiv(&self) -> bool {
         bitcheck!(self, 25)
-    }
-
-    fn child_bitmask(&self) -> u32 {
-        read_bitrange!(self.node, 17, 24)
-    }
-
-    fn child_offset(&self) -> u32 {
-        read_bitrange!(self.node, 1, 16)
-    }
-
-    fn parent_bitmask(&self) -> u32 {
-        read_bitrange!(self.parent, 17, 24)
-    }
-
-    fn parent_child_offset(&self) -> u32 {
-        read_bitrange!(self.parent, 1, 16)
     }
 }
