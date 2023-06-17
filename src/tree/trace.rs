@@ -113,8 +113,9 @@ impl PosInfo {
     pub fn move_up(&mut self, branch_data: [BranchInfo; MAX_DEPTH]) {
         let branch = branch_data[self.depth_idx()].clone();
 
-        self.pos_on_edge -= branch.mask_info * branch.span;
-        self.local_pos += branch.mask_info * branch.span;
+        let mask_vec = BranchInfo::mask_as_vec(branch.mask_info).extend(0.0);
+        self.pos_on_edge -= mask_vec * branch.span;
+        self.local_pos += mask_vec * branch.span;
 
         self.depth -= 1;
     }
@@ -140,10 +141,10 @@ impl PosInfo {
 
         // Get which child node to choose
         new_branch.mask_info = self.local_pos.truncate().get_mask(new_branch.span);
-        let child_mask_as_vec = BranchInfo::mask_as_vec(new_branch.mask_info).extend(0.0);
 
-        self.pos_on_edge += child_mask_as_vec * new_branch.span;
-        self.local_pos -= child_mask_as_vec * new_branch.span;
+        let mask_vec = BranchInfo::mask_as_vec(new_branch.mask_info).extend(0.0);
+        self.pos_on_edge += mask_vec * new_branch.span;
+        self.local_pos -= mask_vec * new_branch.span;
 
         new_branch.index = select_idx(self, new_branch.mask_info as usize);
     }
