@@ -33,17 +33,14 @@ impl Octree {
 
         for _ in 1..MAX_DEPTH {
             if pos_info.branch(&branch_data).node.is_subdiv() {
-                pos_info.move_into_child(
-                    &mut branch_data,
-                    |branch| {
-                        let mut branch = branch.clone();
-                        
-                        (branch.index, branch.node) =
-                            branch.get_child(&self.octant_data, branch.mask_info);
+                pos_info.move_into_child(&mut branch_data, |branch| {
+                    let mut branch = branch.clone();
 
-                        branch
-                    },
-                );
+                    (branch.index, branch.node) =
+                        branch.get_child(&self.octant_data, branch.mask_info);
+
+                    branch
+                });
             } else {
                 break;
             }
@@ -69,37 +66,38 @@ impl Octree {
             ..Default::default()
         };
 
-        for _ in 1..MAX_DEPTH {
-            pos_info.move_into_child(
-                &mut branch_data,
-                |branch| {
-                    let mut branch = branch.clone();
+        for d in 1..MAX_DEPTH {
+            pos_info.move_into_child(&mut branch_data, |branch| {
+                let mut branch = branch.clone();
 
-                    if !branch.parent.is_subdiv() {
-                        branch.parent = branch
-                            .parent
-                            // Set Nodetype to be subdivide
-                            .set_subdiv(true)
-                            // Set child offset, offset is index of first child
-                            .set_child_offset(self.octant_data.len() as u32);
+                if !branch.parent.is_subdiv() {
+                    branch.parent = branch
+                        .parent
+                        // Set Nodetype to be subdivide
+                        .set_subdiv(true)
+                        // Set child offset, offset is index of first child
+                        .set_child_offset(self.octant_data.len() as u32);
 
-                        // Add new child to octant data
-                        for _ in 0..8 {
-                            self.octant_data.push(0);
-                        }
+                    // Add new child to octant data
+                    for _ in 0..8 {
+                        self.octant_data.push(0);
                     }
+                }
 
-                    // Set child filled and update parent in octant data
-                    self.octant_data[branch.parent_idx()] =
-                        branch.parent.set_child_filled(branch.mask_info, true);
+                log::info!("pi {} d {}, pco {}", branch.parent_idx(), d, branch.parent_child_offset());
 
-                    (branch.index, branch.node) =
-                        branch.get_child(&self.octant_data, branch.mask_info);
-                    
-                    branch
-                },
-            );
+                // Set child filled and update parent in octant data
+                self.octant_data[branch.parent_idx()] =
+                    branch.parent.set_child_filled(branch.mask_info, true);
+
+                (branch.index, branch.node) = branch.get_child(&self.octant_data, branch.mask_info);
+
+                branch
+            });
         }
+
+        self.octant_data[pos_info.branch(&branch_data).idx()] =
+            self.octant_data[pos_info.branch(&branch_data).idx()].set_leaf(true);
 
         pos_info
     }
@@ -111,6 +109,16 @@ impl Octree {
         self.insert_node(Vector3::new(0.0, 0.0, 0.0));
 
         self.insert_node(Vector3::new(10.0, 10.0, 10.0));
+
+        for nude in self.octant_data.clone() {
+            log::info!(
+                "leaf {} subdiv {} bitmask {:#09b} offset {}",
+                nude.is_subdiv(),
+                nude.is_leaf(),
+                nude.get_child_bitmask(),
+                nude.get_child_offset()
+            );
+        }
     }
 }
 

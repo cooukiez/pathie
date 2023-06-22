@@ -24,6 +24,7 @@ mod input;
 mod interface;
 mod tree;
 mod pipe;
+#[macro_use]
 mod bit;
 mod vector;
 mod uniform;

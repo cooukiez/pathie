@@ -64,7 +64,8 @@ impl BranchInfo {
     }
 
     pub fn get_child(&self, octant_data: &Vec<u32>, child_mask: u32) -> (u32, u32) {
-        let child_idx = self.child_offset() + child_mask;
+        let child_idx = self.parent_child_offset() + child_mask;
+        log::info!("ci {}", child_idx);
         (child_idx, octant_data[child_idx as usize])
     }
 
