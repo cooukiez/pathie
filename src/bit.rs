@@ -1,5 +1,3 @@
-use cgmath::Vector3;
-
 #[macro_export]
 macro_rules! bitset {
     ($num : expr, $bit : expr) => {
