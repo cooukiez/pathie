@@ -2,7 +2,7 @@ use cgmath::{Vector3};
 
 use super::{
     octant::{Octant},
-    trace::PosInfo,
+    trace::{PosInfo, BranchInfo},
 };
 
 pub const MAX_DEPTH: usize = 10;
@@ -15,9 +15,9 @@ pub struct Octree {
 
 impl Octree {
     pub fn node_at_pos(&self, pos: Vector3<f32>) -> PosInfo {
-        let mut pos_info = PosInfo {
-            span: self.root_span,
+        let mut branch_data = [BranchInfo::default(); MAX_DEPTH];
 
+        let mut pos_info = PosInfo {
             local_pos: (pos % self.root_span).extend(0.0),
             pos_on_edge: (pos - (pos % self.root_span)).extend(0.0),
 
@@ -25,9 +25,9 @@ impl Octree {
         };
 
         for _ in 1..MAX_DEPTH {
-            if pos_info.octant(&self.octant_data).has_children() {
-                pos_info.move_into_child(&self.octant_data, |pos_info, space_idx| {
-                    pos_info.parent(&self.octant_data).children[space_idx]
+            if pos_info.branch(&branch_data).node.is_subdiv() {
+                pos_info.move_into_child(&self.octant_data, &mut branch_data, |pos_info, child_mask| {
+                    pos_info.branch(&branch_data).get_child(&self.octant_data, child_mask)
                 });
             } else {
                 break;
@@ -39,8 +39,6 @@ impl Octree {
 
     pub fn insert_node(&mut self, insert_pos: Vector3<f32>) -> PosInfo {
         let mut pos_info = PosInfo {
-            span: self.root_span,
-
             local_pos: (insert_pos % self.root_span).extend(0.0),
             pos_on_edge: (insert_pos - (insert_pos % self.root_span)).extend(0.0),
 
@@ -48,7 +46,7 @@ impl Octree {
         };
 
         for _ in 1..MAX_DEPTH {
-            pos_info.move_into_child(&self.octant_data.clone(), |pos_info, space_idx| {
+            pos_info.move_into_child(&self.octant_data.clone(), branch_data, |pos_info, child_mask| {
                 if pos_info.octant(&self.octant_data).children[space_idx] == 0 {
                     // Set Nodetype to be subdivide
                     self.octant_data[pos_info.index()].node_type = 1;
@@ -90,7 +88,7 @@ impl Octree {
 impl Default for Octree {
     fn default() -> Self {
         Self {
-            octant_data: vec![Octant::default()],
+            octant_data: vec![0],
             root_span: (1 << MAX_DEPTH) as f32,
         }
     }

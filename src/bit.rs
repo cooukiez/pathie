@@ -1,3 +1,5 @@
+use cgmath::Vector3;
+
 #[macro_export]
 macro_rules! bitset {
     ($num : expr, $bit : expr) => {
@@ -89,5 +91,27 @@ macro_rules! write_bitrange {
         // after that insert with 'or' operator
 
         ($num & !(mask)) | ($rep & mask)
+    }};
+}
+
+#[macro_export]
+macro_rules! mask_to_vec {
+    ($mask : expr) => {{
+        Vector3 {
+            x: (($mask >> 0) & 1) as f32,
+            y: (($mask >> 2) & 1) as f32,
+            z: (($mask >> 1) & 1) as f32,
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! vec_to_mask {
+    ($input_vec : expr) => {{
+        let x_bit = if $input_vec.x > 0.0 { 1 } else { 0 };
+        let y_bit = if $input_vec.y > 0.0 { 1 } else { 0 };
+        let z_bit = if $input_vec.z > 0.0 { 1 } else { 0 };
+
+        (x_bit << 0) | (y_bit << 1) | (z_bit << 2)
     }};
 }

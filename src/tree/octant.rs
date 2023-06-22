@@ -1,28 +1,4 @@
-use cgmath::Vector3;
-
-use crate::{read_bitrange, set_bit};
-
-pub trait Mask {
-    fn get_mask(&self, span: f32) -> u32;
-}
-
-impl Mask for Vector3<f32> {
-    fn get_mask(&self, span: f32) -> u32 {
-        set_bit!(
-            set_bit!(
-                set_bit!(
-                    0u32,
-                    1,
-                    (self.x > span)
-                ),
-                2,
-                (self.z > span)
-            ),
-            3,
-            (self.y > span)
-        )
-    }
-}
+use crate::{read_bitrange, set_bit, bitcheck};
 
 /// Bit 1 - 16 | Child offset
 /// Bit 17 - 24 | Child bitmask
