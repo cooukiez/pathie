@@ -113,8 +113,8 @@ impl Octree {
         for nude in self.octant_data.clone() {
             log::info!(
                 "leaf {} subdiv {} bitmask {:#09b} offset {}",
-                nude.is_subdiv(),
                 nude.is_leaf(),
+                nude.is_subdiv(),
                 nude.get_child_bitmask(),
                 nude.get_child_offset()
             );

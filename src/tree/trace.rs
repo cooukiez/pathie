@@ -48,19 +48,19 @@ impl BranchInfo {
     }
 
     pub fn child_bitmask(&self) -> u32 {
-        read_bitrange!(self.node, 17, 24)
+        read_bitrange!(self.node, 16, 23)
     }
 
     pub fn child_offset(&self) -> u32 {
-        read_bitrange!(self.node, 1, 16)
+        read_bitrange!(self.node, 0, 15)
     }
 
     pub fn parent_bitmask(&self) -> u32 {
-        read_bitrange!(self.parent, 17, 24)
+        read_bitrange!(self.parent, 16, 23)
     }
 
     pub fn parent_child_offset(&self) -> u32 {
-        read_bitrange!(self.parent, 1, 16)
+        read_bitrange!(self.parent, 0, 15)
     }
 
     pub fn get_child(&self, octant_data: &Vec<u32>, child_mask: u32) -> (u32, u32) {
