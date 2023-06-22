@@ -12,16 +12,20 @@ use ash::{
 
 use crate::{
     interface::Interface,
-    tree::{octree::{Octree}, octant::Octant},
+    tree::{octree::{Octree}},
     uniform::Uniform,
     Pref, DEFAULT_STORAGE_BUFFER_SIZE,
 };
+
+/*
 
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
     pos: [f32; 4],
     uv: [f32; 2],
 }
+
+*/
 
 pub struct ImageTarget {
     image_target: vk::Image,
@@ -35,10 +39,14 @@ pub struct BufferSet {
     pub buffer_mem: vk::DeviceMemory,
 }
 
+/*
+
 pub struct Shader {
     code: Vec<u32>,
     module: vk::ShaderModule,
 }
+
+*/
 
 pub struct Pipe {
     pub render_res: vk::Extent2D,
@@ -90,7 +98,7 @@ impl Pipe {
             let octree_data = octree.octant_data.clone();
             let octree_buffer = BufferSet::new(
                 interface,
-                align_of::<Octant>() as u64,
+                align_of::<u32>() as u64,
                 DEFAULT_STORAGE_BUFFER_SIZE,
                 vk::BufferUsageFlags::STORAGE_BUFFER,
                 vk::SharingMode::EXCLUSIVE,
@@ -143,7 +151,7 @@ impl Pipe {
             );
             octree_buffer.describe_in_gpu(
                 interface,
-                (mem::size_of::<Octant>() * octree_data.len()) as u64,
+                (mem::size_of::<u32>() * octree_data.len()) as u64,
                 descriptor_set_list[2],
                 0,
                 vk::DescriptorType::STORAGE_BUFFER,

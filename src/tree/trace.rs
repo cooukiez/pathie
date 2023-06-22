@@ -100,7 +100,7 @@ impl PosInfo {
     ) -> Option<PosInfo> {
         let mut pos_info = self.clone();
 
-        for depth in self.depth as usize..max_depth {
+        for _ in self.depth as usize..max_depth {
             let mut branch = branch_data[self.depth_idx()];
             let new_mask = branch.mask_info | dir_mask;
             let move_up = branch.mask_info & dir_mask;
@@ -110,12 +110,17 @@ impl PosInfo {
                 pos_info.move_up(&branch_data);
             } else {
                 // Stop moving up and get next node
-                branch = branch_data[self.depth_idx()].move_to_neighbor(octant_data, new_mask);
+                branch = self.branch(branch_data).move_to_neighbor(octant_data, new_mask);
 
                 // Start moving down
                 while branch.node.is_subdiv() {
-                    pos_info.move_into_child(octant_data, branch_data, |pos_info, child_mask| {
-                        branch.get_child(octant_data, child_mask)
+                    pos_info.move_into_child(branch_data, |branch| {
+                        let mut branch = branch.clone();
+                        
+                        (branch.index, branch.node) =
+                            branch.get_child(&octant_data, branch.mask_info);
+
+                        branch
                     });
                 }
 
@@ -138,9 +143,8 @@ impl PosInfo {
 
     /// Expect child to be subdivide
 
-    pub fn move_into_child<Function: FnOnce(&Self, u32) -> (u32, u32)>(
+    pub fn move_into_child<Function: FnOnce(&BranchInfo) -> BranchInfo>(
         &mut self,
-        octant_data: &Vec<u32>,
         branch_data: &mut [BranchInfo; MAX_DEPTH],
         select_idx: Function,
     ) {
@@ -162,7 +166,7 @@ impl PosInfo {
         self.pos_on_edge += mask_to_vec!(new_branch.mask_info).extend(0.0) * new_branch.span;
         self.local_pos -= mask_to_vec!(new_branch.mask_info).extend(0.0) * new_branch.span;
 
-        (new_branch.index, new_branch.node) = select_idx(self, new_branch.mask_info);
+        new_branch = select_idx(&new_branch);
         branch_data[self.depth_idx()] = new_branch;
     }
 }

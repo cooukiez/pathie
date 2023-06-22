@@ -34,12 +34,14 @@ impl Octree {
         for _ in 1..MAX_DEPTH {
             if pos_info.branch(&branch_data).node.is_subdiv() {
                 pos_info.move_into_child(
-                    &self.octant_data,
                     &mut branch_data,
-                    |pos_info, child_mask| {
-                        pos_info
-                            .branch(&branch_data)
-                            .get_child(&self.octant_data, child_mask)
+                    |branch| {
+                        let mut branch = branch.clone();
+                        
+                        (branch.index, branch.node) =
+                            branch.get_child(&self.octant_data, branch.mask_info);
+
+                        branch
                     },
                 );
             } else {
@@ -69,28 +71,32 @@ impl Octree {
 
         for _ in 1..MAX_DEPTH {
             pos_info.move_into_child(
-                &self.octant_data.clone(),
                 &mut branch_data,
-                |pos_info, child_mask| {
-                    if !pos_info.branch(&branch_data).node.is_subdiv() {
-                        // Set Nodetype to be subdivide
-                        self.octant_data[pos_info.branch(&branch_data).idx()] =
-                            self.octant_data[pos_info.branch(&branch_data).idx()].set_subdiv(true);
+                |branch| {
+                    let mut branch = branch.clone();
 
-                        // Create child at specified pos -> space_index
-                        self.octant_data[pos_info.index()].children[space_idx] =
-                            self.octant_data.len() as u32;
+                    if !branch.parent.is_subdiv() {
+                        branch.parent = branch
+                            .parent
+                            // Set Nodetype to be subdivide
+                            .set_subdiv(true)
+                            // Set child offset, offset is index of first child
+                            .set_child_offset(self.octant_data.len() as u32);
 
                         // Add new child to octant data
-                        self.octant_data.push(Octant::new(pos_info.index(), 0));
+                        for _ in 0..8 {
+                            self.octant_data.push(0);
+                        }
                     }
 
-                    // Update basic children with bit shifting
-                    let parent_idx = pos_info.parent_idx(&self.octant_data);
-                    Octant::update_basic_children(&mut self.octant_data[parent_idx]);
+                    // Set child filled and update parent in octant data
+                    self.octant_data[branch.parent_idx()] =
+                        branch.parent.set_child_filled(branch.mask_info, true);
 
-                    // Return new child / move down
-                    pos_info.octant(&self.octant_data).children[space_idx]
+                    (branch.index, branch.node) =
+                        branch.get_child(&self.octant_data, branch.mask_info);
+                    
+                    branch
                 },
             );
         }
@@ -100,7 +106,7 @@ impl Octree {
 
     pub fn test_scene(&mut self) {
         // let fbm = Fbm::<Perlin>::new(0);
-        let mut rng = rand::thread_rng();
+        // let mut rng = rand::thread_rng();
 
         self.insert_node(Vector3::new(0.0, 0.0, 0.0));
 

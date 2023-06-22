@@ -1,5 +1,7 @@
 use cgmath::{Vector2, Vector3, Vector4};
 
+/*
+
 pub type TwoDeeVec<Type> = Vec<Vec<Type>>;
 pub type ThreeDeeVec<Type> = Vec<Vec<Vec<Type>>>;
 
@@ -10,6 +12,8 @@ pub fn vec_two_dee<Type: std::clone::Clone>(side_len: usize, content: Type) -> T
 pub fn vec_three_dee<Type: std::clone::Clone>(side_len: usize, content: Type) -> ThreeDeeVec<Type> {
     vec![vec![vec![content; side_len]; side_len]; side_len]
 }
+
+*/
 
 trait Num {
     // Move Number back into boundary
