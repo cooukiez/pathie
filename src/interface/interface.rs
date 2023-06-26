@@ -182,12 +182,13 @@ impl Interface {
             )
             .unwrap();
 
+            let surface_loader = Surface::new(&entry, &instance);
+
             log::info!("Creating PhyDevice ...");
             let phy_device_list = instance
                 .enumerate_physical_devices()
                 .expect("ERR_NO_PHY_DEVICE");
-
-            let surface_loader = Surface::new(&entry, &instance);
+            
             let (phy_device, queue_family_index) = phy_device_list
                 .iter()
                 .find_map(|phy_device| {
