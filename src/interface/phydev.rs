@@ -3,12 +3,6 @@ use std::ffi::CStr;
 use ash::{extensions::khr::Surface, vk, Instance};
 
 #[derive(Clone)]
-pub struct SurfaceGroup {
-    pub surface_loader: Surface,
-    pub surface: vk::SurfaceKHR,
-}
-
-#[derive(Clone)]
 pub struct PhyDeviceGroup {
     pub device_list: Vec<vk::PhysicalDevice>,
 

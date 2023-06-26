@@ -70,7 +70,7 @@ impl Pipe {
     pub fn init(interface: &Interface, pref: &Pref, uniform: &mut Uniform, octree: &Octree) -> Self {
         unsafe {
             let surface_capa = interface.surface_loader
-                .get_physical_device_surface_capabilities(interface.phy_device, interface.surface)
+                .get_physical_device_surface_capabilities(interface.phy_device.device, interface.surface)
                 .unwrap();
 
             let (_, render_res) = Interface::get_res(&interface.window, pref, &surface_capa);
@@ -611,7 +611,7 @@ impl Pipe {
             // New SurfaceCapability
             let surface_capa = interface
                 .surface_loader
-                .get_physical_device_surface_capabilities(interface.phy_device, interface.surface)
+                .get_physical_device_surface_capabilities(interface.phy_device.device, interface.surface)
                 .unwrap();
 
             (interface.surface_res, self.render_res) =

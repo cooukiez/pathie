@@ -1,4 +1,4 @@
-use crate::Pref;
+use crate::{Pref, interface::phydev::PhyDeviceGroup};
 use ash::{
     extensions::{
         ext::DebugUtils,
@@ -27,10 +27,7 @@ pub struct Interface {
     pub surface_loader: Surface,
     pub surface: vk::SurfaceKHR,
 
-    pub phy_device: vk::PhysicalDevice,
-    pub phy_device_prop: vk::PhysicalDeviceProperties,
-    pub phy_device_mem_prop: vk::PhysicalDeviceMemoryProperties,
-    pub phy_device_feature: vk::PhysicalDeviceFeatures,
+    pub phy_device: PhyDeviceGroup,
 
     pub queue_family_index: u32,
     pub device: Device,
@@ -185,41 +182,12 @@ impl Interface {
             let surface_loader = Surface::new(&entry, &instance);
 
             log::info!("Creating PhyDevice ...");
-            let phy_device_list = instance
-                .enumerate_physical_devices()
-                .expect("ERR_NO_PHY_DEVICE");
-            
-            let (phy_device, queue_family_index) = phy_device_list
-                .iter()
-                .find_map(|phy_device| {
-                    instance
-                        .get_physical_device_queue_family_properties(*phy_device)
-                        .iter()
-                        .enumerate()
-                        .find_map(|(index, info)| {
-                            let graphic_surface_support =
-                                info.queue_flags.contains(vk::QueueFlags::GRAPHICS)
-                                    && surface_loader
-                                        .get_physical_device_surface_support(
-                                            *phy_device,
-                                            index as u32,
-                                            surface,
-                                        )
-                                        .unwrap();
-                            if graphic_surface_support {
-                                Some((*phy_device, index))
-                            } else {
-                                None
-                            }
-                        })
-                })
-                .expect("NO_SUITABLE_PHY_DEVICE");
+            let phy_device = PhyDeviceGroup::default()
+                .get_phy_device_list(&instance)
+                .get_suitable_phy_device(&instance, &surface_loader, surface)
+                .get_phy_device_prop(&instance);
 
-            let phy_device_prop = instance.get_physical_device_properties(phy_device);
-            let phy_device_mem_prop = instance.get_physical_device_memory_properties(phy_device);
-            let phy_device_feature = instance.get_physical_device_features(phy_device);
-
-            let queue_family_index = queue_family_index as u32;
+            let queue_family_index = phy_device.queue_family_index as u32;
             let device_extension_list = [
                 Swapchain::name().as_ptr(),
                 // DynamicRendering::name().as_ptr(),
@@ -248,18 +216,18 @@ impl Interface {
                 .push_next(&mut dynamic_rendering_feature);
 
             let device: Device = instance
-                .create_device(phy_device, &device_create_info, None)
+                .create_device(phy_device.device, &device_create_info, None)
                 .unwrap();
 
             let present_queue = device.get_device_queue(queue_family_index, 0);
 
             log::info!("Load Surface ...");
             let surface_format = surface_loader
-                .get_physical_device_surface_formats(phy_device, surface)
+                .get_physical_device_surface_formats(phy_device.device, surface)
                 .unwrap()[0];
 
             let surface_capa = surface_loader
-                .get_physical_device_surface_capabilities(phy_device, surface)
+                .get_physical_device_surface_capabilities(phy_device.device, surface)
                 .unwrap();
 
             let mut swap_img_count = surface_capa.min_image_count + 1;
@@ -281,7 +249,7 @@ impl Interface {
             };
 
             let present_mode_list = surface_loader
-                .get_physical_device_surface_present_modes(phy_device, surface)
+                .get_physical_device_surface_present_modes(phy_device.device, surface)
                 .unwrap();
 
             let present_mode = present_mode_list
@@ -394,9 +362,6 @@ impl Interface {
                 surface,
 
                 phy_device,
-                phy_device_prop,
-                phy_device_mem_prop,
-                phy_device_feature,
 
                 queue_family_index,
                 device,
@@ -508,7 +473,7 @@ impl Interface {
     }
 
     pub fn find_memorytype_index(&self, memory_req: &vk::MemoryRequirements, flag: vk::MemoryPropertyFlags) -> Option<u32> {
-        self.phy_device_mem_prop.memory_types[..self.phy_device_mem_prop.memory_type_count as _]
+        self.phy_device.mem_prop.memory_types[..self.phy_device.mem_prop.memory_type_count as _]
             .iter()
             .enumerate()
             .find(|(index, memory_type)| {
