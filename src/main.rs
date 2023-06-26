@@ -8,7 +8,7 @@ use std::{
 use ash::vk;
 use env_logger::fmt::{Color, Formatter};
 use input::Input;
-use interface::Interface;
+use interface::interface::Interface;
 use log::Record;
 use pipe::Pipe;
 use tree::octree::Octree;
@@ -24,7 +24,6 @@ mod input;
 mod interface;
 mod tree;
 mod pipe;
-#[macro_use]
 mod bit;
 mod vector;
 mod uniform;

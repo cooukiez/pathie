@@ -5,7 +5,7 @@ use winit::{
     window::Fullscreen,
 };
 
-use crate::{interface::Interface, uniform::Uniform, tree::octree::Octree};
+use crate::{interface::interface::Interface, uniform::Uniform, tree::octree::Octree};
 
 const MOVEMENT_INC: f32 = 10.0;
 

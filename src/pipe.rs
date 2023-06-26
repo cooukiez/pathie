@@ -11,7 +11,7 @@ use ash::{
 };
 
 use crate::{
-    interface::Interface,
+    interface::interface::Interface,
     tree::{octree::{Octree}},
     uniform::Uniform,
     Pref, DEFAULT_STORAGE_BUFFER_SIZE,
