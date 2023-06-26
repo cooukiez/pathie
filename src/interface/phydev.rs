@@ -7,7 +7,7 @@ pub struct PhyDeviceGroup {
     pub device_list: Vec<vk::PhysicalDevice>,
 
     pub device: vk::PhysicalDevice,
-    pub queue_family_index: usize,
+    pub queue_family_index: u32,
 
     pub device_prop: vk::PhysicalDeviceProperties,
     pub mem_prop: vk::PhysicalDeviceMemoryProperties,
@@ -48,7 +48,7 @@ impl PhyDeviceGroup {
         device: &vk::PhysicalDevice,
         index: usize,
         surface: vk::SurfaceKHR,
-    ) -> Option<(vk::PhysicalDevice, usize)> {
+    ) -> Option<(vk::PhysicalDevice, u32)> {
         unsafe {
             // Check for graphic queue support
             let supported = info.queue_flags.contains(vk::QueueFlags::GRAPHICS)
@@ -58,7 +58,8 @@ impl PhyDeviceGroup {
 
             // Return device and index if suitable
             if supported {
-                Some((*device, index))
+                // Convert because will later be used different
+                Some((*device, index as u32))
             } else {
                 None
             }

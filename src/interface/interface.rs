@@ -29,7 +29,6 @@ pub struct Interface {
 
     pub phy_device: PhyDeviceGroup,
 
-    pub queue_family_index: u32,
     pub device: Device,
     pub present_queue: vk::Queue,
 
@@ -187,7 +186,6 @@ impl Interface {
                 .get_suitable_phy_device(&instance, &surface_loader, surface)
                 .get_phy_device_prop(&instance);
 
-            let queue_family_index = phy_device.queue_family_index as u32;
             let device_extension_list = [
                 Swapchain::name().as_ptr(),
                 // DynamicRendering::name().as_ptr(),
@@ -203,7 +201,7 @@ impl Interface {
 
             log::info!("Get QueueList ...");
             let queue_info = vk::DeviceQueueCreateInfo::builder()
-                .queue_family_index(queue_family_index)
+                .queue_family_index(phy_device.queue_family_index)
                 .queue_priorities(&priority);
 
             let mut dynamic_rendering_feature =
@@ -219,7 +217,7 @@ impl Interface {
                 .create_device(phy_device.device, &device_create_info, None)
                 .unwrap();
 
-            let present_queue = device.get_device_queue(queue_family_index, 0);
+            let present_queue = device.get_device_queue(phy_device.queue_family_index, 0);
 
             log::info!("Load Surface ...");
             let surface_format = surface_loader
@@ -282,7 +280,7 @@ impl Interface {
             log::info!("Creating CommandPool ...");
             let pool_create_info = vk::CommandPoolCreateInfo::builder()
                 .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-                .queue_family_index(queue_family_index);
+                .queue_family_index(phy_device.queue_family_index);
 
             let pool = device.create_command_pool(&pool_create_info, None).unwrap();
 
@@ -363,7 +361,6 @@ impl Interface {
 
                 phy_device,
 
-                queue_family_index,
                 device,
                 present_queue,
 
