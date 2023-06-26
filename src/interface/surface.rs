@@ -77,25 +77,31 @@ impl SurfaceGroup {
         unsafe {
             let mut result = self.clone();
 
+            log::info!("Getting info about surface format ...");
             result.format = result
                 .loader
                 .get_physical_device_surface_formats(phy_device.device, result.surface)
                 .unwrap()[0];
+            log::info!("Surface format is [ {} ]...", result.format.format.as_raw());
 
-            // Get surface Capability
+            log::info!("Getting info about surface capability ...");
             result.capa = result
                 .loader
                 .get_physical_device_surface_capabilities(phy_device.device, result.surface)
                 .unwrap();
-
+            
+            log::info!("Getting info about swapchain image count ...");
             result.swap_img_count = result.capa.min_image_count + 1;
             if result.capa.max_image_count > 0
                 && result.swap_img_count > result.capa.max_image_count
             {
                 result.swap_img_count = result.capa.max_image_count;
             }
+            log::info!("Swapchain image count is [ {} ]...", result.swap_img_count);
 
             result = result.get_surface_res(&window, pref);
+            log::info!("Surface resolution is [ {} x {} ]...", result.surface_res.width, result.surface_res.height);
+            log::info!("Render resolution is [ {} x {} ]...", result.render_res.width, result.render_res.height);
 
             result.pre_transform = if result
                 .capa
@@ -120,6 +126,7 @@ impl SurfaceGroup {
                 .find(|&mode| mode == pref.pref_present_mode)
                 // Else use present mode fifo
                 .unwrap_or(vk::PresentModeKHR::FIFO);
+            log::info!("Selected present mode is [ {} ]...", result.present_mode.as_raw());
 
             result
         }
