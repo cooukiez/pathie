@@ -1,5 +1,5 @@
 use crate::{
-    interface::{phydev::PhyDeviceGroup, surface::SurfaceGroup},
+    interface::{phydev::PhyDeviceGroup, surface::SurfaceGroup, swapchain::{self, SwapchainGroup}},
     Pref,
 };
 use ash::{
@@ -30,11 +30,7 @@ pub struct Interface {
     pub device: Device,
     pub present_queue: vk::Queue,
 
-    pub swapchain_loader: Swapchain,
-    pub swapchain: vk::SwapchainKHR,
-
-    pub present_img_list: Vec<vk::Image>,
-    pub present_img_view_list: Vec<vk::ImageView>,
+    pub swapchain: SwapchainGroup,
 
     pub pool: vk::CommandPool,
     pub setup_cmd_buffer: vk::CommandBuffer,
@@ -211,25 +207,7 @@ impl Interface {
             let present_queue = device.get_device_queue(phy_device.queue_family_index, 0);
 
             log::info!("Creating Swapchain ...");
-            let swapchain_loader = Swapchain::new(&instance, &device);
-
-            let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
-                .surface(surface.surface)
-                .min_image_count(surface.swap_img_count)
-                .image_color_space(surface.format.color_space)
-                .image_format(surface.format.format)
-                .image_extent(surface.surface_res)
-                .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-                .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .pre_transform(surface.pre_transform)
-                .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-                .present_mode(surface.present_mode)
-                .clipped(true)
-                .image_array_layers(1);
-
-            let swapchain = swapchain_loader
-                .create_swapchain(&swapchain_create_info, None)
-                .unwrap();
+            let mut swapchain = SwapchainGroup::new(&instance, &device).create_swapchain(&surface);
 
             log::info!("Creating CommandPool ...");
             let pool_create_info = vk::CommandPoolCreateInfo::builder()
@@ -252,30 +230,7 @@ impl Interface {
             let draw_cmd_buffer = command_buffer_list[1];
 
             log::info!("Load PresentImgList ...");
-            let present_img_list = swapchain_loader.get_swapchain_images(swapchain).unwrap();
-            let present_img_view_list: Vec<vk::ImageView> = present_img_list
-                .iter()
-                .map(|&image| {
-                    let create_view_info = vk::ImageViewCreateInfo::builder()
-                        .view_type(vk::ImageViewType::TYPE_2D)
-                        .format(surface.format.format)
-                        .components(vk::ComponentMapping {
-                            r: vk::ComponentSwizzle::R,
-                            g: vk::ComponentSwizzle::G,
-                            b: vk::ComponentSwizzle::B,
-                            a: vk::ComponentSwizzle::A,
-                        })
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                        .image(image);
-                    device.create_image_view(&create_view_info, None).unwrap()
-                })
-                .collect();
+            swapchain = swapchain.get_present_img(&surface, &device);
 
             log::info!("Init Fence ...");
             let fence_create_info =
@@ -317,11 +272,7 @@ impl Interface {
                 device,
                 present_queue,
 
-                swapchain_loader,
                 swapchain,
-
-                present_img_list,
-                present_img_view_list,
 
                 pool,
                 setup_cmd_buffer,
@@ -341,8 +292,8 @@ impl Interface {
         function: Function,
     ) -> Result<bool, Box<dyn Error>> {
         unsafe {
-            let next_image = self.swapchain_loader.acquire_next_image(
-                self.swapchain,
+            let next_image = self.swapchain.loader.acquire_next_image(
+                self.swapchain.swapchain,
                 std::u64::MAX,
                 self.present_complete,
                 vk::Fence::null(),
@@ -362,13 +313,13 @@ impl Interface {
                 wait_semaphore_count: 1,
                 p_wait_semaphores: &self.render_complete,
                 swapchain_count: 1,
-                p_swapchains: &self.swapchain,
+                p_swapchains: &self.swapchain.swapchain,
                 p_image_indices: &present_index,
                 ..Default::default()
             };
 
             let present_result = self
-                .swapchain_loader
+                .swapchain.loader
                 .queue_present(self.present_queue, &present_info);
 
             match present_result {

@@ -10,7 +10,7 @@ use env_logger::fmt::{Color, Formatter};
 use input::Input;
 use interface::interface::Interface;
 use log::Record;
-use pipe::Pipe;
+use pipe::pipe::Pipe;
 use tree::octree::Octree;
 use uniform::Uniform;
 use winit::{

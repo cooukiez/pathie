@@ -17,6 +17,8 @@ use crate::{
     Pref, DEFAULT_STORAGE_BUFFER_SIZE,
 };
 
+use super::{buffer::BufferSet, image::ImageTarget};
+
 /*
 
 #[derive(Clone, Debug, Copy)]
@@ -26,18 +28,6 @@ struct Vertex {
 }
 
 */
-
-pub struct ImageTarget {
-    image_target: vk::Image,
-    image_mem: vk::DeviceMemory,
-    sampler: vk::Sampler,
-    image_view: vk::ImageView,
-}
-
-pub struct BufferSet {
-    pub buffer: vk::Buffer,
-    pub buffer_mem: vk::DeviceMemory,
-}
 
 /*
 
@@ -73,7 +63,7 @@ impl Pipe {
 
             log::info!("Getting ImageTarget List ...");
             let image_target_list = interface
-                .present_img_view_list
+                .swapchain.img_list
                 .iter()
                 .map(|_| ImageTarget::new(interface, interface.surface.render_res))
                 .collect();
@@ -153,7 +143,7 @@ impl Pipe {
             );
 
             log::info!("Getting ShaderCode ...");
-            let mut primary_ray_spv_file = Cursor::new(&include_bytes!("../shader/comp.spv")[..]);
+            let mut primary_ray_spv_file = Cursor::new(&include_bytes!("../../shader/comp.spv")[..]);
 
             let primary_ray_code =
                 read_spv(&mut primary_ray_spv_file).expect("ERR_READ_VERTEX_SPV");
@@ -359,7 +349,7 @@ impl Pipe {
             };
 
             let comp_write = vk::ImageMemoryBarrier::builder()
-                .image(image.image_target)
+                .image(image.img)
                 .old_layout(vk::ImageLayout::UNDEFINED)
                 .new_layout(vk::ImageLayout::GENERAL)
                 .subresource_range(basic_subresource_range.clone())
@@ -367,7 +357,7 @@ impl Pipe {
                 .build();
 
             let comp_transfer = vk::ImageMemoryBarrier::builder()
-                .image(image.image_target)
+                .image(image.img)
                 .old_layout(vk::ImageLayout::GENERAL)
                 .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                 .subresource_range(basic_subresource_range.clone())
@@ -550,7 +540,7 @@ impl Pipe {
                         // First Image Barrier
                         self.first_img_barrier(
                             &self.image_target_list[present_index as usize],
-                            interface.present_img_list[present_index as usize],
+                            interface.swapchain.img_list[present_index as usize],
                             interface,
                             cmd_buffer,
                         );
@@ -558,13 +548,13 @@ impl Pipe {
                         self.copy_image(
                             interface,
                             pref,
-                            self.image_target_list[present_index as usize].image_target,
-                            interface.present_img_list[present_index as usize],
+                            self.image_target_list[present_index as usize].img,
+                            interface.swapchain.img_list[present_index as usize],
                             self.render_res,
                             interface.surface.surface_res,
                         );
                         self.sec_img_barrier(
-                            interface.present_img_list[present_index as usize],
+                            interface.swapchain.img_list[present_index as usize],
                             interface,
                             cmd_buffer,
                         );
@@ -596,12 +586,12 @@ impl Pipe {
 
             // Destroy Swapchain and SwapchainImgList
             interface
-                .present_img_view_list
+                .swapchain.view_list
                 .iter()
                 .for_each(|view| interface.device.destroy_image_view(*view, None));
             interface
-                .swapchain_loader
-                .destroy_swapchain(interface.swapchain, None);
+                .swapchain.loader
+                .destroy_swapchain(interface.swapchain.swapchain, None);
 
             interface.surface = interface.surface.get_surface_info(&interface.phy_device, &interface.window, pref);
 
@@ -621,18 +611,18 @@ impl Pipe {
                 .clipped(true)
                 .image_array_layers(1);
 
-            interface.swapchain = interface
-                .swapchain_loader
+            interface.swapchain.swapchain = interface
+                .swapchain.loader
                 .create_swapchain(&swapchain_create_info, None)
                 .unwrap();
 
-            interface.present_img_list = interface
-                .swapchain_loader
-                .get_swapchain_images(interface.swapchain)
+            interface.swapchain.img_list = interface
+                .swapchain.loader
+                .get_swapchain_images(interface.swapchain.swapchain)
                 .unwrap();
 
-            interface.present_img_view_list = interface
-                .present_img_list
+            interface.swapchain.view_list = interface
+                .swapchain.img_list
                 .iter()
                 .map(|&image| {
                     let create_view_info = vk::ImageViewCreateInfo::builder()
@@ -660,263 +650,10 @@ impl Pipe {
                 .collect();
 
             self.image_target_list = interface
-                .present_img_view_list
+                .swapchain.view_list
                 .iter()
                 .map(|_| ImageTarget::new(interface, self.render_res))
                 .collect();
-        }
-    }
-}
-
-impl ImageTarget {
-    pub fn new(interface: &Interface, extent: vk::Extent2D) -> Self {
-        unsafe {
-            // Create ImgInfo with Dimension -> Scaled Variant
-            let image_info = vk::ImageCreateInfo::builder()
-                .format(interface.surface.format.format)
-                .extent(vk::Extent3D {
-                    width: extent.width,
-                    height: extent.height,
-                    depth: 1,
-                })
-                .mip_levels(1)
-                .array_layers(1)
-                .samples(vk::SampleCountFlags::TYPE_1)
-                .tiling(vk::ImageTiling::OPTIMAL)
-                .usage(vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::TRANSFER_SRC)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .initial_layout(vk::ImageLayout::UNDEFINED)
-                .image_type(vk::ImageType::TYPE_2D)
-                .build();
-
-            // Create Image on Device
-            let image_target = interface.device.create_image(&image_info, None).unwrap();
-
-            // Get Memory Requirement for Image and the MemoryTypeIndex
-            let img_mem_requirement = interface.device.get_image_memory_requirements(image_target);
-            let img_mem_index = interface
-                .find_memorytype_index(&img_mem_requirement, vk::MemoryPropertyFlags::DEVICE_LOCAL)
-                .expect("NO_SUITABLE_MEM_TYPE_INDEX");
-
-            // Prepare MemoryAllocation
-            let allocate_info = vk::MemoryAllocateInfo::builder()
-                .allocation_size(img_mem_requirement.size)
-                .memory_type_index(img_mem_index)
-                .build();
-
-            // Allocate Memory therefore create DeviceMemory
-            let image_mem = interface
-                .device
-                .allocate_memory(&allocate_info, None)
-                .unwrap();
-
-            // To Finish -> Bind Memory
-            interface
-                .device
-                .bind_image_memory(image_target, image_mem, 0)
-                .expect("UNABLE_TO_BIND_MEM");
-
-            let sampler_info = vk::SamplerCreateInfo::builder()
-                .mag_filter(vk::Filter::LINEAR)
-                .min_filter(vk::Filter::LINEAR)
-                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
-                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_BORDER)
-                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_BORDER)
-                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_BORDER)
-                .mip_lod_bias(0.0)
-                .max_anisotropy(1.0)
-                .compare_op(vk::CompareOp::NEVER)
-                .min_lod(0.0)
-                .max_lod(1.0)
-                .border_color(vk::BorderColor::FLOAT_OPAQUE_WHITE);
-
-            let sampler = interface.device.create_sampler(&sampler_info, None).unwrap();
-
-            // Prepare ImageView Creation and bind Image
-            let image_view_info = vk::ImageViewCreateInfo::builder()
-                .view_type(vk::ImageViewType::TYPE_2D)
-                .format(interface.surface.format.format)
-                .subresource_range(vk::ImageSubresourceRange {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    base_mip_level: 0,
-                    level_count: 1,
-                    base_array_layer: 0,
-                    layer_count: 1,
-                })
-                .image(image_target)
-                .components(vk::ComponentMapping {
-                    r: vk::ComponentSwizzle::R,
-                    g: vk::ComponentSwizzle::G,
-                    b: vk::ComponentSwizzle::B,
-                    a: vk::ComponentSwizzle::A,
-                })
-                .build();
-
-            // Build Image View
-            let image_view = interface
-                .device
-                .create_image_view(&image_view_info, None)
-                .unwrap();
-
-            Self {
-                image_target,
-                image_mem,
-                sampler,
-                image_view,
-            }
-        }
-    }
-
-    pub fn describe_in_gpu(
-        &self,
-        interface: &Interface,
-        image_layout: vk::ImageLayout,
-        dst_set: vk::DescriptorSet,
-        dst_binding: u32,
-        descriptor_type: vk::DescriptorType,
-    ) {
-        unsafe {
-            let image_descriptor = vk::DescriptorImageInfo {
-                image_view: self.image_view,
-                image_layout,
-                sampler: self.sampler,
-            };
-
-            let write_info = vk::WriteDescriptorSet {
-                dst_set,
-                dst_binding,
-                descriptor_count: 1,
-                descriptor_type,
-                p_image_info: &image_descriptor,
-                ..Default::default()
-            };
-
-            interface.device.update_descriptor_sets(&[write_info], &[]);
-        }
-    }
-
-    pub fn destroy(&self, interface: &Interface) {
-        unsafe {
-            interface.device.destroy_image_view(self.image_view, None);
-            interface.device.destroy_image(self.image_target, None);
-        }
-    }
-}
-
-impl BufferSet {
-    pub fn new<Type: Copy>(
-        interface: &Interface,
-        alignment: u64,
-        size: u64,
-        usage: vk::BufferUsageFlags,
-        sharing_mode: vk::SharingMode,
-        data: &[Type],
-    ) -> Self {
-        unsafe {
-            // BufferInfo
-            let buffer_info = vk::BufferCreateInfo {
-                size,
-                usage,
-                sharing_mode,
-
-                ..Default::default()
-            };
-
-            // Create BufferObject
-            let buffer = interface.device.create_buffer(&buffer_info, None).unwrap();
-
-            // Get MemoryRequirement
-            let memory_req = interface.device.get_buffer_memory_requirements(buffer);
-            let memory_index = interface
-                .find_memorytype_index(
-                    &memory_req,
-                    vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-                )
-                .expect("ERR_INDEX_BUFFER_MEM_INDEX");
-
-            // Prepare Allocation
-            let allocate_info = vk::MemoryAllocateInfo {
-                allocation_size: memory_req.size,
-                memory_type_index: memory_index,
-
-                ..Default::default()
-            };
-
-            // Create MemoryObject
-            let buffer_mem = interface
-                .device
-                .allocate_memory(&allocate_info, None)
-                .unwrap();
-
-            // Prepare MemoryCopy
-            let index_ptr: *mut c_void = interface
-                .device
-                .map_memory(buffer_mem, 0, memory_req.size, vk::MemoryMapFlags::empty())
-                .unwrap();
-            let mut index_slice = Align::new(index_ptr, alignment, memory_req.size);
-
-            // Copy and finish Memory
-            index_slice.copy_from_slice(&data);
-            interface.device.unmap_memory(buffer_mem);
-
-            interface
-                .device
-                .bind_buffer_memory(buffer, buffer_mem, 0)
-                .unwrap();
-
-            Self { buffer, buffer_mem }
-        }
-    }
-
-    pub fn update<Type: Copy>(&self, interface: &Interface, data: &[Type]) {
-        unsafe {
-            let buffer_ptr = interface
-                .device
-                .map_memory(
-                    self.buffer_mem,
-                    0,
-                    std::mem::size_of_val(data) as u64,
-                    vk::MemoryMapFlags::empty(),
-                )
-                .unwrap();
-
-            let mut aligned_slice = Align::new(
-                buffer_ptr,
-                align_of::<Type>() as u64,
-                std::mem::size_of_val(data) as u64,
-            );
-
-            aligned_slice.copy_from_slice(&data.clone()[..]);
-
-            interface.device.unmap_memory(self.buffer_mem);
-        }
-    }
-
-    pub fn describe_in_gpu(
-        &self,
-        interface: &Interface,
-        range: u64,
-        dst_set: vk::DescriptorSet,
-        dst_binding: u32,
-        descriptor_type: vk::DescriptorType,
-    ) {
-        unsafe {
-            let buffer_descriptor = vk::DescriptorBufferInfo {
-                buffer: self.buffer,
-                offset: 0,
-                range,
-            };
-
-            let write_info = vk::WriteDescriptorSet {
-                dst_set,
-                dst_binding,
-                descriptor_count: 1,
-                descriptor_type,
-                p_buffer_info: &buffer_descriptor,
-                ..Default::default()
-            };
-
-            interface.device.update_descriptor_sets(&[write_info], &[]);
         }
     }
 }

@@ -29,7 +29,7 @@ impl SurfaceGroup {
     /// Create new surface group object and immediatly create
     /// surface loader and surface khr.
 
-    pub fn new(entry: &Entry, instance: &Instance, window: &Window) -> SurfaceGroup {
+    pub fn new(entry: &Entry, instance: &Instance, window: &Window) -> Self {
         unsafe {
             let loader = Surface::new(&entry, &instance);
 
