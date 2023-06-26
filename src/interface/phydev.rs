@@ -1,6 +1,6 @@
 use std::ffi::CStr;
 
-use ash::{extensions::khr::Surface, vk, Instance};
+use ash::{vk, Instance};
 
 use super::surface::SurfaceGroup;
 

@@ -1,18 +1,18 @@
-use crate::{Pref, interface::{phydev::PhyDeviceGroup, surface::SurfaceGroup}};
+use crate::{
+    interface::{phydev::PhyDeviceGroup, surface::SurfaceGroup},
+    Pref,
+};
 use ash::{
-    extensions::{
-        ext::DebugUtils,
-        khr::{Surface, Swapchain},
-    },
-    vk::{self, SurfaceTransformFlagsKHR},
+    extensions::{ext::DebugUtils, khr::{Swapchain, DynamicRendering}},
+    vk::{self},
     Device, Entry, Instance,
 };
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use raw_window_handle::HasRawDisplayHandle;
 use std::{
     error::Error,
     ffi::{c_void, CStr, CString},
 };
-use winit::{event_loop::EventLoop, monitor::MonitorHandle, window::{WindowBuilder, Window}};
+use winit::{event_loop::EventLoop, monitor::MonitorHandle, window::WindowBuilder};
 
 pub struct Interface {
     pub entry: Entry,
@@ -25,7 +25,6 @@ pub struct Interface {
     pub monitor: MonitorHandle,
 
     pub surface: SurfaceGroup,
-
     pub phy_device: PhyDeviceGroup,
 
     pub device: Device,
@@ -60,7 +59,12 @@ macro_rules! offset_of {
     }};
 }
 
-unsafe extern "system" fn vulkan_debug_callback(flag: vk::DebugUtilsMessageSeverityFlagsEXT, msg_type: vk::DebugUtilsMessageTypeFlagsEXT, callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT, _: *mut c_void) -> vk::Bool32 {
+unsafe extern "system" fn vulkan_debug_callback(
+    flag: vk::DebugUtilsMessageSeverityFlagsEXT,
+    msg_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    _: *mut c_void,
+) -> vk::Bool32 {
     use vk::DebugUtilsMessageSeverityFlagsEXT as Flag;
     let message = CStr::from_ptr((*callback_data).p_message);
 
@@ -174,9 +178,9 @@ impl Interface {
             log::info!("Load Surface information ...");
             surface = surface.get_surface_info(&phy_device, &window, pref);
 
-            let device_extension_list = [
+            let device_ext_list = [
                 Swapchain::name().as_ptr(),
-                // DynamicRendering::name().as_ptr(),
+                DynamicRendering::name().as_ptr(),
                 #[cfg(any(target_os = "macos", target_os = "ios",))]
                 KhrPortabilitySubsetFn::name().as_ptr(),
             ];
@@ -185,19 +189,18 @@ impl Interface {
                 shader_clip_distance: 1,
                 ..Default::default()
             };
-            let priority = [1.0];
 
             log::info!("Get QueueList ...");
             let queue_info = vk::DeviceQueueCreateInfo::builder()
                 .queue_family_index(phy_device.queue_family_index)
-                .queue_priorities(&priority);
+                .queue_priorities(&[1f32]);
 
             let mut dynamic_rendering_feature =
                 vk::PhysicalDeviceDynamicRenderingFeaturesKHR::builder().dynamic_rendering(true);
 
             let device_create_info = vk::DeviceCreateInfo::builder()
                 .queue_create_infos(std::slice::from_ref(&queue_info))
-                .enabled_extension_names(&device_extension_list)
+                .enabled_extension_names(&device_ext_list)
                 .enabled_features(&feature)
                 .push_next(&mut dynamic_rendering_feature);
 
@@ -383,7 +386,11 @@ impl Interface {
         }
     }
 
-    pub fn find_memorytype_index(&self, memory_req: &vk::MemoryRequirements, flag: vk::MemoryPropertyFlags) -> Option<u32> {
+    pub fn find_memorytype_index(
+        &self,
+        memory_req: &vk::MemoryRequirements,
+        flag: vk::MemoryPropertyFlags,
+    ) -> Option<u32> {
         self.phy_device.mem_prop.memory_types[..self.phy_device.mem_prop.memory_type_count as _]
             .iter()
             .enumerate()
