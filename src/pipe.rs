@@ -69,18 +69,13 @@ pub struct Pipe {
 impl Pipe {
     pub fn init(interface: &Interface, pref: &Pref, uniform: &mut Uniform, octree: &Octree) -> Self {
         unsafe {
-            let surface_capa = interface.surface_loader
-                .get_physical_device_surface_capabilities(interface.phy_device.device, interface.surface)
-                .unwrap();
-
-            let (_, render_res) = Interface::get_res(&interface.window, pref, &surface_capa);
-            uniform.apply_resolution(render_res);
+            uniform.apply_resolution(interface.surface.render_res);
 
             log::info!("Getting ImageTarget List ...");
             let image_target_list = interface
                 .present_img_view_list
                 .iter()
-                .map(|_| ImageTarget::new(interface, render_res))
+                .map(|_| ImageTarget::new(interface, interface.surface.render_res))
                 .collect();
 
             log::info!("Creating UniformBuffer ...");
@@ -199,7 +194,7 @@ impl Pipe {
 
             log::info!("Rendering initialisation finished ...");
             Pipe {
-                render_res,
+                render_res: interface.surface.render_res,
                 image_target_list,
                 uniform_buffer,
                 octree_buffer,
@@ -566,7 +561,7 @@ impl Pipe {
                             self.image_target_list[present_index as usize].image_target,
                             interface.present_img_list[present_index as usize],
                             self.render_res,
-                            interface.surface_res,
+                            interface.surface.surface_res,
                         );
                         self.sec_img_barrier(
                             interface.present_img_list[present_index as usize],
@@ -608,38 +603,24 @@ impl Pipe {
                 .swapchain_loader
                 .destroy_swapchain(interface.swapchain, None);
 
-            // New SurfaceCapability
-            let surface_capa = interface
-                .surface_loader
-                .get_physical_device_surface_capabilities(interface.phy_device.device, interface.surface)
-                .unwrap();
-
-            (interface.surface_res, self.render_res) =
-                Interface::get_res(&interface.window, pref, &surface_capa);
+            interface.surface = interface.surface.get_surface_info(&interface.phy_device, &interface.window, pref);
 
             uniform.apply_resolution(self.render_res);
 
-            // Select PresentMode -> PreferredPresentMode is selected in Pref
-            let present_mode = interface
-                .present_mode_list
-                .iter()
-                .cloned()
-                .find(|&mode| mode == pref.pref_present_mode)
-                .unwrap_or(vk::PresentModeKHR::FIFO);
-
             let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
-                .surface(interface.surface)
-                .min_image_count(interface.swap_img_count)
-                .image_color_space(interface.surface_format.color_space)
-                .image_format(interface.surface_format.format)
-                .image_extent(interface.surface_res)
+                .surface(interface.surface.surface)
+                .min_image_count(interface.surface.swap_img_count)
+                .image_color_space(interface.surface.format.color_space)
+                .image_format(interface.surface.format.format)
+                .image_extent(interface.surface.surface_res)
                 .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
                 .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .pre_transform(interface.pre_transform)
+                .pre_transform(interface.surface.pre_transform)
                 .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-                .present_mode(present_mode)
+                .present_mode(interface.surface.present_mode)
                 .clipped(true)
                 .image_array_layers(1);
+
             interface.swapchain = interface
                 .swapchain_loader
                 .create_swapchain(&swapchain_create_info, None)
@@ -656,7 +637,7 @@ impl Pipe {
                 .map(|&image| {
                     let create_view_info = vk::ImageViewCreateInfo::builder()
                         .view_type(vk::ImageViewType::TYPE_2D)
-                        .format(interface.surface_format.format)
+                        .format(interface.surface.format.format)
                         .components(vk::ComponentMapping {
                             r: vk::ComponentSwizzle::R,
                             g: vk::ComponentSwizzle::G,
@@ -692,7 +673,7 @@ impl ImageTarget {
         unsafe {
             // Create ImgInfo with Dimension -> Scaled Variant
             let image_info = vk::ImageCreateInfo::builder()
-                .format(interface.surface_format.format)
+                .format(interface.surface.format.format)
                 .extent(vk::Extent3D {
                     width: extent.width,
                     height: extent.height,
@@ -754,7 +735,7 @@ impl ImageTarget {
             // Prepare ImageView Creation and bind Image
             let image_view_info = vk::ImageViewCreateInfo::builder()
                 .view_type(vk::ImageViewType::TYPE_2D)
-                .format(interface.surface_format.format)
+                .format(interface.surface.format.format)
                 .subresource_range(vk::ImageSubresourceRange {
                     aspect_mask: vk::ImageAspectFlags::COLOR,
                     base_mip_level: 0,

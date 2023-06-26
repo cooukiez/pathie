@@ -2,6 +2,8 @@ use std::ffi::CStr;
 
 use ash::{extensions::khr::Surface, vk, Instance};
 
+use super::surface::SurfaceGroup;
+
 #[derive(Clone)]
 pub struct PhyDeviceGroup {
     pub device_list: Vec<vk::PhysicalDevice>,
@@ -44,16 +46,15 @@ impl PhyDeviceGroup {
     pub fn is_device_suitable(
         &self,
         info: &vk::QueueFamilyProperties,
-        surface_loader: &Surface,
+        surface: &SurfaceGroup,
         device: &vk::PhysicalDevice,
         index: usize,
-        surface: vk::SurfaceKHR,
     ) -> Option<(vk::PhysicalDevice, u32)> {
         unsafe {
             // Check for graphic queue support
             let supported = info.queue_flags.contains(vk::QueueFlags::GRAPHICS)
-                && surface_loader
-                    .get_physical_device_surface_support(*device, index as u32, surface)
+                && surface.loader
+                    .get_physical_device_surface_support(*device, index as u32, surface.surface)
                     .unwrap();
 
             // Return device and index if suitable
@@ -78,8 +79,7 @@ impl PhyDeviceGroup {
     pub fn get_suitable_phy_device(
         &self,
         instance: &Instance,
-        surface_loader: &Surface,
-        surface: vk::SurfaceKHR,
+        surface: &SurfaceGroup,
     ) -> Self {
         unsafe {
             let mut result = self.clone();
@@ -100,10 +100,9 @@ impl PhyDeviceGroup {
                             // Check if device is suitable
                             self.is_device_suitable(
                                 info,
-                                surface_loader,
+                                surface,
                                 device,
                                 index,
-                                surface,
                             )
                         })
                 })

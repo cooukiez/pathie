@@ -1,4 +1,4 @@
-use crate::{Pref, interface::phydev::PhyDeviceGroup};
+use crate::{Pref, interface::{phydev::PhyDeviceGroup, surface::SurfaceGroup}};
 use ash::{
     extensions::{
         ext::DebugUtils,
@@ -24,20 +24,12 @@ pub struct Interface {
     pub monitor_list: Vec<MonitorHandle>,
     pub monitor: MonitorHandle,
 
-    pub surface_loader: Surface,
-    pub surface: vk::SurfaceKHR,
+    pub surface: SurfaceGroup,
 
     pub phy_device: PhyDeviceGroup,
 
     pub device: Device,
     pub present_queue: vk::Queue,
-
-    pub surface_format: vk::SurfaceFormatKHR,
-    pub pre_transform: SurfaceTransformFlagsKHR,
-    pub swap_img_count: u32,
-
-    pub surface_res: vk::Extent2D,
-    pub present_mode_list: Vec<vk::PresentModeKHR>,
 
     pub swapchain_loader: Swapchain,
     pub swapchain: vk::SwapchainKHR,
@@ -78,6 +70,8 @@ unsafe extern "system" fn vulkan_debug_callback(flag: vk::DebugUtilsMessageSever
         Flag::WARNING => log::info!("[ {:?} ] {}", msg_type, message.to_str().unwrap(),),
         _ => log::info!("[ {:?} ] {}", msg_type, message.to_str().unwrap(),),
     }
+
+    log::info!("");
 
     return vk::FALSE;
 }
@@ -169,22 +163,16 @@ impl Interface {
                 .create_debug_utils_messenger(&debug_info, None)
                 .unwrap();
 
-            let surface = ash_window::create_surface(
-                &entry,
-                &instance,
-                window.raw_display_handle(),
-                window.raw_window_handle(),
-                None,
-            )
-            .unwrap();
-
-            let surface_loader = Surface::new(&entry, &instance);
+            let mut surface = SurfaceGroup::new(&entry, &instance, &window);
 
             log::info!("Creating PhyDevice ...");
             let phy_device = PhyDeviceGroup::default()
                 .get_phy_device_list(&instance)
-                .get_suitable_phy_device(&instance, &surface_loader, surface)
+                .get_suitable_phy_device(&instance, &surface)
                 .get_phy_device_prop(&instance);
+
+            log::info!("Load Surface information ...");
+            surface = surface.get_surface_info(&phy_device, &window, pref);
 
             let device_extension_list = [
                 Swapchain::name().as_ptr(),
@@ -219,57 +207,20 @@ impl Interface {
 
             let present_queue = device.get_device_queue(phy_device.queue_family_index, 0);
 
-            log::info!("Load Surface ...");
-            let surface_format = surface_loader
-                .get_physical_device_surface_formats(phy_device.device, surface)
-                .unwrap()[0];
-
-            let surface_capa = surface_loader
-                .get_physical_device_surface_capabilities(phy_device.device, surface)
-                .unwrap();
-
-            let mut swap_img_count = surface_capa.min_image_count + 1;
-            if surface_capa.max_image_count > 0
-                && swap_img_count > surface_capa.max_image_count
-            {
-                swap_img_count = surface_capa.max_image_count;
-            }
-
-            let (surface_res, _) = Self::get_res(&window, pref, &surface_capa);
-
-            let pre_transform = if surface_capa
-                .supported_transforms
-                .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
-            {
-                vk::SurfaceTransformFlagsKHR::IDENTITY
-            } else {
-                surface_capa.current_transform
-            };
-
-            let present_mode_list = surface_loader
-                .get_physical_device_surface_present_modes(phy_device.device, surface)
-                .unwrap();
-
-            let present_mode = present_mode_list
-                .iter()
-                .cloned()
-                .find(|&mode| mode == pref.pref_present_mode)
-                .unwrap_or(vk::PresentModeKHR::FIFO);
-
             log::info!("Creating Swapchain ...");
             let swapchain_loader = Swapchain::new(&instance, &device);
 
             let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
-                .surface(surface)
-                .min_image_count(swap_img_count)
-                .image_color_space(surface_format.color_space)
-                .image_format(surface_format.format)
-                .image_extent(surface_res)
+                .surface(surface.surface)
+                .min_image_count(surface.swap_img_count)
+                .image_color_space(surface.format.color_space)
+                .image_format(surface.format.format)
+                .image_extent(surface.surface_res)
                 .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
                 .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .pre_transform(pre_transform)
+                .pre_transform(surface.pre_transform)
                 .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-                .present_mode(present_mode)
+                .present_mode(surface.present_mode)
                 .clipped(true)
                 .image_array_layers(1);
 
@@ -304,7 +255,7 @@ impl Interface {
                 .map(|&image| {
                     let create_view_info = vk::ImageViewCreateInfo::builder()
                         .view_type(vk::ImageViewType::TYPE_2D)
-                        .format(surface_format.format)
+                        .format(surface.format.format)
                         .components(vk::ComponentMapping {
                             r: vk::ComponentSwizzle::R,
                             g: vk::ComponentSwizzle::G,
@@ -356,20 +307,12 @@ impl Interface {
                 monitor_list,
                 monitor,
 
-                surface_loader,
                 surface,
 
                 phy_device,
 
                 device,
                 present_queue,
-
-                surface_format: surface_format,
-                pre_transform,
-                swap_img_count,
-
-                surface_res,
-                present_mode_list,
 
                 swapchain_loader,
                 swapchain,
@@ -438,35 +381,6 @@ impl Interface {
 
             Ok(false)
         }
-    }
-
-    /// Function to get the resolution
-    /// at which to render. The resolution or scale factor
-    /// can be changed in pref.
-    /// First return is surface and other one is render res.
-
-    pub fn get_res(window: &Window, pref: &Pref, surface_capa: &vk::SurfaceCapabilitiesKHR) -> (vk::Extent2D, vk::Extent2D) {
-        // Select new Dimension
-        let dim = window.inner_size();
-        let surface_res = match surface_capa.current_extent.width {
-            std::u32::MAX => vk::Extent2D {
-                width: dim.width,
-                height: dim.height,
-            },
-            _ => surface_capa.current_extent,
-        };
-
-        // Select new RenderResolution
-        let render_res = if pref.use_render_res && window.fullscreen() != None {
-            pref.render_res
-        } else {
-            vk::Extent2D {
-                width: (surface_res.width as f32 / pref.img_scale) as u32,
-                height: (surface_res.height as f32 / pref.img_scale) as u32,
-            }
-        };
-
-        (surface_res, render_res)
     }
 
     pub fn find_memorytype_index(&self, memory_req: &vk::MemoryRequirements, flag: vk::MemoryPropertyFlags) -> Option<u32> {
