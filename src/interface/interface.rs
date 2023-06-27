@@ -337,21 +337,6 @@ impl Interface {
         }
     }
 
-    pub fn find_memorytype_index(
-        &self,
-        memory_req: &vk::MemoryRequirements,
-        flag: vk::MemoryPropertyFlags,
-    ) -> Option<u32> {
-        self.phy_device.mem_prop.memory_types[..self.phy_device.mem_prop.memory_type_count as _]
-            .iter()
-            .enumerate()
-            .find(|(index, memory_type)| {
-                (1 << index) & memory_req.memory_type_bits != 0
-                    && memory_type.property_flags & flag == flag
-            })
-            .map(|(index, _memory_type)| index as _)
-    }
-
     pub fn wait_for_gpu(&self) -> Result<(), Box<dyn Error>> {
         unsafe { Ok(self.device.device_wait_idle().unwrap()) }
     }

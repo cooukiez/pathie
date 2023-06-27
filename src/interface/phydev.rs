@@ -13,7 +13,7 @@ pub struct PhyDeviceGroup {
 
     pub device_prop: vk::PhysicalDeviceProperties,
     pub mem_prop: vk::PhysicalDeviceMemoryProperties,
-    pub feature: vk::PhysicalDeviceFeatures, 
+    pub feature: vk::PhysicalDeviceFeatures,
 }
 
 impl PhyDeviceGroup {
@@ -53,7 +53,8 @@ impl PhyDeviceGroup {
         unsafe {
             // Check for graphic queue support
             let supported = info.queue_flags.contains(vk::QueueFlags::GRAPHICS)
-                && surface.loader
+                && surface
+                    .loader
                     .get_physical_device_surface_support(*device, index as u32, surface.surface)
                     .unwrap();
 
@@ -76,11 +77,7 @@ impl PhyDeviceGroup {
     /// If not suitable device is found, we throw an exception,
     /// because then the application won't be able to run.
 
-    pub fn get_suitable_phy_device(
-        &self,
-        instance: &Instance,
-        surface: &SurfaceGroup,
-    ) -> Self {
+    pub fn get_suitable_phy_device(&self, instance: &Instance, surface: &SurfaceGroup) -> Self {
         unsafe {
             let mut result = self.clone();
 
@@ -98,12 +95,7 @@ impl PhyDeviceGroup {
                         .enumerate()
                         .find_map(|(index, info)| {
                             // Check if device is suitable
-                            self.is_device_suitable(
-                                info,
-                                surface,
-                                device,
-                                index,
-                            )
+                            self.is_device_suitable(info, surface, device, index)
                         })
                 })
                 .expect("NO_SUITABLE_PHY_DEVICE");
@@ -121,9 +113,8 @@ impl PhyDeviceGroup {
             let mut result = self.clone();
 
             result.device_prop = instance.get_physical_device_properties(result.device);
-            result.mem_prop =
-                instance.get_physical_device_memory_properties(result.device);
-                result.feature = instance.get_physical_device_features(result.device);
+            result.mem_prop = instance.get_physical_device_memory_properties(result.device);
+            result.feature = instance.get_physical_device_features(result.device);
 
             log::info!(
                 "Selected physical device -> {}",
@@ -134,6 +125,23 @@ impl PhyDeviceGroup {
 
             result
         }
+    }
+
+    /// Find suitable memorytype index for memory req.
+
+    pub fn find_memorytype_index(
+        &self,
+        memory_req: &vk::MemoryRequirements,
+        flag: vk::MemoryPropertyFlags,
+    ) -> Option<u32> {
+        self.mem_prop.memory_types[..self.mem_prop.memory_type_count as _]
+            .iter()
+            .enumerate()
+            .find(|(index, memory_type)| {
+                (1 << index) & memory_req.memory_type_bits != 0
+                    && memory_type.property_flags & flag == flag
+            })
+            .map(|(index, _memory_type)| index as _)
     }
 }
 

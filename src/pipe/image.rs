@@ -1,6 +1,6 @@
 use ash::{vk, Device};
 
-use crate::interface::{interface::Interface, surface::SurfaceGroup};
+use crate::interface::{interface::Interface, phydev::PhyDeviceGroup, surface::SurfaceGroup};
 
 #[derive(Clone)]
 pub struct ImageTarget {
@@ -8,84 +8,110 @@ pub struct ImageTarget {
     pub view: vk::ImageView,
 
     pub mem: vk::DeviceMemory,
+    pub mem_req: vk::MemoryRequirements,
     pub sampler: vk::Sampler,
 }
+
+/// Convert extent two dimensional to three dimensional
+#[macro_export]
+macro_rules! extent_conv {
+    ($extent : expr) => {
+        vk::Extent3D {
+            width: $extent.width,
+            height: $extent.height,
+            depth: 1,
+        }
+    };
+}
+
+pub const SUBRES_RANGE: vk::ImageSubresourceRange = vk::ImageSubresourceRange {
+    aspect_mask: vk::ImageAspectFlags::COLOR,
+    base_mip_level: 0,
+    level_count: 1,
+    base_array_layer: 0,
+    layer_count: 1,
+};
+
+pub const COMP_MAP: vk::ComponentMapping = vk::ComponentMapping {
+    r: vk::ComponentSwizzle::R,
+    g: vk::ComponentSwizzle::G,
+    b: vk::ComponentSwizzle::B,
+    a: vk::ComponentSwizzle::A,
+};
 
 /// Basic object for creating two dimensional image to store
 /// some sort of information. Not intended to be used as multi layer
 /// texture to replace buffer, as said for simple picture material.
 
 impl ImageTarget {
-    /// This function will create a simple two dimensional image
-    /// with tiling, sample count and more predefined for the
-    /// intended usage. After that, we create the simple image on the device.
+    /// This function will create image on device
+    /// and will update the img attribute.
 
     pub fn create_img(
-        surface: &SurfaceGroup,
-        extent: &vk::Extent2D,
-        tiling: vk::ImageTiling,
-        usage: vk::ImageUsageFlags,
-        sharing_mode: vk::SharingMode,
-        layout: vk::ImageLayout,
+        &self,
+        info: vk::ImageCreateInfo,
         device: &Device,
-    ) -> vk::Image {
+    ) -> Self {
         unsafe {
-            let extent = vk::Extent3D {
-                width: extent.width,
-                height: extent.height,
-                depth: 1,
-            };
-
-            // Create ImgInfo with Dimension
-            let image_info = vk::ImageCreateInfo::builder()
-                .format(surface.format.format)
-                .extent(extent)
-                .mip_levels(1)
-                .array_layers(1)
-                .samples(vk::SampleCountFlags::TYPE_1)
-                .tiling(tiling)
-                .usage(usage)
-                .sharing_mode(sharing_mode)
-                .initial_layout(layout)
-                .image_type(vk::ImageType::TYPE_2D)
-                .build();
+            let mut result = self.clone();
 
             // Create Image on Device
-            device.create_image(&image_info, None).unwrap()
+            result.img = device.create_image(&info, None).unwrap();
+
+            result
         }
     }
 
-    /// This function will create the image view for a sepcified image.
-    /// First we create the info with predefined subresource range,
-    /// format and more for the intended usage. After that we create
-    /// the image view on the device.
-
-    pub fn create_view(surface: &SurfaceGroup, img: vk::Image, device: &Device) -> vk::ImageView {
+    pub fn create_img_memory(&self, device: &Device, phy_device: &PhyDeviceGroup) -> Self {
         unsafe {
-            // Prepare image view for creation and bind image
-            let image_view_info = vk::ImageViewCreateInfo::builder()
-                .image(img)
-                .view_type(vk::ImageViewType::TYPE_2D)
-                .format(surface.format.format)
-                .subresource_range(vk::ImageSubresourceRange {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    base_mip_level: 0,
-                    level_count: 1,
-                    base_array_layer: 0,
-                    layer_count: 1,
-                })
-                .components(vk::ComponentMapping {
-                    r: vk::ComponentSwizzle::R,
-                    g: vk::ComponentSwizzle::G,
-                    b: vk::ComponentSwizzle::B,
-                    a: vk::ComponentSwizzle::A,
-                })
+            let mut result = self.clone();
+
+            // Get Memory Requirement for Image and the MemoryTypeIndex
+            result.mem_req = device.get_image_memory_requirements(result.img);
+            let mem_index = phy_device
+                .find_memorytype_index(&result.mem_req, vk::MemoryPropertyFlags::DEVICE_LOCAL)
+                .expect("NO_SUITABLE_MEM_TYPE_INDEX");
+
+            // Prepare MemoryAllocation
+            let allocate_info = vk::MemoryAllocateInfo::builder()
+                .allocation_size(result.mem_req.size)
+                .memory_type_index(mem_index)
                 .build();
 
-            // Build image view
+            // Allocate Memory
+            result.mem = device.allocate_memory(&allocate_info, None).unwrap();
+
             device
-                .create_image_view(&image_view_info, None)
-                .unwrap()
+                .bind_image_memory(result.img, result.mem, 0)
+                .expect("UNABLE_TO_BIND_MEM");
+
+            result
+        }
+    }
+
+    pub fn create_sampler(&self, info: vk::SamplerCreateInfo, device: &Device) -> Self {
+        unsafe {
+            let mut result = self.clone();
+
+            let sampler = device.create_sampler(&info, None).unwrap();
+
+            result
+        }
+    }
+
+    /// This function will create image on device
+    /// and will update the img attribute.
+
+    pub fn create_view(&self, info: vk::ImageViewCreateInfo, img: vk::Image, device: &Device) -> Self {
+        unsafe {
+            let mut result = self.clone();
+            let mut info = info.clone();
+            info.image = img;
+
+            // Build image view
+            result.view = device.create_image_view(&info, None).unwrap();
+
+            result
         }
     }
 
@@ -93,41 +119,22 @@ impl ImageTarget {
     /// image sampler. It is only intended to be used as two dimensional image.
     /// Will return new image target object.
 
-    pub fn new(interface: &Interface, extent: vk::Extent2D) -> Self {
+    pub fn basic_img(interface: &Interface, extent: vk::Extent2D) -> Self {
         unsafe {
-            let img = Self::create_img(
-                &interface.surface,
-                &extent,
-                vk::ImageTiling::OPTIMAL,
-                vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::TRANSFER_SRC,
-                vk::SharingMode::EXCLUSIVE,
-                vk::ImageLayout::UNDEFINED,
-                &interface.device
-            );
+            let mut result = Self::default();
 
-            // Get Memory Requirement for Image and the MemoryTypeIndex
-            let mem_requirement = interface.device.get_image_memory_requirements(img);
-            let mem_index = interface
-                .find_memorytype_index(&mem_requirement, vk::MemoryPropertyFlags::DEVICE_LOCAL)
-                .expect("NO_SUITABLE_MEM_TYPE_INDEX");
-
-            // Prepare MemoryAllocation
-            let allocate_info = vk::MemoryAllocateInfo::builder()
-                .allocation_size(mem_requirement.size)
-                .memory_type_index(mem_index)
+            let img_info = vk::ImageCreateInfo::builder()
+                .format(interface.surface.format.format)
+                .extent(extent_conv!(extent))
+                .mip_levels(1)
+                .array_layers(1)
+                .samples(vk::SampleCountFlags::TYPE_1)
+                .tiling(vk::ImageTiling::OPTIMAL)
+                .usage(vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::TRANSFER_SRC)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .initial_layout(vk::ImageLayout::UNDEFINED)
+                .image_type(vk::ImageType::TYPE_2D)
                 .build();
-
-            // Allocate Memory therefore create DeviceMemory
-            let mem = interface
-                .device
-                .allocate_memory(&allocate_info, None)
-                .unwrap();
-
-            // To Finish -> Bind Memory
-            interface
-                .device
-                .bind_image_memory(img, mem, 0)
-                .expect("UNABLE_TO_BIND_MEM");
 
             let sampler_info = vk::SamplerCreateInfo::builder()
                 .mag_filter(vk::Filter::LINEAR)
@@ -141,21 +148,22 @@ impl ImageTarget {
                 .compare_op(vk::CompareOp::NEVER)
                 .min_lod(0.0)
                 .max_lod(1.0)
-                .border_color(vk::BorderColor::FLOAT_OPAQUE_WHITE);
+                .border_color(vk::BorderColor::FLOAT_OPAQUE_WHITE)
+                .build();
 
-            let sampler = interface
-                .device
-                .create_sampler(&sampler_info, None)
-                .unwrap();
+            let view_info = vk::ImageViewCreateInfo::builder()
+                .view_type(vk::ImageViewType::TYPE_2D)
+                .format(interface.surface.format.format)
+                .subresource_range(SUBRES_RANGE)
+                .components(COMP_MAP)
+                .build();
 
-            let view = Self::create_view(&interface.surface, img, &interface.device);
+            result = result
+                .create_img(img_info, &interface.device)
+                .create_img_memory(&interface.device, &interface.phy_device)
+                .create_sampler(sampler_info, &interface.device);
 
-            Self {
-                img,
-                mem,
-                sampler,
-                view,
-            }
+            result
         }
     }
 
@@ -207,6 +215,7 @@ impl Default for ImageTarget {
             img: Default::default(),
             view: Default::default(),
             mem: Default::default(),
+            mem_req: Default::default(),
             sampler: Default::default(),
         }
     }

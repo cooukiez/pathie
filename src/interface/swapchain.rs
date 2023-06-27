@@ -1,6 +1,6 @@
-use ash::{extensions::khr::Swapchain, vk, Instance, Device};
+use ash::{extensions::khr::Swapchain, vk, Device, Instance};
 
-use crate::pipe::image::ImageTarget;
+use crate::pipe::image::{ImageTarget, COMP_MAP, SUBRES_RANGE};
 
 use super::surface::SurfaceGroup;
 
@@ -52,9 +52,7 @@ impl SwapchainGroup {
                 .clipped(true)
                 .image_array_layers(1);
 
-            result.swapchain = result.loader
-                .create_swapchain(&create_info, None)
-                .unwrap();
+            result.swapchain = result.loader.create_swapchain(&create_info, None).unwrap();
 
             result
         }
@@ -69,13 +67,27 @@ impl SwapchainGroup {
             let mut result = self.clone();
 
             log::info!("Getting swapchain present image material ...");
-            result.img_list = result.loader.get_swapchain_images(result.swapchain).unwrap();
+            result.img_list = result
+                .loader
+                .get_swapchain_images(result.swapchain)
+                .unwrap();
 
             log::info!("Creating image view list for present image list ...");
-            result.view_list = result.img_list
+            result.view_list = result
+                .img_list
                 .iter()
                 .map(|img| {
-                    ImageTarget::create_view(surface, * img, device)
+                    device
+                        .create_image_view(
+                            &vk::ImageViewCreateInfo::builder()
+                                .view_type(vk::ImageViewType::TYPE_2D)
+                                .format(surface.format.format)
+                                .components(COMP_MAP)
+                                .subresource_range(SUBRES_RANGE)
+                                .image(*img),
+                            None,
+                        )
+                        .unwrap()
                 })
                 .collect();
 
