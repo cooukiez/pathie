@@ -20,13 +20,13 @@ use winit::{
     platform::run_return::EventLoopExtRunReturn,
 };
 
+mod bit;
 mod input;
 mod interface;
-mod tree;
 mod pipe;
-mod bit;
-mod vector;
+mod tree;
 mod uniform;
+mod vector;
 
 const DEFAULT_STORAGE_BUFFER_SIZE: u64 = 1342177280;
 // const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
@@ -128,7 +128,7 @@ impl Render {
 
         let input = Input::new();
         let mut uniform = Uniform::new(octree.root_span);
-        
+
         octree.test_scene();
 
         let interface = Interface::init(&event_loop, &pref);
@@ -222,9 +222,7 @@ impl Render {
 
                             // Update Uniform
                             self.uniform.update_uniform(app_start.elapsed());
-                            self.graphic_pipe
-                                .uniform_buffer
-                                .update(&self.interface, &[self.uniform]);
+                            // self.graphic_pipe.uniform_buffer.update(&self.interface, &[self.uniform]);
 
                             // Draw and capture FrameTime
                             let start = Instant::now();

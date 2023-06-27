@@ -1,6 +1,6 @@
-use ash::vk;
+use ash::{vk, Device};
 
-use crate::interface::interface::Interface;
+use crate::interface::{interface::Interface, surface::SurfaceGroup};
 
 #[derive(Clone)]
 pub struct ImageTarget {
@@ -21,11 +21,13 @@ impl ImageTarget {
     /// intended usage. After that, we create the simple image on the device.
 
     pub fn create_img(
-        interface: &Interface,
+        surface: &SurfaceGroup,
         extent: &vk::Extent2D,
+        tiling: vk::ImageTiling,
         usage: vk::ImageUsageFlags,
         sharing_mode: vk::SharingMode,
         layout: vk::ImageLayout,
+        device: &Device,
     ) -> vk::Image {
         unsafe {
             let extent = vk::Extent3D {
@@ -36,12 +38,12 @@ impl ImageTarget {
 
             // Create ImgInfo with Dimension
             let image_info = vk::ImageCreateInfo::builder()
-                .format(interface.surface.format.format)
+                .format(surface.format.format)
                 .extent(extent)
                 .mip_levels(1)
                 .array_layers(1)
                 .samples(vk::SampleCountFlags::TYPE_1)
-                .tiling(vk::ImageTiling::OPTIMAL)
+                .tiling(tiling)
                 .usage(usage)
                 .sharing_mode(sharing_mode)
                 .initial_layout(layout)
@@ -49,7 +51,7 @@ impl ImageTarget {
                 .build();
 
             // Create Image on Device
-            interface.device.create_image(&image_info, None).unwrap()
+            device.create_image(&image_info, None).unwrap()
         }
     }
 
@@ -58,12 +60,13 @@ impl ImageTarget {
     /// format and more for the intended usage. After that we create
     /// the image view on the device.
 
-    pub fn create_view(interface: &Interface, img: vk::Image) -> vk::ImageView {
+    pub fn create_view(surface: &SurfaceGroup, img: vk::Image, device: &Device) -> vk::ImageView {
         unsafe {
             // Prepare image view for creation and bind image
             let image_view_info = vk::ImageViewCreateInfo::builder()
+                .image(img)
                 .view_type(vk::ImageViewType::TYPE_2D)
-                .format(interface.surface.format.format)
+                .format(surface.format.format)
                 .subresource_range(vk::ImageSubresourceRange {
                     aspect_mask: vk::ImageAspectFlags::COLOR,
                     base_mip_level: 0,
@@ -71,7 +74,6 @@ impl ImageTarget {
                     base_array_layer: 0,
                     layer_count: 1,
                 })
-                .image(img)
                 .components(vk::ComponentMapping {
                     r: vk::ComponentSwizzle::R,
                     g: vk::ComponentSwizzle::G,
@@ -81,21 +83,26 @@ impl ImageTarget {
                 .build();
 
             // Build image view
-            interface
-                .device
+            device
                 .create_image_view(&image_view_info, None)
                 .unwrap()
         }
     }
 
+    /// Create new image target with image, image view, image memory and
+    /// image sampler. It is only intended to be used as two dimensional image.
+    /// Will return new image target object.
+
     pub fn new(interface: &Interface, extent: vk::Extent2D) -> Self {
         unsafe {
             let img = Self::create_img(
-                interface,
+                &interface.surface,
                 &extent,
+                vk::ImageTiling::OPTIMAL,
                 vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::TRANSFER_SRC,
                 vk::SharingMode::EXCLUSIVE,
                 vk::ImageLayout::UNDEFINED,
+                &interface.device
             );
 
             // Get Memory Requirement for Image and the MemoryTypeIndex
@@ -141,7 +148,7 @@ impl ImageTarget {
                 .create_sampler(&sampler_info, None)
                 .unwrap();
 
-            let view = Self::create_view(interface, img);
+            let view = Self::create_view(&interface.surface, img, &interface.device);
 
             Self {
                 img,
@@ -151,6 +158,10 @@ impl ImageTarget {
             }
         }
     }
+
+    /// This function will update the descriptor in the gpu. This is done by
+    /// creating a descriptor image info and then a write info. After that it will write the
+    /// descriptor set.
 
     pub fn describe_in_gpu(
         &self,
@@ -179,6 +190,8 @@ impl ImageTarget {
             interface.device.update_descriptor_sets(&[write_info], &[]);
         }
     }
+
+    /// Destroy image and image view
 
     pub fn destroy(&self, interface: &Interface) {
         unsafe {

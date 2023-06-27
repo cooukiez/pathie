@@ -1,6 +1,6 @@
-use std::{ffi::c_void, mem::align_of};
+use std::{ffi::c_void};
 
-use ash::{vk, util::Align};
+use ash::{util::Align, vk};
 
 use crate::interface::interface::Interface;
 
@@ -8,9 +8,18 @@ use crate::interface::interface::Interface;
 pub struct BufferSet {
     pub buffer: vk::Buffer,
     pub buffer_mem: vk::DeviceMemory,
+
+    pub alignment: u64,
+    pub size: u64,
+
+    pub usage: vk::BufferUsageFlags,
 }
 
 impl BufferSet {
+    /// Create new buffer set object with alignment, size in storage,
+    /// usage, sharing mode and the actual buffer data.
+    /// To finish, return the new buffer set object.
+
     pub fn new<Type: Copy>(
         interface: &Interface,
         alignment: u64,
@@ -56,14 +65,16 @@ impl BufferSet {
                 .unwrap();
 
             // Prepare MemoryCopy
-            let index_ptr: *mut c_void = interface
+            let buffer_ptr: *mut c_void = interface
                 .device
                 .map_memory(buffer_mem, 0, memory_req.size, vk::MemoryMapFlags::empty())
                 .unwrap();
-            let mut index_slice = Align::new(index_ptr, alignment, memory_req.size);
+
+            // Align memory
+            let mut aligned_slice = Align::new(buffer_ptr, alignment, memory_req.size);
 
             // Copy and finish Memory
-            index_slice.copy_from_slice(&data);
+            aligned_slice.copy_from_slice(&data);
             interface.device.unmap_memory(buffer_mem);
 
             interface
@@ -75,29 +86,34 @@ impl BufferSet {
         }
     }
 
-    pub fn update<Type: Copy>(&self, interface: &Interface, data: &[Type]) {
+    /// Update the data in buffer set object
+    /// by remapping memory. Input data, alignment and size has to be
+    /// known for this operation.
+
+    pub fn update<Type: Copy>(
+        &self,
+        interface: &Interface,
+        alignment: u64,
+        size: u64,
+        data: &[Type],
+    ) {
         unsafe {
             let buffer_ptr = interface
                 .device
-                .map_memory(
-                    self.buffer_mem,
-                    0,
-                    std::mem::size_of_val(data) as u64,
-                    vk::MemoryMapFlags::empty(),
-                )
+                .map_memory(self.buffer_mem, 0, size, vk::MemoryMapFlags::empty())
                 .unwrap();
 
-            let mut aligned_slice = Align::new(
-                buffer_ptr,
-                align_of::<Type>() as u64,
-                std::mem::size_of_val(data) as u64,
-            );
+            // Align memory
+            let mut aligned_slice = Align::new(buffer_ptr, alignment, size);
 
             aligned_slice.copy_from_slice(&data.clone()[..]);
-
             interface.device.unmap_memory(self.buffer_mem);
         }
     }
+
+    /// This function will update the descriptor in the gpu. This is done by
+    /// creating a descriptor buffer info and then a write info. After that it will write the
+    /// descriptor set.
 
     pub fn describe_in_gpu(
         &self,

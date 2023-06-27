@@ -1,5 +1,7 @@
 use ash::{extensions::khr::Swapchain, vk, Instance, Device};
 
+use crate::pipe::image::ImageTarget;
+
 use super::surface::SurfaceGroup;
 
 #[derive(Clone)]
@@ -22,7 +24,7 @@ impl SwapchainGroup {
         let loader = Swapchain::new(instance, device);
 
         Self {
-            loader: loader,
+            loader,
             swapchain: Default::default(),
             img_list: Default::default(),
             view_list: Default::default(),
@@ -58,6 +60,10 @@ impl SwapchainGroup {
         }
     }
 
+    /// Get the swapchain present image list and create the image view
+    /// list for the image list. Then set both the attrib. in the swapchain
+    /// group object.
+
     pub fn get_present_img(&self, surface: &SurfaceGroup, device: &Device) -> Self {
         unsafe {
             let mut result = self.clone();
@@ -68,26 +74,8 @@ impl SwapchainGroup {
             log::info!("Creating image view list for present image list ...");
             result.view_list = result.img_list
                 .iter()
-                .map(|&image| {
-                    // Replace with image struct later
-                    let create_view_info = vk::ImageViewCreateInfo::builder()
-                        .view_type(vk::ImageViewType::TYPE_2D)
-                        .format(surface.format.format)
-                        .components(vk::ComponentMapping {
-                            r: vk::ComponentSwizzle::R,
-                            g: vk::ComponentSwizzle::G,
-                            b: vk::ComponentSwizzle::B,
-                            a: vk::ComponentSwizzle::A,
-                        })
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                        .image(image);
-                    device.create_image_view(&create_view_info, None).unwrap()
+                .map(|img| {
+                    ImageTarget::create_view(surface, * img, device)
                 })
                 .collect();
 
