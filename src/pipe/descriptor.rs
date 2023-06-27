@@ -21,25 +21,9 @@ impl DescriptorPool {
         unsafe {
             let mut result = self.clone();
 
-            // Specify descriptor count for each storage type
-            let descriptor_size_list = [
-                vk::DescriptorPoolSize {
-                    ty: vk::DescriptorType::STORAGE_IMAGE,
-                    descriptor_count: result.image_desc_count,
-                },
-                vk::DescriptorPoolSize {
-                    ty: vk::DescriptorType::UNIFORM_BUFFER,
-                    descriptor_count: result.uniform_desc_count,
-                },
-                vk::DescriptorPoolSize {
-                    ty: vk::DescriptorType::STORAGE_BUFFER,
-                    descriptor_count: result.storage_desc_count,
-                },
-            ];
-
             log::info!("Creating DescriptorPool ...");
             let descriptor_pool_info = vk::DescriptorPoolCreateInfo::builder()
-                .pool_sizes(&descriptor_size_list)
+                .pool_sizes(&result.size_list)
                 .max_sets(result.set_list.len() as u32);
 
             result.pool = device
