@@ -2,15 +2,59 @@ use ash::{vk, Device};
 
 #[derive(Clone)]
 pub struct DescriptorPool {
-    pub size_list: Vec<vk::DescriptorPoolSize>,
     pub layout_list: Vec<vk::DescriptorSetLayout>,
 
-    pub set_list: Vec<vk::DescriptorSet>,
-
+    pub size_list: Vec<vk::DescriptorPoolSize>,
     pub pool: vk::DescriptorPool,
+
+    pub set_list: Vec<vk::DescriptorSet>,
 }
 
 impl DescriptorPool {
+    /// Create descriptor set which is group of descriptor.
+    /// Specify the type and count, could cause error if more used than
+    /// expect in pool creation. Same goes for descriptor set. If set count
+    /// is bigger than max set, it will throw an error.
+
+    pub fn create_descriptor_set_layout(
+        &self,
+        desc_type: vk::DescriptorType,
+        desc_count: u32,
+        shader_stage: vk::ShaderStageFlags,
+        device: &Device,
+    ) -> Self {
+        unsafe {
+            let mut result = self.clone();
+
+            result.size_list.push(vk::DescriptorPoolSize {
+                ty: desc_type,
+                descriptor_count: desc_count,
+            });
+
+            log::info!("Creating DescriptorSet ...");
+            let set_binding_info = vec![
+                vk::DescriptorSetLayoutBinding {
+                    descriptor_type: desc_type,
+                    descriptor_count: 1,
+                    stage_flags: shader_stage,
+                    ..Default::default()
+                };
+                desc_count as usize
+            ];
+
+            result.layout_list.push(
+                device
+                    .create_descriptor_set_layout(
+                        &vk::DescriptorSetLayoutCreateInfo::builder().bindings(&set_binding_info),
+                        None,
+                    )
+                    .unwrap(),
+            );
+
+            result
+        }
+    }
+
     /// Desciptor describe some sort buffer like storage buffer.
     /// Descriptor set is group of descriptor.
     /// Specify the descriptor count for each storage type here.
@@ -34,42 +78,17 @@ impl DescriptorPool {
         }
     }
 
-    /// Create descriptor set which is group of descriptor.
-    /// Specify the type and count, could cause error if more used than
-    /// expect in pool creation. Same goes for descriptor set. If set count
-    /// is bigger than max set, it will throw an error.
-
-    pub fn create_descriptor_set_layout(
-        &self,
-        descriptor_type: vk::DescriptorType,
-        descriptor_count: u32,
-        shader_stage: vk::ShaderStageFlags,
-        device: &Device,
-    ) -> Self {
+    pub fn write_descriptor_pool(&self, device: &Device) -> Self {
         unsafe {
             let mut result = self.clone();
 
-            result.size_list.push(vk::DescriptorPoolSize {
-                ty: descriptor_type,
-                descriptor_count,
-            });
+            let desc_alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(result.pool)
+                .set_layouts(&result.layout_list);
 
-            log::info!("Creating DescriptorSet ...");
-            let set_binding_info = [vk::DescriptorSetLayoutBinding {
-                descriptor_type,
-                descriptor_count,
-                stage_flags: shader_stage,
-                ..Default::default()
-            }];
-
-            let desc_info =
-                vk::DescriptorSetLayoutCreateInfo::builder().bindings(&set_binding_info);
-
-            result.layout_list.push(
-                device
-                    .create_descriptor_set_layout(&desc_info, None)
-                    .unwrap(),
-            );
+            result.set_list = device
+                .allocate_descriptor_sets(&desc_alloc_info)
+                .unwrap();
 
             result
         }
