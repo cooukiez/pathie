@@ -44,7 +44,6 @@ impl PhyDeviceGroup {
     /// *Add Other criteria for device selection here*
 
     pub fn is_device_suitable(
-        &self,
         info: &vk::QueueFamilyProperties,
         surface: &SurfaceGroup,
         device: &vk::PhysicalDevice,
@@ -95,7 +94,7 @@ impl PhyDeviceGroup {
                         .enumerate()
                         .find_map(|(index, info)| {
                             // Check if device is suitable
-                            self.is_device_suitable(info, surface, device, index)
+                            Self::is_device_suitable(info, surface, device, index)
                         })
                 })
                 .expect("NO_SUITABLE_PHY_DEVICE");

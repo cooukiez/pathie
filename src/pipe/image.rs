@@ -1,6 +1,6 @@
 use ash::{vk, Device};
 
-use crate::interface::{interface::Interface, phydev::PhyDeviceGroup, surface::SurfaceGroup};
+use crate::interface::{interface::Interface, phydev::PhyDeviceGroup};
 
 #[derive(Clone)]
 pub struct ImageTarget {
@@ -93,7 +93,7 @@ impl ImageTarget {
         unsafe {
             let mut result = self.clone();
 
-            let sampler = device.create_sampler(&info, None).unwrap();
+            result.sampler = device.create_sampler(&info, None).unwrap();
 
             result
         }
@@ -102,11 +102,11 @@ impl ImageTarget {
     /// This function will create image on device
     /// and will update the img attribute.
 
-    pub fn create_view(&self, info: vk::ImageViewCreateInfo, img: vk::Image, device: &Device) -> Self {
+    pub fn create_view(&self, info: vk::ImageViewCreateInfo, device: &Device) -> Self {
         unsafe {
             let mut result = self.clone();
             let mut info = info.clone();
-            info.image = img;
+            info.image = result.img;
 
             // Build image view
             result.view = device.create_image_view(&info, None).unwrap();
@@ -161,7 +161,8 @@ impl ImageTarget {
             result = result
                 .create_img(img_info, &interface.device)
                 .create_img_memory(&interface.device, &interface.phy_device)
-                .create_sampler(sampler_info, &interface.device);
+                .create_sampler(sampler_info, &interface.device)
+                .create_view(view_info, &interface.device);
 
             result
         }

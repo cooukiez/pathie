@@ -1,6 +1,6 @@
 use ash::{extensions::khr::Swapchain, vk, Device, Instance};
 
-use crate::pipe::image::{ImageTarget, COMP_MAP, SUBRES_RANGE};
+use crate::pipe::image::{SUBRES_RANGE, COMP_MAP};
 
 use super::surface::SurfaceGroup;
 

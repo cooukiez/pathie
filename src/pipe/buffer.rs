@@ -78,10 +78,10 @@ impl BufferSet {
     /// To finish, return the new buffer set object.
 
     pub fn new(
-        interface: &Interface,
         buffer_size: u64,
         usage: vk::BufferUsageFlags,
         sharing_mode: vk::SharingMode,
+        device: &Device,
     ) -> Self {
         unsafe {
             let mut result = Self::default();
@@ -99,7 +99,7 @@ impl BufferSet {
             };
 
             // Create BufferObject
-            result.buffer = interface.device.create_buffer(&buffer_info, None).unwrap();
+            result.buffer = device.create_buffer(&buffer_info, None).unwrap();
 
             result
         }

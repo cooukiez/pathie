@@ -7,14 +7,12 @@ use std::{
 
 use ash::{
     util::{read_spv, Align},
-    vk
+    vk,
 };
 
 use crate::{
-    interface::interface::Interface,
-    tree::{octree::{Octree}},
-    uniform::Uniform,
-    Pref, DEFAULT_STORAGE_BUFFER_SIZE,
+    interface::interface::Interface, tree::octree::Octree, uniform::Uniform, Pref,
+    DEFAULT_STORAGE_BUFFER_SIZE,
 };
 
 use super::{buffer::BufferSet, image::ImageTarget};
@@ -57,36 +55,52 @@ pub struct Pipe {
 }
 
 impl Pipe {
-    pub fn init(interface: &Interface, pref: &Pref, uniform: &mut Uniform, octree: &Octree) -> Self {
+    pub fn init(
+        interface: &Interface,
+        pref: &Pref,
+        uniform: &mut Uniform,
+        octree: &Octree,
+    ) -> Self {
         unsafe {
             uniform.apply_resolution(interface.surface.render_res);
 
             log::info!("Getting ImageTarget List ...");
             let image_target_list = interface
-                .swapchain.img_list
+                .swapchain
+                .img_list
                 .iter()
-                .map(|_| ImageTarget::new(interface, interface.surface.render_res))
+                .map(|_| ImageTarget::basic_img(interface, interface.surface.render_res))
                 .collect();
 
             log::info!("Creating UniformBuffer ...");
             let uniform_data = uniform.clone();
             let uniform_buffer = BufferSet::new(
-                interface,
-                align_of::<Uniform>() as u64,
                 mem::size_of_val(&uniform_data) as u64,
                 vk::BufferUsageFlags::UNIFORM_BUFFER,
                 vk::SharingMode::EXCLUSIVE,
+                &interface.device,
+            )
+            .create_memory(
+                &interface.device,
+                &interface.phy_device,
+                align_of::<Uniform>() as u64,
+                mem::size_of_val(&uniform_data) as u64,
                 &[uniform_data],
             );
 
             log::info!("Creating OctreeBuffer ...");
             let octree_data = octree.octant_data.clone();
             let octree_buffer = BufferSet::new(
-                interface,
-                align_of::<u32>() as u64,
                 DEFAULT_STORAGE_BUFFER_SIZE,
                 vk::BufferUsageFlags::STORAGE_BUFFER,
                 vk::SharingMode::EXCLUSIVE,
+                &interface.device,
+            )
+            .create_memory(
+                &interface.device,
+                &interface.phy_device,
+                align_of::<u32>() as u64,
+                DEFAULT_STORAGE_BUFFER_SIZE,
                 &octree_data,
             );
 
@@ -143,7 +157,8 @@ impl Pipe {
             );
 
             log::info!("Getting ShaderCode ...");
-            let mut primary_ray_spv_file = Cursor::new(&include_bytes!("../../shader/comp.spv")[..]);
+            let mut primary_ray_spv_file =
+                Cursor::new(&include_bytes!("../../shader/comp.spv")[..]);
 
             let primary_ray_code =
                 read_spv(&mut primary_ray_spv_file).expect("ERR_READ_VERTEX_SPV");
@@ -196,78 +211,6 @@ impl Pipe {
                 pipe_layout,
                 pipe,
             }
-        }
-    }
-
-    /// Desciptor describe some sort buffer like storage buffer.
-    /// Descriptor set is group of descriptor.
-    /// Specify the descriptor count for each storage type here.
-    /// Uniform buffer count and storage buffer descriptor count.
-    /// Max set is the max amount of set in the pool.
-
-    pub fn create_descriptor_pool(
-        image_desc_count: u32,
-        uniform_desc_count: u32,
-        storage_desc_count: u32,
-        max_set: u32,
-        interface: &Interface,
-    ) -> vk::DescriptorPool {
-        unsafe {
-            // Specify descriptor count for each storage type
-            let descriptor_size_list = [
-                vk::DescriptorPoolSize {
-                    ty: vk::DescriptorType::STORAGE_IMAGE,
-                    descriptor_count: image_desc_count,
-                },
-                vk::DescriptorPoolSize {
-                    ty: vk::DescriptorType::UNIFORM_BUFFER,
-                    descriptor_count: uniform_desc_count,
-                },
-                vk::DescriptorPoolSize {
-                    ty: vk::DescriptorType::STORAGE_BUFFER,
-                    descriptor_count: storage_desc_count,
-                },
-            ];
-
-            log::info!("Creating DescriptorPool ...");
-            let descriptor_pool_info = vk::DescriptorPoolCreateInfo::builder()
-                .pool_sizes(&descriptor_size_list)
-                .max_sets(max_set);
-
-            interface
-                .device
-                .create_descriptor_pool(&descriptor_pool_info, None)
-                .unwrap()
-        }
-    }
-
-    /// Create descriptor set which is group of descriptor.
-    /// Specify the type and count, could cause error if more used than
-    /// expect in pool creation. Same goes for descriptor set. If set count
-    /// is bigger than max set, it will throw an error.
-
-    pub fn create_descriptor_set_layout(
-        descriptor_type: vk::DescriptorType,
-        descriptor_count: u32,
-        shader_stage: vk::ShaderStageFlags,
-        interface: &Interface,
-    ) -> vk::DescriptorSetLayout {
-        unsafe {
-            log::info!("Creating DescriptorSet ...");
-            let set_binding_info = [vk::DescriptorSetLayoutBinding {
-                descriptor_type,
-                descriptor_count,
-                stage_flags: shader_stage,
-                ..Default::default()
-            }];
-
-            let desc_info =
-                vk::DescriptorSetLayoutCreateInfo::builder().bindings(&set_binding_info);
-
-            interface
-                .device
-                .create_descriptor_set_layout(&desc_info, None)
-                .unwrap()
         }
     }
 
@@ -586,14 +529,19 @@ impl Pipe {
 
             // Destroy Swapchain and SwapchainImgList
             interface
-                .swapchain.view_list
+                .swapchain
+                .view_list
                 .iter()
                 .for_each(|view| interface.device.destroy_image_view(*view, None));
             interface
-                .swapchain.loader
+                .swapchain
+                .loader
                 .destroy_swapchain(interface.swapchain.swapchain, None);
 
-            interface.surface = interface.surface.get_surface_info(&interface.phy_device, &interface.window, pref);
+            interface.surface =
+                interface
+                    .surface
+                    .get_surface_info(&interface.phy_device, &interface.window, pref);
 
             uniform.apply_resolution(self.render_res);
 
@@ -612,17 +560,20 @@ impl Pipe {
                 .image_array_layers(1);
 
             interface.swapchain.swapchain = interface
-                .swapchain.loader
+                .swapchain
+                .loader
                 .create_swapchain(&swapchain_create_info, None)
                 .unwrap();
 
             interface.swapchain.img_list = interface
-                .swapchain.loader
+                .swapchain
+                .loader
                 .get_swapchain_images(interface.swapchain.swapchain)
                 .unwrap();
 
             interface.swapchain.view_list = interface
-                .swapchain.img_list
+                .swapchain
+                .img_list
                 .iter()
                 .map(|&image| {
                     let create_view_info = vk::ImageViewCreateInfo::builder()
@@ -650,9 +601,10 @@ impl Pipe {
                 .collect();
 
             self.image_target_list = interface
-                .swapchain.view_list
+                .swapchain
+                .view_list
                 .iter()
-                .map(|_| ImageTarget::new(interface, self.render_res))
+                .map(|_| ImageTarget::basic_img(interface, self.render_res))
                 .collect();
         }
     }
