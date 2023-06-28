@@ -168,44 +168,12 @@ impl ImageTarget {
         }
     }
 
-    /// This function will update the descriptor in the gpu. This is done by
-    /// creating a descriptor image info and then a write info. After that it will write the
-    /// descriptor set.
-
-    pub fn describe_in_gpu(
-        &self,
-        interface: &Interface,
-        image_layout: vk::ImageLayout,
-        dst_set: vk::DescriptorSet,
-        dst_binding: u32,
-        descriptor_type: vk::DescriptorType,
-    ) {
-        unsafe {
-            let image_descriptor = vk::DescriptorImageInfo {
-                image_view: self.view,
-                image_layout,
-                sampler: self.sampler,
-            };
-
-            let write_info = vk::WriteDescriptorSet {
-                dst_set,
-                dst_binding,
-                descriptor_count: 1,
-                descriptor_type,
-                p_image_info: &image_descriptor,
-                ..Default::default()
-            };
-
-            interface.device.update_descriptor_sets(&[write_info], &[]);
-        }
-    }
-
     /// Destroy image and image view
 
-    pub fn destroy(&self, interface: &Interface) {
+    pub fn destroy(&self, device: &Device) {
         unsafe {
-            interface.device.destroy_image_view(self.view, None);
-            interface.device.destroy_image(self.img, None);
+            device.destroy_image_view(self.view, None);
+            device.destroy_image(self.img, None);
         }
     }
 }

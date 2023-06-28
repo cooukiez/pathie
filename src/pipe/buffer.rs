@@ -104,38 +104,6 @@ impl BufferSet {
             result
         }
     }
-
-    /// This function will update the descriptor in the gpu. This is done by
-    /// creating a descriptor buffer info and then a write info. After that it will write the
-    /// descriptor set.
-
-    pub fn describe_in_gpu(
-        &self,
-        interface: &Interface,
-        range: u64,
-        dst_set: vk::DescriptorSet,
-        dst_binding: u32,
-        descriptor_type: vk::DescriptorType,
-    ) {
-        unsafe {
-            let buffer_descriptor = vk::DescriptorBufferInfo {
-                buffer: self.buffer,
-                offset: 0,
-                range,
-            };
-
-            let write_info = vk::WriteDescriptorSet {
-                dst_set,
-                dst_binding,
-                descriptor_count: 1,
-                descriptor_type,
-                p_buffer_info: &buffer_descriptor,
-                ..Default::default()
-            };
-
-            interface.device.update_descriptor_sets(&[write_info], &[]);
-        }
-    }
 }
 
 impl Default for BufferSet {
