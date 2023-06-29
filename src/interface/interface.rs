@@ -1,9 +1,16 @@
 use crate::{
-    interface::{phydev::PhyDeviceGroup, surface::SurfaceGroup, swapchain::{self, SwapchainGroup}},
+    interface::{
+        phydev::PhyDeviceGroup,
+        surface::SurfaceGroup,
+        swapchain::{self, SwapchainGroup},
+    },
     Pref,
 };
 use ash::{
-    extensions::{ext::DebugUtils, khr::{Swapchain, DynamicRendering}},
+    extensions::{
+        ext::DebugUtils,
+        khr::{DynamicRendering, Swapchain},
+    },
     vk::{self},
     Device, Entry, Instance,
 };
@@ -319,7 +326,8 @@ impl Interface {
             };
 
             let present_result = self
-                .swapchain.loader
+                .swapchain
+                .loader
                 .queue_present(self.present_queue, &present_info);
 
             match present_result {

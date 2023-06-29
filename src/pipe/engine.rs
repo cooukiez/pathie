@@ -1,24 +1,35 @@
 use std::{
     error::Error,
-    ffi::{c_void, CString},
+    ffi::CString,
     io::Cursor,
     mem::{self, align_of},
 };
 
-use ash::{
-    util::{read_spv, Align},
-    vk,
-};
+use ash::{util::read_spv, vk};
 
 use crate::{
-    interface::interface::Interface, pipe::descriptor::DescriptorPool, tree::octree::Octree,
-    uniform::Uniform, Pref, DEFAULT_STORAGE_BUFFER_SIZE,
+    interface::interface::Interface,
+    pipe::{descriptor::DescriptorPool, pipe::Pipe},
+    tree::octree::Octree,
+    uniform::Uniform,
+    Pref, DEFAULT_STORAGE_BUFFER_SIZE,
 };
 
 use super::{buffer::BufferSet, image::ImageTarget};
 
-impl Pipe {
-    pub fn init(
+pub struct Engine {
+    pub image_target_list: Vec<ImageTarget>,
+
+    pub uniform_buffer: BufferSet,
+    pub octree_buffer: BufferSet,
+
+    pub descriptor_pool: DescriptorPool,
+    pub pipe_info: Pipe,
+    pub pipe: vk::Pipeline,
+}
+
+impl Engine {
+    pub fn create_compute(
         interface: &Interface,
         pref: &Pref,
         uniform: &mut Uniform,
@@ -114,40 +125,19 @@ impl Pipe {
                 &interface.device,
             );
 
-            log::info!("Getting ShaderCode ...");
-            let mut primary_ray_spv_file =
-                Cursor::new(&include_bytes!("../../shader/comp.spv")[..]);
+            let mut pipe_info = Pipe::default();
 
-            let primary_ray_code =
-                read_spv(&mut primary_ray_spv_file).expect("ERR_READ_VERTEX_SPV");
-            let primary_ray_info = vk::ShaderModuleCreateInfo::builder().code(&primary_ray_code);
+            pipe_info = pipe_info.create_shader_module(
+                &mut Cursor::new(&include_bytes!("../../shader/comp.spv")[..]),
+                &interface.device,
+                vk::ShaderStageFlags::COMPUTE,
+            );
 
-            let primary_ray_module = interface
-                .device
-                .create_shader_module(&primary_ray_info, None)
-                .expect("ERR_VERTEX_MODULE");
-
-            let layout_create_info =
-                vk::PipelineLayoutCreateInfo::builder().set_layouts(&descriptor_pool.layout_list);
-
-            log::info!("Creating PipelineLayout ...");
-            let pipe_layout = interface
-                .device
-                .create_pipeline_layout(&layout_create_info, None)
-                .unwrap();
-
-            log::info!("Stage Creation ...");
-            let shader_entry_name = CString::new("main").unwrap();
-            let shader_stage = vk::PipelineShaderStageCreateInfo {
-                module: primary_ray_module,
-                p_name: shader_entry_name.as_ptr(),
-                stage: vk::ShaderStageFlags::COMPUTE,
-                ..Default::default()
-            };
+            pipe_info = pipe_info.create_layout(&descriptor_pool, &interface.device);
 
             let compute_pipe_info = vk::ComputePipelineCreateInfo::builder()
-                .stage(shader_stage)
-                .layout(pipe_layout)
+                .stage(pipe_info.shader_list[0].stage_info)
+                .layout(pipe_info.pipe_layout)
                 .build();
 
             let pipe = interface
@@ -156,227 +146,14 @@ impl Pipe {
                 .expect("ERROR_CREATE_PIPELINE")[0];
 
             log::info!("Rendering initialisation finished ...");
-            Pipe {
-                render_res: interface.surface.render_res,
+            Self {
                 image_target_list,
                 uniform_buffer,
                 octree_buffer,
                 descriptor_pool,
-                primary_ray_code,
-                primary_ray_module,
-                pipe_layout,
+                pipe_info,
                 pipe,
             }
-        }
-    }
-
-    /// Submit command buffer with
-    /// sync setup. With draw command buffer and
-    /// present queue.
-
-    pub fn record_submit_cmd<Function: FnOnce(vk::CommandBuffer)>(
-        &self,
-        interface: &Interface,
-        draw_cmd_fence: vk::Fence,
-        draw_cmd_buffer: vk::CommandBuffer,
-        present_complete: vk::Semaphore,
-        render_complete: vk::Semaphore,
-        function: Function,
-    ) {
-        unsafe {
-            interface
-                .device
-                .wait_for_fences(&[draw_cmd_fence], true, std::u64::MAX)
-                .expect("DEVICE_LOST");
-
-            interface
-                .device
-                .reset_fences(&[draw_cmd_fence])
-                .expect("FENCE_RESET_FAILED");
-
-            interface
-                .device
-                .reset_command_buffer(
-                    draw_cmd_buffer,
-                    vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-                )
-                .expect("ERR_RESET_CMD_BUFFER");
-
-            let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
-                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-
-            interface
-                .device
-                .begin_command_buffer(draw_cmd_buffer, &command_buffer_begin_info)
-                .expect("ERR_BEGIN_CMD_BUFFER");
-
-            function(draw_cmd_buffer);
-
-            interface
-                .device
-                .end_command_buffer(draw_cmd_buffer)
-                .expect("ERR_END_CMD_BUFFER");
-
-            let submit_info = vk::SubmitInfo::builder()
-                .wait_dst_stage_mask(&[vk::PipelineStageFlags::BOTTOM_OF_PIPE])
-                .wait_semaphores(&[present_complete])
-                .command_buffers(&[draw_cmd_buffer])
-                .signal_semaphores(&[render_complete])
-                .build();
-
-            interface
-                .device
-                .queue_submit(interface.present_queue, &[submit_info], draw_cmd_fence)
-                .expect("QUEUE_SUBMIT_FAILED");
-        }
-    }
-
-    pub fn first_img_barrier(
-        &self,
-        image: &ImageTarget,
-        present_image: vk::Image,
-        interface: &Interface,
-        cmd_buffer: vk::CommandBuffer,
-    ) {
-        unsafe {
-            let basic_subresource_range = vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            };
-
-            let comp_write = vk::ImageMemoryBarrier::builder()
-                .image(image.img)
-                .old_layout(vk::ImageLayout::UNDEFINED)
-                .new_layout(vk::ImageLayout::GENERAL)
-                .subresource_range(basic_subresource_range.clone())
-                .dst_access_mask(vk::AccessFlags::SHADER_WRITE)
-                .build();
-
-            let comp_transfer = vk::ImageMemoryBarrier::builder()
-                .image(image.img)
-                .old_layout(vk::ImageLayout::GENERAL)
-                .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-                .subresource_range(basic_subresource_range.clone())
-                .src_access_mask(vk::AccessFlags::SHADER_WRITE)
-                .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
-                .build();
-
-            let swap_transfer = vk::ImageMemoryBarrier::builder()
-                .image(present_image)
-                .old_layout(vk::ImageLayout::UNDEFINED)
-                .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                .subresource_range(basic_subresource_range.clone())
-                .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-                .build();
-
-            interface.device.cmd_pipeline_barrier(
-                cmd_buffer,
-                vk::PipelineStageFlags::COMPUTE_SHADER,
-                vk::PipelineStageFlags::ALL_COMMANDS,
-                vk::DependencyFlags::empty(),
-                &[],
-                &[],
-                &[comp_write, comp_transfer, swap_transfer],
-            )
-        }
-    }
-
-    /// Function for blitting one image to another image with possibile
-    /// scaling implemented. This function is for fast usage
-    /// and not for changing the copy setting.
-
-    pub fn copy_image(
-        &self,
-        interface: &Interface,
-        pref: &Pref,
-        src_img: vk::Image,
-        dst_img: vk::Image,
-        src_res: vk::Extent2D,
-        dst_res: vk::Extent2D,
-    ) {
-        unsafe {
-            let src = vk::ImageSubresourceLayers {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                mip_level: 0,
-                base_array_layer: 0,
-                layer_count: 1,
-            };
-            let dst = vk::ImageSubresourceLayers {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                mip_level: 0,
-                base_array_layer: 0,
-                layer_count: 1,
-            };
-
-            let blit = vk::ImageBlit {
-                src_subresource: src,
-                src_offsets: [
-                    vk::Offset3D { x: 0, y: 0, z: 0 },
-                    vk::Offset3D {
-                        x: src_res.width as i32,
-                        y: src_res.height as i32,
-                        z: 1,
-                    },
-                ],
-                dst_subresource: dst,
-                dst_offsets: [
-                    vk::Offset3D { x: 0, y: 0, z: 0 },
-                    vk::Offset3D {
-                        x: dst_res.width as i32,
-                        y: dst_res.height as i32,
-                        z: 1,
-                    },
-                ],
-            };
-
-            interface.device.cmd_blit_image(
-                interface.draw_cmd_buffer,
-                src_img,
-                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                dst_img,
-                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                &[blit],
-                pref.img_filter,
-            );
-        }
-    }
-
-    pub fn sec_img_barrier(
-        &self,
-        present_image: vk::Image,
-        interface: &Interface,
-        cmd_buffer: vk::CommandBuffer,
-    ) {
-        unsafe {
-            let basic_subresource_range = vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            };
-
-            let swap_present = vk::ImageMemoryBarrier::builder()
-                .image(present_image)
-                .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-                .subresource_range(basic_subresource_range.clone())
-                .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-                .dst_access_mask(vk::AccessFlags::MEMORY_READ)
-                .build();
-
-            interface.device.cmd_pipeline_barrier(
-                cmd_buffer,
-                vk::PipelineStageFlags::ALL_COMMANDS,
-                vk::PipelineStageFlags::TOP_OF_PIPE,
-                vk::DependencyFlags::empty(),
-                &[],
-                &[],
-                &[swap_present],
-            )
         }
     }
 
@@ -393,31 +170,30 @@ impl Pipe {
     ) -> Result<bool, Box<dyn Error>> {
         unsafe {
             interface.swap_draw_next(|present_index| {
-                self.record_submit_cmd(
-                    interface,
+                self.pipe_info.record_submit_cmd(
+                    &interface.device,
                     interface.draw_cmd_fence,
                     interface.draw_cmd_buffer,
                     interface.present_complete,
                     interface.render_complete,
+                    interface.present_queue,
                     |cmd_buffer| {
-                        self.descriptor_pool
-                            .write_img_desc(
-                                &self.image_target_list[present_index as usize],
-                                vk::ImageLayout::GENERAL,
-                                0,
-                                0,
-                                vk::DescriptorType::STORAGE_IMAGE,
-                                &interface.device,
-                            );
-                        self.descriptor_pool
-                            .write_buffer_desc(
-                                &self.uniform_buffer,
-                                mem::size_of_val(uniform) as u64,
-                                1,
-                                0,
-                                vk::DescriptorType::UNIFORM_BUFFER,
-                                &interface.device,
-                            );
+                        self.descriptor_pool.write_img_desc(
+                            &self.image_target_list[present_index as usize],
+                            vk::ImageLayout::GENERAL,
+                            0,
+                            0,
+                            vk::DescriptorType::STORAGE_IMAGE,
+                            &interface.device,
+                        );
+                        self.descriptor_pool.write_buffer_desc(
+                            &self.uniform_buffer,
+                            mem::size_of_val(uniform) as u64,
+                            1,
+                            0,
+                            vk::DescriptorType::UNIFORM_BUFFER,
+                            &interface.device,
+                        );
 
                         // Dispatch Compute Pipe
                         interface.device.cmd_bind_pipeline(
@@ -428,37 +204,38 @@ impl Pipe {
                         interface.device.cmd_bind_descriptor_sets(
                             cmd_buffer,
                             vk::PipelineBindPoint::COMPUTE,
-                            self.pipe_layout,
+                            self.pipe_info.pipe_layout,
                             0,
                             &self.descriptor_pool.set_list[..],
                             &[],
                         );
                         interface.device.cmd_dispatch(
                             cmd_buffer,
-                            self.render_res.width / 16,
-                            self.render_res.height / 16,
+                            interface.surface.render_res.width / 16,
+                            interface.surface.render_res.height / 16,
                             1,
                         );
 
                         // First Image Barrier
-                        self.first_img_barrier(
+                        self.pipe_info.first_img_barrier(
                             &self.image_target_list[present_index as usize],
                             interface.swapchain.img_list[present_index as usize],
-                            interface,
+                            &interface.device,
                             cmd_buffer,
                         );
                         // Copy image memory
-                        self.copy_image(
-                            interface,
+                        self.pipe_info.copy_image(
+                            &interface.device,
+                            cmd_buffer,
                             pref,
                             self.image_target_list[present_index as usize].img,
                             interface.swapchain.img_list[present_index as usize],
-                            self.render_res,
+                            interface.surface.render_res,
                             interface.surface.surface_res,
                         );
-                        self.sec_img_barrier(
+                        self.pipe_info.sec_img_barrier(
                             interface.swapchain.img_list[present_index as usize],
-                            interface,
+                            &interface.device,
                             cmd_buffer,
                         );
                     },
@@ -503,7 +280,7 @@ impl Pipe {
                     .surface
                     .get_surface_info(&interface.phy_device, &interface.window, pref);
 
-            uniform.apply_resolution(self.render_res);
+            uniform.apply_resolution(interface.surface.render_res);
 
             let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
                 .surface(interface.surface.surface)
@@ -564,7 +341,7 @@ impl Pipe {
                 .swapchain
                 .view_list
                 .iter()
-                .map(|_| ImageTarget::basic_img(interface, self.render_res))
+                .map(|_| ImageTarget::basic_img(interface, interface.surface.render_res))
                 .collect();
         }
     }

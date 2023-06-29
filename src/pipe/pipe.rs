@@ -2,7 +2,7 @@ use std::{ffi::CString, io::Cursor, mem};
 
 use ash::{util::read_spv, vk, Device};
 
-use crate::{interface::surface::SurfaceGroup, offset_of};
+use crate::{interface::surface::SurfaceGroup, offset_of, Pref};
 
 use super::{descriptor::DescriptorPool, image::ImageTarget};
 
@@ -14,18 +14,14 @@ struct Vertex {
 
 #[derive(Clone)]
 pub struct Shader {
-    code: Vec<u32>,
-    module: vk::ShaderModule,
+    pub code: Vec<u32>,
+    pub module: vk::ShaderModule,
 
-    stage_info: vk::PipelineShaderStageCreateInfo,
+    pub stage_info: vk::PipelineShaderStageCreateInfo,
 }
 
 #[derive(Clone)]
 pub struct Pipe {
-    pub image_target_list: Vec<ImageTarget>,
-
-    pub descriptor_pool: DescriptorPool,
-
     pub shader_list: Vec<Shader>,
 
     pub pipe_layout: vk::PipelineLayout,
@@ -41,6 +37,7 @@ pub struct Pipe {
     pub multisample_state: vk::PipelineMultisampleStateCreateInfo,
     pub blend_state: vk::PipelineColorBlendStateCreateInfo,
     pub dynamic_state: vk::PipelineDynamicStateCreateInfo,
+    pub rendering: vk::PipelineRenderingCreateInfo,
 }
 
 // "../../shader/comp.spv"
@@ -49,8 +46,7 @@ pub struct Pipe {
 impl Pipe {
     pub fn create_shader_module(
         &self,
-        raw_code: &[u8; 0],
-        shader_index: usize,
+        spv_file: &mut Cursor<&[u8]>,
         device: &Device,
         stage_flag: vk::ShaderStageFlags,
     ) -> Self {
@@ -59,9 +55,7 @@ impl Pipe {
             let mut shader = Shader::default();
 
             log::info!("Getting ShaderCode ...");
-            let mut spv_file = Cursor::new(&raw_code[..]);
-
-            shader.code = read_spv(&mut spv_file).expect("ERR_READ_SPV");
+            shader.code = read_spv(spv_file).expect("ERR_READ_SPV");
             let mod_info = vk::ShaderModuleCreateInfo::builder().code(&shader.code);
 
             shader.module = device
@@ -77,18 +71,18 @@ impl Pipe {
                 ..Default::default()
             };
 
-            result.shader_list[shader_index] = shader;
+            result.shader_list.push(shader);
 
             result
         }
     }
 
-    pub fn create_layout(&self, device: &Device) -> Self {
+    pub fn create_layout(&self, descriptor_pool: &DescriptorPool, device: &Device) -> Self {
         unsafe {
             let mut result = self.clone();
 
             let info = vk::PipelineLayoutCreateInfo::builder()
-                .set_layouts(&self.descriptor_pool.layout_list);
+                .set_layouts(&descriptor_pool.layout_list);
 
             log::info!("Creating PipelineLayout ...");
             result.pipe_layout = device.create_pipeline_layout(&info, None).unwrap();
@@ -191,7 +185,7 @@ impl Pipe {
         unsafe {
             let mut result = self.clone();
 
-            log::info!("Blending ...");
+            log::info!("Creating color blending state ...");
             let blend_attachment_list = [vk::PipelineColorBlendAttachmentState {
                 blend_enable: 0,
 
@@ -229,15 +223,223 @@ impl Pipe {
         }
     }
 
-    pub fn create_rendering(&self) -> Self {
+    pub fn create_rendering(&self, surface: &SurfaceGroup) -> Self {
         unsafe {
             let mut result = self.clone();
 
-            let format_list = [interface.surface_format.format];
-            let mut pipeline_rendering = vk::PipelineRenderingCreateInfoKHR::builder()
-                .color_attachment_formats(&format_list);
+            log::info!("Creating pipeline rendering ...");
+            let format_list = [surface.format.format];
+            result.rendering = vk::PipelineRenderingCreateInfoKHR::builder()
+                .color_attachment_formats(&format_list)
+                .build();
 
             result
+        }
+    }
+
+    /// Submit command buffer with
+    /// sync setup. With draw command buffer and
+    /// present queue.
+
+    pub fn record_submit_cmd<Function: FnOnce(vk::CommandBuffer)>(
+        &self,
+        device: &Device,
+        draw_cmd_fence: vk::Fence,
+        draw_cmd_buffer: vk::CommandBuffer,
+        present_complete: vk::Semaphore,
+        render_complete: vk::Semaphore,
+        present_queue: vk::Queue,
+        function: Function,
+    ) {
+        unsafe {
+            device
+                .wait_for_fences(&[draw_cmd_fence], true, std::u64::MAX)
+                .expect("DEVICE_LOST");
+
+            device
+                .reset_fences(&[draw_cmd_fence])
+                .expect("FENCE_RESET_FAILED");
+
+            device
+                .reset_command_buffer(
+                    draw_cmd_buffer,
+                    vk::CommandBufferResetFlags::RELEASE_RESOURCES,
+                )
+                .expect("ERR_RESET_CMD_BUFFER");
+
+            let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
+                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+
+            device
+                .begin_command_buffer(draw_cmd_buffer, &command_buffer_begin_info)
+                .expect("ERR_BEGIN_CMD_BUFFER");
+
+            function(draw_cmd_buffer);
+
+            device
+                .end_command_buffer(draw_cmd_buffer)
+                .expect("ERR_END_CMD_BUFFER");
+
+            let submit_info = vk::SubmitInfo::builder()
+                .wait_dst_stage_mask(&[vk::PipelineStageFlags::BOTTOM_OF_PIPE])
+                .wait_semaphores(&[present_complete])
+                .command_buffers(&[draw_cmd_buffer])
+                .signal_semaphores(&[render_complete])
+                .build();
+
+            device
+                .queue_submit(present_queue, &[submit_info], draw_cmd_fence)
+                .expect("QUEUE_SUBMIT_FAILED");
+        }
+    }
+
+    pub fn first_img_barrier(
+        &self,
+        image: &ImageTarget,
+        present_image: vk::Image,
+        device: &Device,
+        cmd_buffer: vk::CommandBuffer,
+    ) {
+        unsafe {
+            let basic_subresource_range = vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            };
+
+            let comp_write = vk::ImageMemoryBarrier::builder()
+                .image(image.img)
+                .old_layout(vk::ImageLayout::UNDEFINED)
+                .new_layout(vk::ImageLayout::GENERAL)
+                .subresource_range(basic_subresource_range.clone())
+                .dst_access_mask(vk::AccessFlags::SHADER_WRITE)
+                .build();
+
+            let comp_transfer = vk::ImageMemoryBarrier::builder()
+                .image(image.img)
+                .old_layout(vk::ImageLayout::GENERAL)
+                .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                .subresource_range(basic_subresource_range.clone())
+                .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+                .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
+                .build();
+
+            let swap_transfer = vk::ImageMemoryBarrier::builder()
+                .image(present_image)
+                .old_layout(vk::ImageLayout::UNDEFINED)
+                .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                .subresource_range(basic_subresource_range.clone())
+                .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                .build();
+
+            device.cmd_pipeline_barrier(
+                cmd_buffer,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::PipelineStageFlags::ALL_COMMANDS,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[comp_write, comp_transfer, swap_transfer],
+            )
+        }
+    }
+
+    /// Function for blitting one image to another image with possibile
+    /// scaling implemented. This function is for fast usage
+    /// and not for changing the copy setting.
+
+    pub fn copy_image(
+        &self,
+        device: &Device,
+        cmd_buffer: vk::CommandBuffer,
+        pref: &Pref,
+        src_img: vk::Image,
+        dst_img: vk::Image,
+        src_res: vk::Extent2D,
+        dst_res: vk::Extent2D,
+    ) {
+        unsafe {
+            let src = vk::ImageSubresourceLayers {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                mip_level: 0,
+                base_array_layer: 0,
+                layer_count: 1,
+            };
+            let dst = vk::ImageSubresourceLayers {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                mip_level: 0,
+                base_array_layer: 0,
+                layer_count: 1,
+            };
+
+            let blit = vk::ImageBlit {
+                src_subresource: src,
+                src_offsets: [
+                    vk::Offset3D { x: 0, y: 0, z: 0 },
+                    vk::Offset3D {
+                        x: src_res.width as i32,
+                        y: src_res.height as i32,
+                        z: 1,
+                    },
+                ],
+                dst_subresource: dst,
+                dst_offsets: [
+                    vk::Offset3D { x: 0, y: 0, z: 0 },
+                    vk::Offset3D {
+                        x: dst_res.width as i32,
+                        y: dst_res.height as i32,
+                        z: 1,
+                    },
+                ],
+            };
+
+            device.cmd_blit_image(
+                cmd_buffer,
+                src_img,
+                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                dst_img,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                &[blit],
+                pref.img_filter,
+            );
+        }
+    }
+
+    pub fn sec_img_barrier(
+        &self,
+        present_image: vk::Image,
+        device: &Device,
+        cmd_buffer: vk::CommandBuffer,
+    ) {
+        unsafe {
+            let basic_subresource_range = vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            };
+
+            let swap_present = vk::ImageMemoryBarrier::builder()
+                .image(present_image)
+                .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+                .subresource_range(basic_subresource_range.clone())
+                .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                .dst_access_mask(vk::AccessFlags::MEMORY_READ)
+                .build();
+
+            device.cmd_pipeline_barrier(
+                cmd_buffer,
+                vk::PipelineStageFlags::ALL_COMMANDS,
+                vk::PipelineStageFlags::TOP_OF_PIPE,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[swap_present],
+            )
         }
     }
 }
@@ -248,6 +450,25 @@ impl Default for Shader {
             code: Default::default(),
             module: Default::default(),
             stage_info: Default::default(),
+        }
+    }
+}
+
+impl Default for Pipe {
+    fn default() -> Self {
+        Self {
+            shader_list: Default::default(),
+            pipe_layout: Default::default(),
+            pipe: Default::default(),
+            vertex_state: Default::default(),
+            vertex_assembly_stage: Default::default(),
+            viewport: Default::default(),
+            viewport_state: Default::default(),
+            raster_state: Default::default(),
+            multisample_state: Default::default(),
+            blend_state: Default::default(),
+            dynamic_state: Default::default(),
+            rendering: Default::default(),
         }
     }
 }

@@ -10,7 +10,7 @@ use env_logger::fmt::{Color, Formatter};
 use input::Input;
 use interface::interface::Interface;
 use log::Record;
-use pipe::engine::Pipe;
+use pipe::engine::Engine;
 use tree::octree::Octree;
 use uniform::Uniform;
 use winit::{
@@ -50,7 +50,7 @@ pub struct Render {
     input: Input,
 
     interface: Interface,
-    graphic_pipe: Pipe,
+    graphic_pipe: Engine,
 }
 
 // General Setting
@@ -132,7 +132,7 @@ impl Render {
         octree.test_scene();
 
         let interface = Interface::init(&event_loop, &pref);
-        let graphic_pipe = Pipe::init(&interface, &pref, &mut uniform, &octree);
+        let graphic_pipe = Engine::create_compute(&interface, &pref, &mut uniform, &octree);
 
         Render {
             state,
