@@ -132,7 +132,8 @@ impl Render {
         octree.test_scene();
 
         let interface = Interface::init(&event_loop, &pref);
-        let graphic_pipe = Engine::create_compute(&interface, &mut uniform, &octree);
+        let mut graphic_pipe = Engine::create_base(&interface, &uniform, &octree);
+        graphic_pipe = graphic_pipe.create_compute(&interface, &mut uniform, &octree);
 
         Render {
             state,
@@ -228,7 +229,7 @@ impl Render {
                             let start = Instant::now();
                             self.state.out_of_date = self
                                 .graphic_pipe
-                                .draw(&self.interface, &self.pref, &self.uniform)
+                                .draw_comp(&self.interface, &self.pref, &self.uniform)
                                 .expect("RENDER_FAILED");
                             self.state.frame_time = start.elapsed();
                         }

@@ -17,64 +17,78 @@ use crate::{
 
 use super::{buffer::BufferSet, image::ImageTarget};
 
+#[derive(Clone)]
 pub struct Engine {
     pub image_target_list: Vec<ImageTarget>,
 
     pub uniform_buffer: BufferSet,
     pub octree_buffer: BufferSet,
 
-    pub descriptor_pool: DescriptorPool,
-    pub pipe_info: Pipe,
-    pub pipe: vk::Pipeline,
+    pub pool_comp: DescriptorPool,
+    pub pipe_comp: Pipe,
+    pub vk_pipe_comp: vk::Pipeline,
+
+    pub pool_graphic: DescriptorPool,
+    pub pipe_graphic: Pipe,
+    pub vk_pipe_graphic: vk::Pipeline,
 }
 
 impl Engine {
-    pub fn create_compute(interface: &Interface, uniform: &mut Uniform, octree: &Octree) -> Self {
+    pub fn create_base(interface: &Interface, uniform: &Uniform, octree: &Octree) -> Self {
+        let mut result = Self::default();
+
+        log::info!("Getting ImageTarget List ...");
+        result.image_target_list = interface
+            .swapchain
+            .img_list
+            .iter()
+            .map(|_| ImageTarget::basic_img(interface, interface.surface.render_res))
+            .collect();
+
+        log::info!("Creating UniformBuffer ...");
+        result.uniform_buffer = BufferSet::new(
+            mem::size_of_val(&uniform) as u64,
+            vk::BufferUsageFlags::UNIFORM_BUFFER,
+            vk::SharingMode::EXCLUSIVE,
+            &interface.device,
+        )
+        .create_memory(
+            &interface.device,
+            &interface.phy_device,
+            align_of::<Uniform>() as u64,
+            mem::size_of_val(&uniform) as u64,
+            &[uniform],
+        );
+
+        log::info!("Creating OctreeBuffer ...");
+        result.octree_buffer = BufferSet::new(
+            DEFAULT_STORAGE_BUFFER_SIZE,
+            vk::BufferUsageFlags::STORAGE_BUFFER,
+            vk::SharingMode::EXCLUSIVE,
+            &interface.device,
+        )
+        .create_memory(
+            &interface.device,
+            &interface.phy_device,
+            align_of::<u32>() as u64,
+            DEFAULT_STORAGE_BUFFER_SIZE,
+            &octree.octant_data,
+        );
+
+        result
+    }
+
+    pub fn create_compute(
+        &self,
+        interface: &Interface,
+        uniform: &Uniform,
+        octree: &Octree,
+    ) -> Self {
         unsafe {
-            uniform.apply_resolution(interface.surface.render_res);
-
-            log::info!("Getting ImageTarget List ...");
-            let image_target_list = interface
-                .swapchain
-                .img_list
-                .iter()
-                .map(|_| ImageTarget::basic_img(interface, interface.surface.render_res))
-                .collect();
-
-            log::info!("Creating UniformBuffer ...");
-            let uniform_data = uniform.clone();
-            let uniform_buffer = BufferSet::new(
-                mem::size_of_val(&uniform_data) as u64,
-                vk::BufferUsageFlags::UNIFORM_BUFFER,
-                vk::SharingMode::EXCLUSIVE,
-                &interface.device,
-            )
-            .create_memory(
-                &interface.device,
-                &interface.phy_device,
-                align_of::<Uniform>() as u64,
-                mem::size_of_val(&uniform_data) as u64,
-                &[uniform_data],
-            );
-
-            log::info!("Creating OctreeBuffer ...");
-            let octree_data = octree.octant_data.clone();
-            let octree_buffer = BufferSet::new(
-                DEFAULT_STORAGE_BUFFER_SIZE,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-                vk::SharingMode::EXCLUSIVE,
-                &interface.device,
-            )
-            .create_memory(
-                &interface.device,
-                &interface.phy_device,
-                align_of::<u32>() as u64,
-                DEFAULT_STORAGE_BUFFER_SIZE,
-                &octree_data,
-            );
+            let mut result = self.clone();
 
             log::info!("Creating descriptor set layout list ...");
-            let mut descriptor_pool = DescriptorPool::default()
+            result.pool_comp = DescriptorPool::default()
                 // ImageTarget
                 .create_descriptor_set_layout(
                     vk::DescriptorType::STORAGE_IMAGE,
@@ -97,30 +111,29 @@ impl Engine {
                     &interface.device,
                 );
 
-            descriptor_pool = descriptor_pool
+            result.pool_comp = result
+                .pool_comp
                 .create_descriptor_pool(&interface.device)
                 .write_descriptor_pool(&interface.device);
 
             log::info!("Writing descriptor list ...");
-            descriptor_pool.write_buffer_desc(
-                &uniform_buffer,
-                mem::size_of_val(&uniform_data) as u64,
+            result.pool_comp.write_buffer_desc(
+                &self.uniform_buffer,
+                vk::WHOLE_SIZE,
                 1,
                 0,
                 vk::DescriptorType::UNIFORM_BUFFER,
                 &interface.device,
             );
 
-            descriptor_pool.write_buffer_desc(
-                &octree_buffer,
-                (mem::size_of::<u32>() * octree_data.len()) as u64,
+            result.pool_comp.write_buffer_desc(
+                &self.octree_buffer,
+                vk::WHOLE_SIZE,
                 2,
                 0,
                 vk::DescriptorType::STORAGE_BUFFER,
                 &interface.device,
             );
-
-            let mut pipe_info = Pipe::default();
 
             log::info!("Getting ShaderCode ...");
             let mut spv = Cursor::new(&include_bytes!("../../shader/comp.spv")[..]);
@@ -142,27 +155,124 @@ impl Engine {
                 ..Default::default()
             };
 
-            pipe_info = pipe_info.create_layout(&descriptor_pool, &interface.device);
+            result.pipe_comp = result
+                .pipe_comp
+                .create_layout(&result.pool_comp, &interface.device);
 
             let compute_pipe_info = vk::ComputePipelineCreateInfo::builder()
                 .stage(shader_stage)
-                .layout(pipe_info.pipe_layout)
+                .layout(result.pipe_comp.pipe_layout)
                 .build();
 
-            let pipe = interface
+            result.vk_pipe_comp = interface
                 .device
                 .create_compute_pipelines(vk::PipelineCache::null(), &[compute_pipe_info], None)
                 .expect("ERROR_CREATE_PIPELINE")[0];
 
-            log::info!("Rendering initialisation finished ...");
-            Self {
-                image_target_list,
-                uniform_buffer,
-                octree_buffer,
-                descriptor_pool,
-                pipe_info,
-                pipe,
-            }
+            result
+        }
+    }
+
+    pub fn create_graphic(
+        &self,
+        interface: &Interface,
+        uniform: &Uniform,
+        octree: &Octree,
+    ) -> Self {
+        unsafe {
+            let mut result = self.clone();
+
+            log::info!("Creating descriptor set layout list ...");
+            result.pool_graphic = DescriptorPool::default()
+                // Uniform Set
+                .create_descriptor_set_layout(
+                    vk::DescriptorType::UNIFORM_BUFFER,
+                    1,
+                    vk::ShaderStageFlags::FRAGMENT,
+                    &interface.device,
+                )
+                // Octree Set
+                .create_descriptor_set_layout(
+                    vk::DescriptorType::STORAGE_BUFFER,
+                    1,
+                    vk::ShaderStageFlags::FRAGMENT,
+                    &interface.device,
+                );
+
+            result.pool_graphic = result
+                .pool_graphic
+                .create_descriptor_pool(&interface.device)
+                .write_descriptor_pool(&interface.device);
+
+            log::info!("Writing descriptor list ...");
+            result.pool_graphic.write_buffer_desc(
+                &self.uniform_buffer,
+                vk::WHOLE_SIZE,
+                1,
+                0,
+                vk::DescriptorType::UNIFORM_BUFFER,
+                &interface.device,
+            );
+
+            result.pool_graphic.write_buffer_desc(
+                &self.octree_buffer,
+                vk::WHOLE_SIZE,
+                2,
+                0,
+                vk::DescriptorType::STORAGE_BUFFER,
+                &interface.device,
+            );
+
+            log::info!("Getting ShaderCode ...");
+            let mut spv = Cursor::new(&include_bytes!("../../shader/comp.spv")[..]);
+
+            let code = read_spv(&mut spv).expect("ERR_READ_VERTEX_SPV");
+            let shader_info = vk::ShaderModuleCreateInfo::builder().code(&code);
+
+            let shader_module = interface
+                .device
+                .create_shader_module(&shader_info, None)
+                .expect("ERR_VERTEX_MODULE");
+
+            log::info!("Stage Creation ...");
+            let shader_entry_name = CString::new("main").unwrap();
+            let shader_stage = vk::PipelineShaderStageCreateInfo {
+                module: shader_module,
+                p_name: shader_entry_name.as_ptr(),
+                stage: vk::ShaderStageFlags::COMPUTE,
+                ..Default::default()
+            };
+
+            result.pipe_graphic = result
+                .pipe_graphic
+                .create_layout(&result.pool_graphic, &interface.device)
+                .create_vertex_stage()
+                .create_viewport(&interface.surface)
+                .create_rasterization()
+                .create_multisampling()
+                .create_color_blending()
+                .create_dynamic_state()
+                .create_rendering(&interface.surface);
+
+            let graphic_pipe_info = vk::GraphicsPipelineCreateInfo::builder()
+                .stages(&shader_stage_info_list)
+                .vertex_input_state(&result.pipe_graphic.vertex_state)
+                .input_assembly_state(&result.pipe_graphic.vertex_assembly_state)
+                .viewport_state(&result.pipe_graphic.viewport_state)
+                .rasterization_state(&result.pipe_graphic.raster_state)
+                .multisample_state(&result.pipe_graphic.multisample_state)
+                .color_blend_state(&result.pipe_graphic.blend_state)
+                .dynamic_state(&result.pipe_graphic.dynamic_state)
+                .layout(result.pipe_graphic.pipe_layout)
+                .push_next(&mut result.pipe_graphic.rendering)
+                .build();
+
+            result.vk_pipe_graphic = interface
+                .device
+                .create_compute_pipelines(vk::PipelineCache::null(), &[graphic_pipe_info], None)
+                .expect("ERROR_CREATE_PIPELINE")[0];
+
+            result
         }
     }
 
@@ -171,7 +281,7 @@ impl Engine {
     /// pipe onto image target and finally blit to swapchain
     /// image. Then end draw.
 
-    pub fn draw(
+    pub fn draw_comp(
         &self,
         interface: &Interface,
         pref: &Pref,
@@ -179,7 +289,7 @@ impl Engine {
     ) -> Result<bool, Box<dyn Error>> {
         unsafe {
             interface.swap_draw_next(|present_index| {
-                self.pipe_info.record_submit_cmd(
+                self.pipe_comp.record_submit_cmd(
                     &interface.device,
                     interface.draw_cmd_fence,
                     interface.draw_cmd_buffer,
@@ -187,7 +297,7 @@ impl Engine {
                     interface.render_complete,
                     interface.present_queue,
                     |cmd_buffer| {
-                        self.descriptor_pool.write_img_desc(
+                        self.pool_comp.write_img_desc(
                             &self.image_target_list[present_index as usize],
                             vk::ImageLayout::GENERAL,
                             0,
@@ -195,9 +305,9 @@ impl Engine {
                             vk::DescriptorType::STORAGE_IMAGE,
                             &interface.device,
                         );
-                        self.descriptor_pool.write_buffer_desc(
+                        self.pool_comp.write_buffer_desc(
                             &self.uniform_buffer,
-                            mem::size_of_val(uniform) as u64,
+                            vk::WHOLE_SIZE,
                             1,
                             0,
                             vk::DescriptorType::UNIFORM_BUFFER,
@@ -208,14 +318,14 @@ impl Engine {
                         interface.device.cmd_bind_pipeline(
                             cmd_buffer,
                             vk::PipelineBindPoint::COMPUTE,
-                            self.pipe,
+                            self.vk_pipe_comp,
                         );
                         interface.device.cmd_bind_descriptor_sets(
                             cmd_buffer,
                             vk::PipelineBindPoint::COMPUTE,
-                            self.pipe_info.pipe_layout,
+                            self.pipe_comp.pipe_layout,
                             0,
-                            &self.descriptor_pool.set_list[..],
+                            &self.pool_comp.set_list[..],
                             &[],
                         );
                         interface.device.cmd_dispatch(
@@ -226,14 +336,14 @@ impl Engine {
                         );
 
                         // First Image Barrier
-                        self.pipe_info.first_img_barrier(
+                        self.pipe_comp.first_img_barrier(
                             &self.image_target_list[present_index as usize],
                             interface.swapchain.img_list[present_index as usize],
                             &interface.device,
                             cmd_buffer,
                         );
                         // Copy image memory
-                        self.pipe_info.copy_image(
+                        self.pipe_comp.copy_image(
                             &interface.device,
                             cmd_buffer,
                             pref,
@@ -242,7 +352,7 @@ impl Engine {
                             interface.surface.render_res,
                             interface.surface.surface_res,
                         );
-                        self.pipe_info.sec_img_barrier(
+                        self.pipe_comp.sec_img_barrier(
                             interface.swapchain.img_list[present_index as usize],
                             &interface.device,
                             cmd_buffer,
@@ -263,34 +373,48 @@ impl Engine {
         uniform: &mut Uniform,
         pref: &Pref,
     ) {
-        unsafe {
-            interface.wait_for_gpu().expect("DEVICE_LOST");
+        interface.wait_for_gpu().expect("DEVICE_LOST");
 
-            log::info!("Recreating Swapchain ...");
-            self.image_target_list.iter().for_each(|target| {
-                target.destroy(&interface.device);
-            });
+        log::info!("Recreating Swapchain ...");
+        self.image_target_list.iter().for_each(|target| {
+            target.destroy(&interface.device);
+        });
 
-            interface.swapchain.destroy(&interface.device);
+        interface.swapchain.destroy(&interface.device);
 
-            interface.surface =
-                interface
-                    .surface
-                    .get_surface_info(&interface.phy_device, &interface.window, pref);
+        interface.surface =
+            interface
+                .surface
+                .get_surface_info(&interface.phy_device, &interface.window, pref);
 
-            uniform.apply_resolution(interface.surface.render_res);
+        uniform.apply_resolution(interface.surface.render_res);
 
-            interface.swapchain = interface
-                .swapchain
-                .create_swapchain(&interface.surface)
-                .get_present_img(&interface.surface, &interface.device);
+        interface.swapchain = interface
+            .swapchain
+            .create_swapchain(&interface.surface)
+            .get_present_img(&interface.surface, &interface.device);
 
-            self.image_target_list = interface
-                .swapchain
-                .view_list
-                .iter()
-                .map(|_| ImageTarget::basic_img(interface, interface.surface.render_res))
-                .collect();
+        self.image_target_list = interface
+            .swapchain
+            .view_list
+            .iter()
+            .map(|_| ImageTarget::basic_img(interface, interface.surface.render_res))
+            .collect();
+    }
+}
+
+impl Default for Engine {
+    fn default() -> Self {
+        Self {
+            image_target_list: Default::default(),
+            uniform_buffer: Default::default(),
+            octree_buffer: Default::default(),
+            pool_comp: Default::default(),
+            pipe_comp: Default::default(),
+            vk_pipe_comp: Default::default(),
+            pool_graphic: Default::default(),
+            pipe_graphic: Default::default(),
+            vk_pipe_graphic: Default::default(),
         }
     }
 }

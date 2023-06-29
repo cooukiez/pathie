@@ -28,7 +28,7 @@ pub struct Pipe {
     pub pipe: vk::Pipeline,
 
     pub vertex_state: vk::PipelineVertexInputStateCreateInfo,
-    pub vertex_assembly_stage: vk::PipelineInputAssemblyStateCreateInfo,
+    pub vertex_assembly_state: vk::PipelineInputAssemblyStateCreateInfo,
 
     pub viewport: Vec<vk::Viewport>,
     pub viewport_state: vk::PipelineViewportStateCreateInfo,
@@ -88,7 +88,7 @@ impl Pipe {
                 .vertex_binding_descriptions(&vertex_binding_list)
                 .build();
 
-            result.vertex_assembly_stage = vk::PipelineInputAssemblyStateCreateInfo {
+            result.vertex_assembly_state = vk::PipelineInputAssemblyStateCreateInfo {
                 topology: vk::PrimitiveTopology::TRIANGLE_LIST,
                 ..Default::default()
             };
@@ -428,7 +428,7 @@ impl Default for Pipe {
             pipe_layout: Default::default(),
             pipe: Default::default(),
             vertex_state: Default::default(),
-            vertex_assembly_stage: Default::default(),
+            vertex_assembly_state: Default::default(),
             viewport: Default::default(),
             viewport_state: Default::default(),
             raster_state: Default::default(),
