@@ -11,7 +11,7 @@ use crate::{
     interface::interface::Interface,
     pipe::{
         descriptor::DescriptorPool,
-        pipe::{Pipe, Shader},
+        pipe::Pipe,
     },
     tree::octree::Octree,
     uniform::Uniform,
@@ -34,7 +34,6 @@ pub struct Engine {
 impl Engine {
     pub fn create_compute(
         interface: &Interface,
-        pref: &Pref,
         uniform: &mut Uniform,
         octree: &Octree,
     ) -> Self {
