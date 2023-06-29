@@ -1,6 +1,6 @@
-use std::{ffi::CString, io::Cursor, mem};
+use std::mem;
 
-use ash::{util::read_spv, vk, Device};
+use ash::{vk, Device};
 
 use crate::{interface::surface::SurfaceGroup, offset_of, Pref};
 
@@ -22,7 +22,7 @@ pub struct Shader {
 
 #[derive(Clone)]
 pub struct Pipe {
-    pub shader_list: Vec<Shader>,
+    pub comp_shader: Shader,
 
     pub pipe_layout: vk::PipelineLayout,
     pub pipe: vk::Pipeline,
@@ -44,39 +44,6 @@ pub struct Pipe {
 // include_bytes!("../../shader/comp.spv")
 
 impl Pipe {
-    pub fn create_shader_module(
-        &self,
-        spv_file: &mut Cursor<&[u8]>,
-        device: &Device,
-        stage_flag: vk::ShaderStageFlags,
-    ) -> Self {
-        unsafe {
-            let mut result = self.clone();
-            let mut shader = Shader::default();
-
-            log::info!("Getting ShaderCode ...");
-            shader.code = read_spv(spv_file).expect("ERR_READ_SPV");
-            let mod_info = vk::ShaderModuleCreateInfo::builder().code(&shader.code);
-
-            shader.module = device
-                .create_shader_module(&mod_info, None)
-                .expect("ERR_VERTEX_MODULE");
-
-            log::info!("Stage Creation ...");
-            let enrty_name = CString::new("main").unwrap();
-            shader.stage_info = vk::PipelineShaderStageCreateInfo {
-                module: shader.module,
-                p_name: enrty_name.as_ptr(),
-                stage: stage_flag,
-                ..Default::default()
-            };
-
-            result.shader_list.push(shader);
-
-            result
-        }
-    }
-
     pub fn create_layout(&self, descriptor_pool: &DescriptorPool, device: &Device) -> Self {
         unsafe {
             let mut result = self.clone();
@@ -457,7 +424,7 @@ impl Default for Shader {
 impl Default for Pipe {
     fn default() -> Self {
         Self {
-            shader_list: Default::default(),
+            comp_shader: Default::default(),
             pipe_layout: Default::default(),
             pipe: Default::default(),
             vertex_state: Default::default(),

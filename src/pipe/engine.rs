@@ -9,7 +9,10 @@ use ash::{util::read_spv, vk};
 
 use crate::{
     interface::interface::Interface,
-    pipe::{descriptor::DescriptorPool, pipe::Pipe},
+    pipe::{
+        descriptor::DescriptorPool,
+        pipe::{Pipe, Shader},
+    },
     tree::octree::Octree,
     uniform::Uniform,
     Pref, DEFAULT_STORAGE_BUFFER_SIZE,
@@ -127,16 +130,31 @@ impl Engine {
 
             let mut pipe_info = Pipe::default();
 
-            pipe_info = pipe_info.create_shader_module(
-                &mut Cursor::new(&include_bytes!("../../shader/comp.spv")[..]),
-                &interface.device,
-                vk::ShaderStageFlags::COMPUTE,
-            );
+            log::info!("Getting ShaderCode ...");
+            let mut spv = Cursor::new(&include_bytes!("../../shader/comp.spv")[..]);
+
+            let code =
+                read_spv(&mut spv).expect("ERR_READ_VERTEX_SPV");
+            let shader_info = vk::ShaderModuleCreateInfo::builder().code(&code);
+
+            let shader_module = interface
+                .device
+                .create_shader_module(&shader_info, None)
+                .expect("ERR_VERTEX_MODULE");
+
+            log::info!("Stage Creation ...");
+            let shader_entry_name = CString::new("main").unwrap();
+            let shader_stage = vk::PipelineShaderStageCreateInfo {
+                module: shader_module,
+                p_name: shader_entry_name.as_ptr(),
+                stage: vk::ShaderStageFlags::COMPUTE,
+                ..Default::default()
+            };
 
             pipe_info = pipe_info.create_layout(&descriptor_pool, &interface.device);
 
             let compute_pipe_info = vk::ComputePipelineCreateInfo::builder()
-                .stage(pipe_info.shader_list[0].stage_info)
+                .stage(shader_stage)
                 .layout(pipe_info.pipe_layout)
                 .build();
 
