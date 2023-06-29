@@ -1,6 +1,6 @@
 use ash::{extensions::khr::Swapchain, vk, Device, Instance};
 
-use crate::pipe::image::{SUBRES_RANGE, COMP_MAP};
+use crate::pipe::image::{COMP_MAP, SUBRES_RANGE};
 
 use super::surface::SurfaceGroup;
 
@@ -92,6 +92,18 @@ impl SwapchainGroup {
                 .collect();
 
             result
+        }
+    }
+
+    /// Destroy Swapchain and SwapchainImgList
+
+    pub fn destroy(&self, device: &Device) {
+        unsafe {
+            self.view_list
+                .iter()
+                .for_each(|view| device.destroy_image_view(*view, None));
+
+            self.loader.destroy_swapchain(self.swapchain, None);
         }
     }
 }

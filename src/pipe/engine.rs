@@ -9,10 +9,7 @@ use ash::{util::read_spv, vk};
 
 use crate::{
     interface::interface::Interface,
-    pipe::{
-        descriptor::DescriptorPool,
-        pipe::Pipe,
-    },
+    pipe::{descriptor::DescriptorPool, pipe::Pipe},
     tree::octree::Octree,
     uniform::Uniform,
     Pref, DEFAULT_STORAGE_BUFFER_SIZE,
@@ -32,11 +29,7 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn create_compute(
-        interface: &Interface,
-        uniform: &mut Uniform,
-        octree: &Octree,
-    ) -> Self {
+    pub fn create_compute(interface: &Interface, uniform: &mut Uniform, octree: &Octree) -> Self {
         unsafe {
             uniform.apply_resolution(interface.surface.render_res);
 
@@ -132,8 +125,7 @@ impl Engine {
             log::info!("Getting ShaderCode ...");
             let mut spv = Cursor::new(&include_bytes!("../../shader/comp.spv")[..]);
 
-            let code =
-                read_spv(&mut spv).expect("ERR_READ_VERTEX_SPV");
+            let code = read_spv(&mut spv).expect("ERR_READ_VERTEX_SPV");
             let shader_info = vk::ShaderModuleCreateInfo::builder().code(&code);
 
             let shader_module = interface
@@ -275,22 +267,11 @@ impl Engine {
             interface.wait_for_gpu().expect("DEVICE_LOST");
 
             log::info!("Recreating Swapchain ...");
-
-            // Destroy Image Target
             self.image_target_list.iter().for_each(|target| {
                 target.destroy(&interface.device);
             });
 
-            // Destroy Swapchain and SwapchainImgList
-            interface
-                .swapchain
-                .view_list
-                .iter()
-                .for_each(|view| interface.device.destroy_image_view(*view, None));
-            interface
-                .swapchain
-                .loader
-                .destroy_swapchain(interface.swapchain.swapchain, None);
+            interface.swapchain.destroy(&interface.device);
 
             interface.surface =
                 interface
@@ -299,60 +280,10 @@ impl Engine {
 
             uniform.apply_resolution(interface.surface.render_res);
 
-            let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
-                .surface(interface.surface.surface)
-                .min_image_count(interface.surface.swap_img_count)
-                .image_color_space(interface.surface.format.color_space)
-                .image_format(interface.surface.format.format)
-                .image_extent(interface.surface.surface_res)
-                .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-                .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .pre_transform(interface.surface.pre_transform)
-                .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-                .present_mode(interface.surface.present_mode)
-                .clipped(true)
-                .image_array_layers(1);
-
-            interface.swapchain.swapchain = interface
+            interface.swapchain = interface
                 .swapchain
-                .loader
-                .create_swapchain(&swapchain_create_info, None)
-                .unwrap();
-
-            interface.swapchain.img_list = interface
-                .swapchain
-                .loader
-                .get_swapchain_images(interface.swapchain.swapchain)
-                .unwrap();
-
-            interface.swapchain.view_list = interface
-                .swapchain
-                .img_list
-                .iter()
-                .map(|&image| {
-                    let create_view_info = vk::ImageViewCreateInfo::builder()
-                        .view_type(vk::ImageViewType::TYPE_2D)
-                        .format(interface.surface.format.format)
-                        .components(vk::ComponentMapping {
-                            r: vk::ComponentSwizzle::R,
-                            g: vk::ComponentSwizzle::G,
-                            b: vk::ComponentSwizzle::B,
-                            a: vk::ComponentSwizzle::A,
-                        })
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                        .image(image);
-                    interface
-                        .device
-                        .create_image_view(&create_view_info, None)
-                        .unwrap()
-                })
-                .collect();
+                .create_swapchain(&interface.surface)
+                .get_present_img(&interface.surface, &interface.device);
 
             self.image_target_list = interface
                 .swapchain
