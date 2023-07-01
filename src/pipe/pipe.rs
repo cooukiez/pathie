@@ -1,15 +1,18 @@
 use std::mem;
 
-use ash::{vk, Device};
+use ash::{
+    vk::{self, VertexInputAttributeDescription, VertexInputBindingDescription},
+    Device,
+};
 
 use crate::{interface::surface::SurfaceGroup, offset_of, Pref};
 
 use super::{descriptor::DescriptorPool, image::ImageTarget};
 
 #[derive(Clone, Debug, Copy)]
-struct Vertex {
-    pos: [f32; 4],
-    uv: [f32; 2],
+pub struct Vertex {
+    pub pos: [f32; 4],
+    pub uv: [f32; 2],
 }
 
 #[derive(Clone)]
@@ -27,10 +30,13 @@ pub struct Pipe {
     pub pipe_layout: vk::PipelineLayout,
     pub pipe: vk::Pipeline,
 
+    pub vertex_binding_list: Vec<VertexInputBindingDescription>,
+    pub vertex_attrib_list: Vec<VertexInputAttributeDescription>,
     pub vertex_state: vk::PipelineVertexInputStateCreateInfo,
     pub vertex_assembly_state: vk::PipelineInputAssemblyStateCreateInfo,
 
     pub viewport: Vec<vk::Viewport>,
+    pub scissor: Vec<vk::Rect2D>,
     pub viewport_state: vk::PipelineViewportStateCreateInfo,
 
     pub raster_state: vk::PipelineRasterizationStateCreateInfo,
@@ -48,8 +54,8 @@ impl Pipe {
         unsafe {
             let mut result = self.clone();
 
-            let info = vk::PipelineLayoutCreateInfo::builder()
-                .set_layouts(&descriptor_pool.layout_list);
+            let info =
+                vk::PipelineLayoutCreateInfo::builder().set_layouts(&descriptor_pool.layout_list);
 
             log::info!("Creating PipelineLayout ...");
             result.pipe_layout = device.create_pipeline_layout(&info, None).unwrap();
@@ -62,13 +68,13 @@ impl Pipe {
         unsafe {
             let mut result = self.clone();
 
-            let vertex_binding_list = vec![vk::VertexInputBindingDescription {
+            result.vertex_binding_list = vec![vk::VertexInputBindingDescription {
                 binding: 0,
                 stride: mem::size_of::<Vertex>() as u32,
                 input_rate: vk::VertexInputRate::VERTEX,
             }];
 
-            let vertex_attrib_list = vec![
+            result.vertex_attrib_list = vec![
                 vk::VertexInputAttributeDescription {
                     location: 0,
                     binding: 0,
@@ -84,8 +90,8 @@ impl Pipe {
             ];
 
             result.vertex_state = vk::PipelineVertexInputStateCreateInfo::builder()
-                .vertex_attribute_descriptions(&vertex_attrib_list)
-                .vertex_binding_descriptions(&vertex_binding_list)
+                .vertex_attribute_descriptions(&result.vertex_attrib_list)
+                .vertex_binding_descriptions(&result.vertex_binding_list)
                 .build();
 
             result.vertex_assembly_state = vk::PipelineInputAssemblyStateCreateInfo {
@@ -109,9 +115,9 @@ impl Pipe {
                 ..Default::default()
             }];
 
-            let scissor = vec![surface.render_res.into()];
+            result.scissor = vec![surface.render_res.into()];
             result.viewport_state = vk::PipelineViewportStateCreateInfo::builder()
-                .scissors(&scissor)
+                .scissors(&result.scissor)
                 .viewports(&result.viewport)
                 .build();
 
@@ -427,9 +433,12 @@ impl Default for Pipe {
             comp_shader: Default::default(),
             pipe_layout: Default::default(),
             pipe: Default::default(),
+            vertex_binding_list: Default::default(),
+            vertex_attrib_list: Default::default(),
             vertex_state: Default::default(),
             vertex_assembly_state: Default::default(),
             viewport: Default::default(),
+            scissor: Default::default(),
             viewport_state: Default::default(),
             raster_state: Default::default(),
             multisample_state: Default::default(),
