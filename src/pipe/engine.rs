@@ -356,6 +356,10 @@ impl Engine {
                 .logic_op(vk::LogicOp::CLEAR)
                 .attachments(&color_blend_attachment_state_list);
 
+            let format_list = [interface.surface.format.format];
+            let mut rendering = vk::PipelineRenderingCreateInfoKHR::builder()
+                .color_attachment_formats(&format_list)
+                .build();
 
             result.pipe_graphic = result
                 .pipe_graphic
@@ -378,7 +382,7 @@ impl Engine {
                 .color_blend_state(&color_blend_state)
                 .dynamic_state(&result.pipe_graphic.dynamic_state)
                 .layout(result.pipe_graphic.pipe_layout)
-                .push_next(&mut result.pipe_graphic.rendering)
+                .push_next(&mut rendering)
                 .build();
 
             result.vk_pipe_graphic = interface
