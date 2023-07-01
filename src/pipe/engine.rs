@@ -493,10 +493,10 @@ impl Engine {
                     interface.render_complete,
                     interface.present_queue,
                     |cmd_buffer| {
-                        self.pool_comp.write_buffer_desc(
+                        self.pool_graphic.write_buffer_desc(
                             &self.uniform_buffer,
                             vk::WHOLE_SIZE,
-                            1,
+                            0,
                             0,
                             vk::DescriptorType::UNIFORM_BUFFER,
                             &interface.device,
