@@ -88,6 +88,7 @@ impl Engine {
                 uv: [1.0, 0.0],
             },
         ];
+        
         result.vertex_buffer = BufferSet::new(
             mem::size_of_val(&vertex_data) as u64,
             vk::BufferUsageFlags::VERTEX_BUFFER,
@@ -391,7 +392,7 @@ impl Engine {
     ) -> Result<bool, Box<dyn Error>> {
         unsafe {
             interface.swap_draw_next(|present_index| {
-                self.pipe_comp.record_submit_cmd(
+                self.pipe_graphic.record_submit_cmd(
                     &interface.device,
                     interface.draw_cmd_fence,
                     interface.draw_cmd_buffer,

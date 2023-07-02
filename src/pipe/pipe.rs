@@ -34,22 +34,8 @@ pub struct Pipe {
     pub pipe_layout: vk::PipelineLayout,
     pub pipe: vk::Pipeline,
 
-    pub shader_stage_list: Vec<PipelineShaderStageCreateInfo>,
-
-    pub vertex_binding_list: Vec<VertexInputBindingDescription>,
-    pub vertex_attrib_list: Vec<VertexInputAttributeDescription>,
-    pub vertex_state: vk::PipelineVertexInputStateCreateInfo,
-    pub vertex_assembly_state: vk::PipelineInputAssemblyStateCreateInfo,
-
     pub viewport: Vec<vk::Viewport>,
     pub scissor: Vec<vk::Rect2D>,
-    pub viewport_state: vk::PipelineViewportStateCreateInfo,
-
-    pub raster_state: vk::PipelineRasterizationStateCreateInfo,
-    pub multisample_state: vk::PipelineMultisampleStateCreateInfo,
-    pub blend_state: vk::PipelineColorBlendStateCreateInfo,
-    pub dynamic_state: vk::PipelineDynamicStateCreateInfo,
-    pub rendering: vk::PipelineRenderingCreateInfo,
 }
 
 // "../../shader/comp.spv"
@@ -102,7 +88,7 @@ impl Pipe {
             log::info!("Stage Creation ...");
             let shader_entry_name = CString::new("main").unwrap();
 
-            result.shader_stage_list = vec![
+            let shader_stage_list = vec![
                 vk::PipelineShaderStageCreateInfo {
                     module: vert_shader_module,
                     p_name: shader_entry_name.as_ptr(),
@@ -119,13 +105,13 @@ impl Pipe {
 
             result = result.create_layout(descriptor_pool, device);
 
-            result.vertex_binding_list = vec![vk::VertexInputBindingDescription {
+            let vertex_binding_list = vec![vk::VertexInputBindingDescription {
                 binding: 0,
                 stride: mem::size_of::<Vertex>() as u32,
                 input_rate: vk::VertexInputRate::VERTEX,
             }];
 
-            result.vertex_attrib_list = vec![
+            let vertex_attrib_list = vec![
                 vk::VertexInputAttributeDescription {
                     location: 0,
                     binding: 0,
@@ -140,12 +126,12 @@ impl Pipe {
                 },
             ];
 
-            result.vertex_state = vk::PipelineVertexInputStateCreateInfo::builder()
-                .vertex_attribute_descriptions(&result.vertex_attrib_list)
-                .vertex_binding_descriptions(&result.vertex_binding_list)
+            let vertex_state = vk::PipelineVertexInputStateCreateInfo::builder()
+                .vertex_attribute_descriptions(&vertex_attrib_list)
+                .vertex_binding_descriptions(&vertex_binding_list)
                 .build();
 
-            result.vertex_assembly_state = vk::PipelineInputAssemblyStateCreateInfo {
+            let vertex_assembly_state = vk::PipelineInputAssemblyStateCreateInfo {
                 topology: vk::PrimitiveTopology::TRIANGLE_LIST,
                 ..Default::default()
             };
@@ -159,13 +145,13 @@ impl Pipe {
             }];
 
             result.scissor = vec![surface.render_res.into()];
-            result.viewport_state = vk::PipelineViewportStateCreateInfo::builder()
+            let viewport_state = vk::PipelineViewportStateCreateInfo::builder()
                 .scissors(&result.scissor)
                 .viewports(&result.viewport)
                 .build();
 
             log::info!("Rasterization ...");
-            result.raster_state = vk::PipelineRasterizationStateCreateInfo {
+            let raster_state = vk::PipelineRasterizationStateCreateInfo {
                 front_face: vk::FrontFace::COUNTER_CLOCKWISE,
                 line_width: 1.0,
                 polygon_mode: vk::PolygonMode::FILL,
@@ -173,7 +159,7 @@ impl Pipe {
             };
 
             log::info!("Multisample state ...");
-            result.multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
+            let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
                 .rasterization_samples(vk::SampleCountFlags::TYPE_1)
                 .build();
 
@@ -192,34 +178,34 @@ impl Pipe {
                 color_write_mask: vk::ColorComponentFlags::RGBA,
             }];
 
-            result.blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
+            let blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
                 .logic_op(vk::LogicOp::CLEAR)
                 .attachments(&blend_attachment_list)
                 .build();
 
             log::info!("Creating DynamicState ...");
             let dynamic_state = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-            result.dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+            let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
                 .dynamic_states(&dynamic_state)
                 .build();
 
             log::info!("Creating pipeline rendering ...");
             let format_list = [surface.format.format];
-            result.rendering = vk::PipelineRenderingCreateInfoKHR::builder()
+            let mut rendering = vk::PipelineRenderingCreateInfoKHR::builder()
                 .color_attachment_formats(&format_list)
                 .build();
 
             let graphic_pipe_info = vk::GraphicsPipelineCreateInfo::builder()
-                .stages(&result.shader_stage_list)
-                .vertex_input_state(&result.vertex_state)
-                .input_assembly_state(&result.vertex_assembly_state)
-                .viewport_state(&result.viewport_state)
-                .rasterization_state(&result.raster_state)
-                .multisample_state(&result.multisample_state)
-                .color_blend_state(&result.blend_state)
-                .dynamic_state(&result.dynamic_state)
+                .stages(&shader_stage_list)
+                .vertex_input_state(&vertex_state)
+                .input_assembly_state(&vertex_assembly_state)
+                .viewport_state(&viewport_state)
+                .rasterization_state(&raster_state)
+                .multisample_state(&multisample_state)
+                .color_blend_state(&blend_state)
+                .dynamic_state(&dynamic_state)
                 .layout(result.pipe_layout)
-                .push_next(&mut result.rendering)
+                .push_next(&mut rendering)
                 .build();
 
             (
@@ -458,19 +444,8 @@ impl Default for Pipe {
             comp_shader: Default::default(),
             pipe_layout: Default::default(),
             pipe: Default::default(),
-            shader_stage_list: Default::default(),
-            vertex_binding_list: Default::default(),
-            vertex_attrib_list: Default::default(),
-            vertex_state: Default::default(),
-            vertex_assembly_state: Default::default(),
             viewport: Default::default(),
             scissor: Default::default(),
-            viewport_state: Default::default(),
-            raster_state: Default::default(),
-            multisample_state: Default::default(),
-            blend_state: Default::default(),
-            dynamic_state: Default::default(),
-            rendering: Default::default(),
         }
     }
 }
