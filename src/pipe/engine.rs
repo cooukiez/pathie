@@ -241,7 +241,8 @@ impl Engine {
             let mut result = self.clone();
 
             log::info!("Creating descriptor set layout list ...");
-            result.pool_graphic = DescriptorPool::default()
+            result.pool_graphic = DescriptorPool::default();
+            /*
                 // Uniform Set
                 .create_descriptor_set_layout(
                     vk::DescriptorType::UNIFORM_BUFFER,
@@ -256,6 +257,7 @@ impl Engine {
                     vk::ShaderStageFlags::FRAGMENT,
                     &interface.device,
                 );
+            */
 
             result.pool_graphic = result
                 .pool_graphic

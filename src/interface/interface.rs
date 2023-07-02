@@ -2,7 +2,7 @@ use crate::{
     interface::{
         phydev::PhyDeviceGroup,
         surface::SurfaceGroup,
-        swapchain::{self, SwapchainGroup},
+        swapchain::SwapchainGroup,
     },
     Pref,
 };
@@ -11,7 +11,7 @@ use ash::{
         ext::DebugUtils,
         khr::{DynamicRendering, Swapchain},
     },
-    vk::{self},
+    vk,
     Device, Entry, Instance,
 };
 use raw_window_handle::HasRawDisplayHandle;

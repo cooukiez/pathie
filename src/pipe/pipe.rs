@@ -2,10 +2,7 @@ use std::{ffi::CString, io::Cursor, mem};
 
 use ash::{
     util::read_spv,
-    vk::{
-        self, PipelineShaderStageCreateInfo, VertexInputAttributeDescription,
-        VertexInputBindingDescription,
-    },
+    vk,
     Device,
 };
 
