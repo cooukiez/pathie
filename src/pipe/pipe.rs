@@ -1,7 +1,11 @@
-use std::mem;
+use std::{ffi::CString, io::Cursor, mem};
 
 use ash::{
-    vk::{self, VertexInputAttributeDescription, VertexInputBindingDescription},
+    util::read_spv,
+    vk::{
+        self, PipelineShaderStageCreateInfo, VertexInputAttributeDescription,
+        VertexInputBindingDescription,
+    },
     Device,
 };
 
@@ -29,6 +33,8 @@ pub struct Pipe {
 
     pub pipe_layout: vk::PipelineLayout,
     pub pipe: vk::Pipeline,
+
+    pub shader_stage_list: Vec<PipelineShaderStageCreateInfo>,
 
     pub vertex_binding_list: Vec<VertexInputBindingDescription>,
     pub vertex_attrib_list: Vec<VertexInputAttributeDescription>,
@@ -64,9 +70,54 @@ impl Pipe {
         }
     }
 
-    pub fn create_vertex_stage(&self) -> Self {
+    pub fn create_graphic_pipe(
+        device: &Device,
+        surface: &SurfaceGroup,
+        descriptor_pool: &DescriptorPool,
+    ) -> (Pipe, vk::Pipeline) {
         unsafe {
-            let mut result = self.clone();
+            let mut result = Self::default();
+
+            log::info!("Getting ShaderCode ...");
+            let mut vert_spv = Cursor::new(&include_bytes!("../../shader/vert.spv")[..]);
+            let mut frag_spv = Cursor::new(&include_bytes!("../../shader/frag.spv")[..]);
+
+            let vert_code = read_spv(&mut vert_spv).expect("ERR_READ_VERTEX_SPV");
+            let frag_code = read_spv(&mut frag_spv).expect("ERR_READ_VERTEX_SPV");
+
+            let vert_shader_info = vk::ShaderModuleCreateInfo::builder()
+                .code(&vert_code)
+                .build();
+            let frag_shader_info = vk::ShaderModuleCreateInfo::builder()
+                .code(&frag_code)
+                .build();
+
+            let vert_shader_module = device
+                .create_shader_module(&vert_shader_info, None)
+                .expect("ERR_VERTEX_MODULE");
+            let frag_shader_module = device
+                .create_shader_module(&frag_shader_info, None)
+                .expect("ERR_VERTEX_MODULE");
+
+            log::info!("Stage Creation ...");
+            let shader_entry_name = CString::new("main").unwrap();
+
+            result.shader_stage_list = vec![
+                vk::PipelineShaderStageCreateInfo {
+                    module: vert_shader_module,
+                    p_name: shader_entry_name.as_ptr(),
+                    stage: vk::ShaderStageFlags::VERTEX,
+                    ..Default::default()
+                },
+                vk::PipelineShaderStageCreateInfo {
+                    module: frag_shader_module,
+                    p_name: shader_entry_name.as_ptr(),
+                    stage: vk::ShaderStageFlags::FRAGMENT,
+                    ..Default::default()
+                },
+            ];
+
+            result = result.create_layout(descriptor_pool, device);
 
             result.vertex_binding_list = vec![vk::VertexInputBindingDescription {
                 binding: 0,
@@ -99,14 +150,6 @@ impl Pipe {
                 ..Default::default()
             };
 
-            result
-        }
-    }
-
-    pub fn create_viewport(&self, surface: &SurfaceGroup) -> Self {
-        unsafe {
-            let mut result = self.clone();
-
             result.viewport = vec![vk::Viewport {
                 width: surface.render_res.width as f32,
                 height: surface.render_res.height as f32,
@@ -121,14 +164,6 @@ impl Pipe {
                 .viewports(&result.viewport)
                 .build();
 
-            result
-        }
-    }
-
-    pub fn create_rasterization(&self) -> Self {
-        unsafe {
-            let mut result = self.clone();
-
             log::info!("Rasterization ...");
             result.raster_state = vk::PipelineRasterizationStateCreateInfo {
                 front_face: vk::FrontFace::COUNTER_CLOCKWISE,
@@ -137,26 +172,10 @@ impl Pipe {
                 ..Default::default()
             };
 
-            result
-        }
-    }
-
-    pub fn create_multisampling(&self) -> Self {
-        unsafe {
-            let mut result = self.clone();
-
             log::info!("Multisample state ...");
             result.multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
                 .rasterization_samples(vk::SampleCountFlags::TYPE_1)
                 .build();
-
-            result
-        }
-    }
-
-    pub fn create_color_blending(&self) -> Self {
-        unsafe {
-            let mut result = self.clone();
 
             log::info!("Creating color blending state ...");
             let blend_attachment_list = [vk::PipelineColorBlendAttachmentState {
@@ -178,27 +197,11 @@ impl Pipe {
                 .attachments(&blend_attachment_list)
                 .build();
 
-            result
-        }
-    }
-
-    pub fn create_dynamic_state(&self) -> Self {
-        unsafe {
-            let mut result = self.clone();
-
             log::info!("Creating DynamicState ...");
             let dynamic_state = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
             result.dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
                 .dynamic_states(&dynamic_state)
                 .build();
-
-            result
-        }
-    }
-
-    pub fn create_rendering(&self, surface: &SurfaceGroup) -> Self {
-        unsafe {
-            let mut result = self.clone();
 
             log::info!("Creating pipeline rendering ...");
             let format_list = [surface.format.format];
@@ -206,7 +209,29 @@ impl Pipe {
                 .color_attachment_formats(&format_list)
                 .build();
 
-            result
+            let graphic_pipe_info = vk::GraphicsPipelineCreateInfo::builder()
+                .stages(&result.shader_stage_list)
+                .vertex_input_state(&result.vertex_state)
+                .input_assembly_state(&result.vertex_assembly_state)
+                .viewport_state(&result.viewport_state)
+                .rasterization_state(&result.raster_state)
+                .multisample_state(&result.multisample_state)
+                .color_blend_state(&result.blend_state)
+                .dynamic_state(&result.dynamic_state)
+                .layout(result.pipe_layout)
+                .push_next(&mut result.rendering)
+                .build();
+
+            (
+                result,
+                device
+                    .create_graphics_pipelines(
+                        vk::PipelineCache::null(),
+                        &[graphic_pipe_info],
+                        None,
+                    )
+                    .expect("ERROR_CREATE_PIPELINE")[0],
+            )
         }
     }
 
@@ -433,6 +458,7 @@ impl Default for Pipe {
             comp_shader: Default::default(),
             pipe_layout: Default::default(),
             pipe: Default::default(),
+            shader_stage_list: Default::default(),
             vertex_binding_list: Default::default(),
             vertex_attrib_list: Default::default(),
             vertex_state: Default::default(),

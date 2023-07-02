@@ -9,13 +9,14 @@ use ash::{util::read_spv, vk};
 
 use crate::{
     interface::interface::Interface,
+    offset_of,
     pipe::{
         descriptor::DescriptorPool,
         pipe::{Pipe, Vertex},
     },
     tree::octree::Octree,
     uniform::Uniform,
-    Pref, DEFAULT_STORAGE_BUFFER_SIZE, offset_of,
+    Pref, DEFAULT_STORAGE_BUFFER_SIZE,
 };
 
 use super::{buffer::BufferSet, image::ImageTarget};
@@ -45,16 +46,15 @@ impl Engine {
     pub fn create_base(interface: &Interface, uniform: &Uniform, octree: &Octree) -> Self {
         let mut result = Self::default();
 
-        log::info!("Getting ImageTarget List ...");
         result.image_target_list = interface
             .swapchain
             .img_list
             .iter()
-            .map(|_| ImageTarget::basic_img(interface, interface.surface.render_res))
+            .map(|_| ImageTarget::attachment_img(interface, interface.surface.render_res))
             .collect();
 
         log::info!("Creating IndexBuffer ...");
-        let index_data = vec![0u32, 1, 2, 2, 3, 0];
+        let index_data: Vec<u32> = vec![0, 1, 2, 2, 3, 0];
         result.index_buffer = BufferSet::new(
             mem::size_of_val(&index_data) as u64,
             vk::BufferUsageFlags::INDEX_BUFFER,
@@ -99,7 +99,7 @@ impl Engine {
             &interface.phy_device,
             align_of::<Vertex>() as u64,
             mem::size_of_val(&vertex_data) as u64,
-            &index_data,
+            &vertex_data,
         );
 
         log::info!("Creating UniformBuffer ...");
@@ -261,6 +261,7 @@ impl Engine {
                 .create_descriptor_pool(&interface.device)
                 .write_descriptor_pool(&interface.device);
 
+            /*
             log::info!("Writing descriptor list ...");
             result.pool_graphic.write_buffer_desc(
                 &self.uniform_buffer,
@@ -279,116 +280,13 @@ impl Engine {
                 vk::DescriptorType::STORAGE_BUFFER,
                 &interface.device,
             );
+            */
 
-            log::info!("Getting ShaderCode ...");
-            let mut vert_spv = Cursor::new(&include_bytes!("../../shader/vert.spv")[..]);
-            let mut frag_spv = Cursor::new(&include_bytes!("../../shader/frag.spv")[..]);
-
-            let vert_code = read_spv(&mut vert_spv).expect("ERR_READ_VERTEX_SPV");
-            let frag_code = read_spv(&mut frag_spv).expect("ERR_READ_VERTEX_SPV");
-
-            let vert_shader_info = vk::ShaderModuleCreateInfo::builder()
-                .code(&vert_code)
-                .build();
-            let frag_shader_info = vk::ShaderModuleCreateInfo::builder()
-                .code(&frag_code)
-                .build();
-
-            let vert_shader_module = interface
-                .device
-                .create_shader_module(&vert_shader_info, None)
-                .expect("ERR_VERTEX_MODULE");
-            let frag_shader_module = interface
-                .device
-                .create_shader_module(&frag_shader_info, None)
-                .expect("ERR_VERTEX_MODULE");
-
-            log::info!("Stage Creation ...");
-            let shader_entry_name = CString::new("main").unwrap();
-
-            let shader_stage_list = vec![
-                vk::PipelineShaderStageCreateInfo {
-                    module: vert_shader_module,
-                    p_name: shader_entry_name.as_ptr(),
-                    stage: vk::ShaderStageFlags::VERTEX,
-                    ..Default::default()
-                },
-                vk::PipelineShaderStageCreateInfo {
-                    module: frag_shader_module,
-                    p_name: shader_entry_name.as_ptr(),
-                    stage: vk::ShaderStageFlags::FRAGMENT,
-                    ..Default::default()
-                },
-            ];
-
-            let vertex_input_binding_description_list = [
-                vk::VertexInputBindingDescription { binding: 0, stride: mem::size_of::<Vertex>() as u32, input_rate: vk::VertexInputRate::VERTEX, }
-            ];
-
-            let vertex_input_attribute_description_list = [
-                vk::VertexInputAttributeDescription { location: 0, binding: 0, format: vk::Format::R32G32B32A32_SFLOAT, offset: offset_of!(Vertex, pos) as u32, },
-                vk::VertexInputAttributeDescription { location: 1, binding: 0, format: vk::Format::R32G32_SFLOAT, offset: offset_of!(Vertex, uv) as u32, },
-            ];
-
-            let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
-                .vertex_attribute_descriptions(&vertex_input_attribute_description_list)
-                .vertex_binding_descriptions(&vertex_input_binding_description_list);
-
-            let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo { topology: vk::PrimitiveTopology::TRIANGLE_LIST, ..Default::default() };
-
-            let color_blend_attachment_state_list = [
-                vk::PipelineColorBlendAttachmentState {
-                    blend_enable: 0,
-
-                    src_color_blend_factor: vk::BlendFactor::SRC_COLOR,
-                    dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_DST_COLOR,
-
-                    color_blend_op: vk::BlendOp::ADD,
-                    src_alpha_blend_factor: vk::BlendFactor::ZERO,
-                    dst_alpha_blend_factor: vk::BlendFactor::ZERO,
-                    alpha_blend_op: vk::BlendOp::ADD,
-
-                    color_write_mask: vk::ColorComponentFlags::RGBA,
-                }
-            ];
-
-            let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
-                .logic_op(vk::LogicOp::CLEAR)
-                .attachments(&color_blend_attachment_state_list);
-
-            let format_list = [interface.surface.format.format];
-            let mut rendering = vk::PipelineRenderingCreateInfoKHR::builder()
-                .color_attachment_formats(&format_list)
-                .build();
-
-            result.pipe_graphic = result
-                .pipe_graphic
-                .create_layout(&result.pool_graphic, &interface.device)
-                .create_vertex_stage()
-                .create_viewport(&interface.surface)
-                .create_rasterization()
-                .create_multisampling()
-                .create_color_blending()
-                .create_dynamic_state()
-                .create_rendering(&interface.surface);
-
-            let graphic_pipe_info = vk::GraphicsPipelineCreateInfo::builder()
-                .stages(&shader_stage_list)
-                .vertex_input_state(&vertex_input_state_info)
-                .input_assembly_state(&vertex_input_assembly_state_info)
-                .viewport_state(&result.pipe_graphic.viewport_state)
-                .rasterization_state(&result.pipe_graphic.raster_state)
-                .multisample_state(&result.pipe_graphic.multisample_state)
-                .color_blend_state(&color_blend_state)
-                .dynamic_state(&result.pipe_graphic.dynamic_state)
-                .layout(result.pipe_graphic.pipe_layout)
-                .push_next(&mut rendering)
-                .build();
-
-            result.vk_pipe_graphic = interface
-                .device
-                .create_graphics_pipelines(vk::PipelineCache::null(), &[graphic_pipe_info], None)
-                .expect("ERROR_CREATE_PIPELINE")[0];
+            (result.pipe_graphic, result.vk_pipe_graphic) = Pipe::create_graphic_pipe(
+                &interface.device,
+                &interface.surface,
+                &result.pool_graphic,
+            );
 
             result
         }
@@ -454,12 +352,14 @@ impl Engine {
                         );
 
                         // First Image Barrier
+                        /*
                         self.pipe_comp.first_img_barrier(
                             &self.image_target_list[present_index as usize],
                             interface.swapchain.img_list[present_index as usize],
                             &interface.device,
                             cmd_buffer,
                         );
+                        */
                         // Copy image memory
                         self.pipe_comp.copy_image(
                             &interface.device,
@@ -470,11 +370,13 @@ impl Engine {
                             interface.surface.render_res,
                             interface.surface.surface_res,
                         );
+                        /*
                         self.pipe_comp.sec_img_barrier(
                             interface.swapchain.img_list[present_index as usize],
                             &interface.device,
                             cmd_buffer,
                         );
+                        */
                     },
                 );
             })
@@ -497,6 +399,7 @@ impl Engine {
                     interface.render_complete,
                     interface.present_queue,
                     |cmd_buffer| {
+                        /*
                         self.pool_graphic.write_buffer_desc(
                             &self.uniform_buffer,
                             vk::WHOLE_SIZE,
@@ -505,6 +408,7 @@ impl Engine {
                             vk::DescriptorType::UNIFORM_BUFFER,
                             &interface.device,
                         );
+                        */
 
                         let color_attachment_info = vk::RenderingAttachmentInfoKHR::builder()
                             .image_view(self.image_target_list[present_index as usize].view)
@@ -512,7 +416,7 @@ impl Engine {
                             .store_op(vk::AttachmentStoreOp::STORE)
                             .clear_value(vk::ClearValue {
                                 color: vk::ClearColorValue {
-                                    float32: [0.0, 0.0, 0.0, 0.0],
+                                    float32: [1.0, 1.0, 1.0, 0.0],
                                 },
                             })
                             .build();
@@ -532,7 +436,7 @@ impl Engine {
                         interface
                             .device
                             .cmd_begin_rendering(cmd_buffer, &rendering_info);
-
+                        
                         interface.device.cmd_bind_descriptor_sets(
                             cmd_buffer,
                             vk::PipelineBindPoint::GRAPHICS,
@@ -583,12 +487,14 @@ impl Engine {
                         interface.device.cmd_end_rendering(cmd_buffer);
 
                         // First Image Barrier
+                        /*
                         self.pipe_comp.first_img_barrier(
                             &self.image_target_list[present_index as usize],
                             interface.swapchain.img_list[present_index as usize],
                             &interface.device,
                             cmd_buffer,
                         );
+                        */
                         // Copy image memory
                         self.pipe_comp.copy_image(
                             &interface.device,
@@ -599,11 +505,13 @@ impl Engine {
                             interface.surface.render_res,
                             interface.surface.surface_res,
                         );
+                        /*
                         self.pipe_comp.sec_img_barrier(
                             interface.swapchain.img_list[present_index as usize],
                             &interface.device,
                             cmd_buffer,
                         );
+                        */
                     },
                 );
             })
@@ -643,9 +551,9 @@ impl Engine {
 
         self.image_target_list = interface
             .swapchain
-            .view_list
+            .img_list
             .iter()
-            .map(|_| ImageTarget::basic_img(interface, interface.surface.render_res))
+            .map(|_| ImageTarget::attachment_img(interface, interface.surface.render_res))
             .collect();
     }
 }

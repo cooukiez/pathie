@@ -5,9 +5,9 @@
 layout (location = 0) in vec4 inPos;
 layout (location = 1) in vec2 inCoord;
 
-layout (location = 0) out vec2 outCoord;
+layout (location = 0) out vec2 localPos;
 
 void main() {
-    outCoord = inCoord;
+    localPos = inCoord;
     gl_Position = inPos;
 }

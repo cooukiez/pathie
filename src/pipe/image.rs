@@ -47,11 +47,7 @@ impl ImageTarget {
     /// This function will create image on device
     /// and will update the img attribute.
 
-    pub fn create_img(
-        &self,
-        info: vk::ImageCreateInfo,
-        device: &Device,
-    ) -> Self {
+    pub fn create_img(&self, info: vk::ImageCreateInfo, device: &Device) -> Self {
         unsafe {
             let mut result = self.clone();
 
@@ -166,6 +162,53 @@ impl ImageTarget {
 
             result
         }
+    }
+
+    pub fn attachment_img(interface: &Interface, extent: vk::Extent2D) -> Self {
+        let mut result = Self::default();
+
+        let img_info = vk::ImageCreateInfo::builder()
+            .format(interface.surface.format.format)
+            .extent(extent_conv!(extent))
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .image_type(vk::ImageType::TYPE_2D)
+            .build();
+
+        let sampler_info = vk::SamplerCreateInfo::builder()
+            .mag_filter(vk::Filter::LINEAR)
+            .min_filter(vk::Filter::LINEAR)
+            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+            .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+            .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+            .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+            .mip_lod_bias(0.0)
+            .max_anisotropy(1.0)
+            .compare_op(vk::CompareOp::NEVER)
+            .min_lod(0.0)
+            .max_lod(1.0)
+            .border_color(vk::BorderColor::FLOAT_OPAQUE_WHITE)
+            .build();
+
+        let view_info = vk::ImageViewCreateInfo::builder()
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(interface.surface.format.format)
+            .subresource_range(SUBRES_RANGE)
+            .components(COMP_MAP)
+            .build();
+
+        result = result
+            .create_img(img_info, &interface.device)
+            .create_img_memory(&interface.device, &interface.phy_device)
+            .create_sampler(sampler_info, &interface.device)
+            .create_view(view_info, &interface.device);
+
+        result
     }
 
     /// Destroy image and image view
