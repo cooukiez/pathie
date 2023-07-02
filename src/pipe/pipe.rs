@@ -26,10 +26,7 @@ pub struct Shader {
 
 #[derive(Clone)]
 pub struct Pipe {
-    pub comp_shader: Shader,
-
     pub pipe_layout: vk::PipelineLayout,
-    pub pipe: vk::Pipeline,
 
     pub viewport: Vec<vk::Viewport>,
     pub scissor: Vec<vk::Rect2D>,
@@ -438,9 +435,7 @@ impl Default for Shader {
 impl Default for Pipe {
     fn default() -> Self {
         Self {
-            comp_shader: Default::default(),
             pipe_layout: Default::default(),
-            pipe: Default::default(),
             viewport: Default::default(),
             scissor: Default::default(),
         }
