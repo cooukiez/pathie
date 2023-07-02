@@ -1,10 +1,6 @@
 use std::{ffi::CString, io::Cursor, mem};
 
-use ash::{
-    util::read_spv,
-    vk,
-    Device,
-};
+use ash::{util::read_spv, vk, Device};
 
 use crate::{interface::surface::SurfaceGroup, offset_of, Pref};
 
@@ -30,6 +26,8 @@ pub struct Pipe {
 
     pub viewport: Vec<vk::Viewport>,
     pub scissor: Vec<vk::Rect2D>,
+
+    pub pipe: vk::Pipeline,
 }
 
 // "../../shader/comp.spv"
@@ -50,11 +48,49 @@ impl Pipe {
         }
     }
 
+    pub fn create_comp_pipe(device: &Device, pool: &DescriptorPool) -> Self {
+        unsafe {
+            let mut result = Self::default();
+
+            log::info!("Getting ShaderCode ...");
+            let mut spv = Cursor::new(&include_bytes!("../../shader/comp.spv")[..]);
+
+            let code = read_spv(&mut spv).expect("ERR_READ_VERTEX_SPV");
+            let shader_info = vk::ShaderModuleCreateInfo::builder().code(&code);
+
+            let shader_module = device
+                .create_shader_module(&shader_info, None)
+                .expect("ERR_VERTEX_MODULE");
+
+            log::info!("Stage Creation ...");
+            let shader_entry_name = CString::new("main").unwrap();
+            let shader_stage = vk::PipelineShaderStageCreateInfo {
+                module: shader_module,
+                p_name: shader_entry_name.as_ptr(),
+                stage: vk::ShaderStageFlags::COMPUTE,
+                ..Default::default()
+            };
+
+            result = result.create_layout(pool, device);
+
+            let compute_pipe_info = vk::ComputePipelineCreateInfo::builder()
+                .stage(shader_stage)
+                .layout(result.pipe_layout)
+                .build();
+
+            result.pipe = device
+                .create_compute_pipelines(vk::PipelineCache::null(), &[compute_pipe_info], None)
+                .expect("ERROR_CREATE_PIPELINE")[0];
+
+            result
+        }
+    }
+
     pub fn create_graphic_pipe(
         device: &Device,
         surface: &SurfaceGroup,
-        descriptor_pool: &DescriptorPool,
-    ) -> (Pipe, vk::Pipeline) {
+        pool: &DescriptorPool,
+    ) -> Self {
         unsafe {
             let mut result = Self::default();
 
@@ -97,7 +133,7 @@ impl Pipe {
                 },
             ];
 
-            result = result.create_layout(descriptor_pool, device);
+            result = result.create_layout(pool, device);
 
             let vertex_binding_list = vec![vk::VertexInputBindingDescription {
                 binding: 0,
@@ -202,16 +238,11 @@ impl Pipe {
                 .push_next(&mut rendering)
                 .build();
 
-            (
-                result,
-                device
-                    .create_graphics_pipelines(
-                        vk::PipelineCache::null(),
-                        &[graphic_pipe_info],
-                        None,
-                    )
-                    .expect("ERROR_CREATE_PIPELINE")[0],
-            )
+            result.pipe = device
+                .create_graphics_pipelines(vk::PipelineCache::null(), &[graphic_pipe_info], None)
+                .expect("ERROR_CREATE_PIPELINE")[0];
+
+            result
         }
     }
 
@@ -438,6 +469,7 @@ impl Default for Pipe {
             pipe_layout: Default::default(),
             viewport: Default::default(),
             scissor: Default::default(),
+            pipe: Default::default(),
         }
     }
 }

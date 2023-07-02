@@ -1,15 +1,12 @@
 use std::{
     error::Error,
-    ffi::CString,
-    io::Cursor,
     mem::{self, align_of},
 };
 
-use ash::{util::read_spv, vk};
+use ash::vk;
 
 use crate::{
     interface::interface::Interface,
-    offset_of,
     pipe::{
         descriptor::DescriptorPool,
         pipe::{Pipe, Vertex},
@@ -39,7 +36,6 @@ pub struct Engine {
 
     pub pool_graphic: DescriptorPool,
     pub pipe_graphic: Pipe,
-    pub vk_pipe_graphic: vk::Pipeline,
 }
 
 impl Engine {
@@ -193,39 +189,7 @@ impl Engine {
                 &interface.device,
             );
 
-            log::info!("Getting ShaderCode ...");
-            let mut spv = Cursor::new(&include_bytes!("../../shader/comp.spv")[..]);
-
-            let code = read_spv(&mut spv).expect("ERR_READ_VERTEX_SPV");
-            let shader_info = vk::ShaderModuleCreateInfo::builder().code(&code);
-
-            let shader_module = interface
-                .device
-                .create_shader_module(&shader_info, None)
-                .expect("ERR_VERTEX_MODULE");
-
-            log::info!("Stage Creation ...");
-            let shader_entry_name = CString::new("main").unwrap();
-            let shader_stage = vk::PipelineShaderStageCreateInfo {
-                module: shader_module,
-                p_name: shader_entry_name.as_ptr(),
-                stage: vk::ShaderStageFlags::COMPUTE,
-                ..Default::default()
-            };
-
-            result.pipe_comp = result
-                .pipe_comp
-                .create_layout(&result.pool_comp, &interface.device);
-
-            let compute_pipe_info = vk::ComputePipelineCreateInfo::builder()
-                .stage(shader_stage)
-                .layout(result.pipe_comp.pipe_layout)
-                .build();
-
-            result.vk_pipe_comp = interface
-                .device
-                .create_compute_pipelines(vk::PipelineCache::null(), &[compute_pipe_info], None)
-                .expect("ERROR_CREATE_PIPELINE")[0];
+            result.pipe_comp = Pipe::create_comp_pipe(&interface.device, &result.pool_comp);
 
             result
         }
@@ -241,8 +205,7 @@ impl Engine {
             let mut result = self.clone();
 
             log::info!("Creating descriptor set layout list ...");
-            result.pool_graphic = DescriptorPool::default();
-            /*
+            result.pool_graphic = DescriptorPool::default()
                 // Uniform Set
                 .create_descriptor_set_layout(
                     vk::DescriptorType::UNIFORM_BUFFER,
@@ -257,14 +220,12 @@ impl Engine {
                     vk::ShaderStageFlags::FRAGMENT,
                     &interface.device,
                 );
-            */
 
             result.pool_graphic = result
                 .pool_graphic
                 .create_descriptor_pool(&interface.device)
                 .write_descriptor_pool(&interface.device);
 
-            /*
             log::info!("Writing descriptor list ...");
             result.pool_graphic.write_buffer_desc(
                 &self.uniform_buffer,
@@ -283,9 +244,8 @@ impl Engine {
                 vk::DescriptorType::STORAGE_BUFFER,
                 &interface.device,
             );
-            */
 
-            (result.pipe_graphic, result.vk_pipe_graphic) = Pipe::create_graphic_pipe(
+            result.pipe_graphic = Pipe::create_graphic_pipe(
                 &interface.device,
                 &interface.surface,
                 &result.pool_graphic,
@@ -452,7 +412,7 @@ impl Engine {
                         interface.device.cmd_bind_pipeline(
                             cmd_buffer,
                             vk::PipelineBindPoint::GRAPHICS,
-                            self.vk_pipe_graphic,
+                            self.pipe_graphic.pipe,
                         );
                         interface.device.cmd_set_viewport(
                             cmd_buffer,
@@ -585,7 +545,6 @@ impl Default for Engine {
             vk_pipe_comp: Default::default(),
             pool_graphic: Default::default(),
             pipe_graphic: Default::default(),
-            vk_pipe_graphic: Default::default(),
         }
     }
 }
