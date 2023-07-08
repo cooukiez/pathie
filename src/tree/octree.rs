@@ -33,7 +33,7 @@ impl Octree {
 
         for _ in 1..MAX_DEPTH {
             if pos_info.branch(&branch_data).node.is_subdiv() {
-                pos_info.move_into_child(&mut branch_data, |branch| {
+                pos_info.select_child(&mut branch_data, |branch| {
                     let mut branch = branch.clone();
 
                     (branch.index, branch.node) =
@@ -66,8 +66,8 @@ impl Octree {
             ..Default::default()
         };
 
-        for d in 1..MAX_DEPTH {
-            pos_info.move_into_child(&mut branch_data, |branch| {
+        for _ in 1..MAX_DEPTH {
+            pos_info.select_child(&mut branch_data, |branch| {
                 let mut branch = branch.clone();
 
                 if !branch.parent.is_subdiv() {
@@ -84,8 +84,6 @@ impl Octree {
                     }
                 }
 
-                log::info!("pi {} d {}, pco {}", branch.parent_idx(), d, branch.parent_child_offset());
-
                 // Set child filled and update parent in octant data
                 self.octant_data[branch.parent_idx()] =
                     branch.parent.set_child_filled(branch.mask_info, true);
@@ -100,6 +98,31 @@ impl Octree {
             self.octant_data[pos_info.branch(&branch_data).idx()].set_leaf(true);
 
         pos_info
+    }
+
+    pub fn collect_branch(&self, branch_data: &[BranchInfo; MAX_DEPTH], pos_info: &PosInfo) -> [BranchInfo; MAX_DEPTH] {
+        let mut branch_data = branch_data.clone();
+        let mut pos_info = pos_info.clone();
+
+        for idx in 0..8 {
+            pos_info.move_into_child(&mut branch_data);
+
+            let mut branch = branch_data[pos_info.depth_idx()].clone();
+
+            (
+                branch.index,
+                branch.node,
+            ) = branch.get_child(&self.octant_data, idx);
+
+            if branch.node.is_subdiv() {
+                branch_data[pos_info.depth_idx()] = branch;
+                branch_data = self.collect_branch(&branch_data, &pos_info);
+            } else if branch.node.is_leaf() {
+                // Add to vertex data
+            }
+        }
+
+        branch_data
     }
 
     pub fn test_scene(&mut self) {

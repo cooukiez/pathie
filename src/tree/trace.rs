@@ -111,13 +111,15 @@ impl PosInfo {
                 pos_info.move_up(&branch_data);
             } else {
                 // Stop moving up and get next node
-                branch = self.branch(branch_data).move_to_neighbor(octant_data, new_mask);
+                branch = self
+                    .branch(branch_data)
+                    .move_to_neighbor(octant_data, new_mask);
 
                 // Start moving down
                 while branch.node.is_subdiv() {
-                    pos_info.move_into_child(branch_data, |branch| {
+                    pos_info.select_child(branch_data, |branch| {
                         let mut branch = branch.clone();
-                        
+
                         (branch.index, branch.node) =
                             branch.get_child(&octant_data, branch.mask_info);
 
@@ -142,33 +144,41 @@ impl PosInfo {
         self.depth -= 1;
     }
 
-    /// Expect child to be subdivide
-
-    pub fn move_into_child<Function: FnOnce(&BranchInfo) -> BranchInfo>(
+    pub fn move_into_child(
         &mut self,
         branch_data: &mut [BranchInfo; MAX_DEPTH],
-        select_idx: Function,
     ) {
         let old_branch = branch_data[self.depth_idx()].clone();
 
         self.depth += 1;
 
-        let mut new_branch = BranchInfo {
+        branch_data[self.depth_idx()] = BranchInfo {
             parent: old_branch.node,
             parent_index: old_branch.index,
             span: old_branch.span * 0.5,
             ..Default::default()
         };
+    }
+
+    /// Expect parent to be subdivide
+
+    pub fn select_child<Function: FnOnce(&BranchInfo) -> BranchInfo>(
+        &mut self,
+        branch_data: &mut [BranchInfo; MAX_DEPTH],
+        select_idx: Function,
+    ) {
+        self.move_into_child(branch_data);
+        let mut branch = self.branch(branch_data);
 
         // Get which child node to choose
-        new_branch.mask_info =
-            vec_to_mask!(self.local_pos.truncate() - Vector3::from([new_branch.span; 3]));
+        branch.mask_info =
+            vec_to_mask!(self.local_pos.truncate() - Vector3::from([branch.span; 3]));
 
-        self.pos_on_edge += mask_to_vec!(new_branch.mask_info).extend(0.0) * new_branch.span;
-        self.local_pos -= mask_to_vec!(new_branch.mask_info).extend(0.0) * new_branch.span;
+        self.pos_on_edge += mask_to_vec!(branch.mask_info).extend(0.0) * branch.span;
+        self.local_pos -= mask_to_vec!(branch.mask_info).extend(0.0) * branch.span;
 
-        new_branch = select_idx(&new_branch);
-        branch_data[self.depth_idx()] = new_branch;
+        branch = select_idx(&branch);
+        branch_data[self.depth_idx()] = branch;
     }
 }
 
