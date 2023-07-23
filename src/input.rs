@@ -7,7 +7,7 @@ use winit::{
 
 use crate::{interface::interface::Interface, uniform::Uniform, tree::octree::Octree};
 
-const MOVEMENT_INC: f32 = 10.0;
+const MOVEMENT_INC: f32 = 0.3;
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Action {

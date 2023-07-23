@@ -60,69 +60,20 @@ impl Uniform {
         self.rot -= self.mouse_delta;
     }
 
-    pub fn get_projection(fov: f32, res: nalgebra_glm::Vec2, near: f32) -> nalgebra_glm::Mat4 {
-        let fov = 1.0 / (fov / 2.0).tan();
-        let aspect = res.x / res.y;
-        nalgebra_glm::mat4(
-            fov / aspect,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            -fov,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            near,
-            0.0,
-        )
-    }
-
     pub fn update_uniform(&mut self, cur_time: Duration) {
         self.time = cur_time.as_millis() as u32;
 
         let view = nalgebra_glm::translation(&nalgebra_glm::make_vec3(&[0.0; 3]));
 
         let camera_pos = nalgebra_glm::Vec3::new(self.pos.x, self.pos.y, self.pos.z);
-        let camera_target = nalgebra_glm::make_vec3(&[0.0; 3]);
-        let camera_dir = nalgebra_glm::normalize(&(camera_pos - camera_target));
-        let up = nalgebra_glm::make_vec3(&[0.0, 1.0, 0.0]);
-        let camera_right = nalgebra_glm::normalize(&nalgebra_glm::cross(&up, &camera_dir));
-        let camera_up = nalgebra_glm::cross(&camera_dir, &camera_right);
-        let cam_x = ((self.time / 2000) as f32).sin() * 2.0;
-        let cam_z = ((self.time / 2000) as f32).cos() * 2.0;
+        let camera_target = camera_pos + nalgebra_glm::make_vec3(&[0.0, 0.0, -1.0]);
+
         let look_at = view
             * nalgebra_glm::look_at(
-                &nalgebra_glm::make_vec3(&[cam_x, 0.0, cam_z]),
-                &nalgebra_glm::make_vec3(&[0.0, 0.0, 0.0]),
+                &camera_pos,
+                &camera_target,
                 &nalgebra_glm::make_vec3(&[0.0, 1.0, 0.0]),
             );
-
-        self.view_proj = view
-        //    * Self::get_projection(20.0, nalgebra_glm::Vec2::new(self.res.x, self.res.y), 20.0)
-            * nalgebra_glm::make_mat4(&[
-                camera_right.x,
-                camera_right.y,
-                camera_right.z,
-                0.0,
-                camera_up.x,
-                camera_up.y,
-                camera_up.z,
-                0.0,
-                camera_dir.x,
-                camera_dir.y,
-                camera_dir.z,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                1.0,
-            ]);
 
         let projection = nalgebra_glm::perspective(
             (self.res.x / self.res.y) as f32,
@@ -132,32 +83,6 @@ impl Uniform {
         );
 
         self.view_proj = projection * look_at;
-
-        // self.view_proj = look_at;
-
-        /*
-        let rot_angle = nalgebra_glm::atan2(
-            &nalgebra_glm::Vec1::new(self.mouse_delta.y),
-            &nalgebra_glm::Vec1::new(self.mouse_delta.x),
-        );
-
-        let rot_x = nalgebra_glm::rotate(
-            &view,
-            self.mouse_delta.x,
-            &nalgebra_glm::Vec3::new(1.0, 0.0, 0.0),
-        );
-        let rot_y = nalgebra_glm::rotate(
-            &view,
-            self.mouse_delta.y,
-            &nalgebra_glm::Vec3::new(0.0, 1.0, 0.0),
-        );
-
-        let rotation = nalgebra_glm::rotate(&nalgebra_glm::make_mat4(&[1.0; 16]), angle, axis);
-        let matrix = translation * rotation;
-
-        let ortho_proj =
-            nalgebra_glm::ortho(0.0, self.res.x, 0.0, self.res.y, 0.0, 1000.0);
-        */
     }
 }
 
