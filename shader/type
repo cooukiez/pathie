@@ -1,0 +1,24 @@
+struct PosInfo {
+    vec4 local_pos;
+    vec4 pos_on_edge;
+    uint depth;
+
+    uint padding[3];
+};
+
+
+// Uniform
+mat4 view_proj;
+vec4 pos;
+
+vec2 res;
+vec2 mouse_delta;
+vec2 mouse_pos;
+vec2 rot;
+
+float root_span;
+uint time;
+
+uint padding[2];
+
+PosInfo pos_info;
