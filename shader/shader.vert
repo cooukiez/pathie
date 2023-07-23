@@ -37,9 +37,4 @@ layout (set = 0, binding = 0) uniform Uniform {
 void main() {
     localPos = inCoord;
     gl_Position = uniform_buffer.view_proj * inPos;
-    debugPrintfEXT("\n%v4f", uniform_buffer.view_proj[0]);
-    debugPrintfEXT("\n%v4f", uniform_buffer.view_proj[1]);
-    debugPrintfEXT("\n%v4f", uniform_buffer.view_proj[2]);
-    debugPrintfEXT("\n%v4f", uniform_buffer.view_proj[3]);
-    debugPrintfEXT("\n");
 }
