@@ -2,10 +2,11 @@ use std::{
     borrow::BorrowMut,
     io::Write,
     thread,
-    time::{Duration, Instant},
+    time::{Duration, Instant}, mem,
 };
 
 use ash::vk;
+use cgmath::Vector2;
 use env_logger::fmt::{Color, Formatter};
 use input::Input;
 use interface::interface::Interface;
@@ -29,7 +30,7 @@ mod uniform;
 mod vector;
 
 const DEFAULT_STORAGE_BUFFER_SIZE: u64 = 1342177280;
-// const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
+const DEFAULT_UNIFORM_BUFFER_SIZE: u64 = 16384;
 
 pub struct RenderState {
     pub out_of_date: bool,
@@ -75,7 +76,7 @@ fn main() {
         buf_style.set_color(Color::Yellow).set_bold(true);
 
         let time = chrono::Local::now().format("%H:%M:%S");
-
+        
         writeln!(
             buf,
             "[ {} {} ] {}",
@@ -132,6 +133,11 @@ impl Render {
         octree.test_scene();
 
         let interface = Interface::init(&event_loop, &pref);
+        uniform.res = Vector2::new(
+            interface.surface.surface_res.width as f32,
+            interface.surface.surface_res.height as f32,
+        );
+
         let mut graphic_pipe = Engine::create_base(&interface, &uniform, &octree);
         // graphic_pipe = graphic_pipe.create_compute(&interface, &uniform, &octree);
         graphic_pipe = graphic_pipe.create_graphic(&interface, &uniform, &octree);
@@ -187,8 +193,8 @@ impl Render {
                         self.interface
                             .window
                             .set_cursor_position(PhysicalPosition::new(
-                                self.uniform.resolution.x / 2.0,
-                                self.uniform.resolution.y / 2.0,
+                                self.uniform.res.x / 2.0,
+                                self.uniform.res.y / 2.0,
                             ))
                             .unwrap();
                     }
@@ -224,7 +230,12 @@ impl Render {
 
                             // Update Uniform
                             self.uniform.update_uniform(app_start.elapsed());
-                            // self.graphic_pipe.uniform_buffer.update(&self.interface, &[self.uniform]);
+                            self.graphic_pipe.uniform_buffer.rewrite_mem(
+                                &self.interface,
+                                mem::align_of::<Uniform>() as u64,
+                                mem::size_of::<Uniform>() as u64,
+                                &[self.uniform],
+                            );
 
                             // Draw and capture FrameTime
                             let start = Instant::now();

@@ -117,7 +117,7 @@ impl PosInfo {
 
                 // Start moving down
                 while branch.node.is_subdiv() {
-                    pos_info.select_child(branch_data, |branch| {
+                    pos_info.move_into_child(branch_data, |branch| {
                         let mut branch = branch.clone();
 
                         (branch.index, branch.node) =
@@ -144,7 +144,7 @@ impl PosInfo {
         self.depth -= 1;
     }
 
-    pub fn move_into_child(
+    pub fn update_branch_to_child(
         &mut self,
         branch_data: &mut [BranchInfo; MAX_DEPTH],
     ) {
@@ -162,12 +162,12 @@ impl PosInfo {
 
     /// Expect parent to be subdivide
 
-    pub fn select_child<Function: FnOnce(&BranchInfo) -> BranchInfo>(
+    pub fn move_into_child<Function: FnOnce(&BranchInfo) -> BranchInfo>(
         &mut self,
         branch_data: &mut [BranchInfo; MAX_DEPTH],
         select_idx: Function,
     ) {
-        self.move_into_child(branch_data);
+        self.update_branch_to_child(branch_data);
         let mut branch = self.branch(branch_data);
 
         // Get which child node to choose

@@ -13,7 +13,7 @@ use crate::{
     },
     tree::octree::Octree,
     uniform::Uniform,
-    Pref, DEFAULT_STORAGE_BUFFER_SIZE,
+    Pref, DEFAULT_STORAGE_BUFFER_SIZE, DEFAULT_UNIFORM_BUFFER_SIZE,
 };
 
 use super::{buffer::BufferSet, image::ImageTarget};
@@ -50,9 +50,12 @@ impl Engine {
             .collect();
 
         log::info!("Creating IndexBuffer ...");
-        result.index_data = vec![0, 1, 2, 2, 3, 0];
+        result.index_data = vec![
+            0, 1, 3, 3, 1, 2, 4, 5, 7, 7, 5, 6, 8, 9, 11, 11, 9, 10, 12, 13, 15, 15, 13, 14, 16,
+            17, 19, 19, 17, 18, 20, 21, 23, 23, 21, 22,
+        ];
         result.index_buffer = BufferSet::new(
-            mem::size_of_val(&result.index_data) as u64,
+            mem::size_of_val(&result.index_data[..]) as u64,
             vk::BufferUsageFlags::INDEX_BUFFER,
             vk::SharingMode::EXCLUSIVE,
             &interface.device,
@@ -61,32 +64,77 @@ impl Engine {
             &interface.device,
             &interface.phy_device,
             align_of::<u32>() as u64,
-            mem::size_of_val(&result.index_data) as u64,
+            mem::size_of_val(&result.index_data[..]) as u64,
             &result.index_data,
         );
 
         log::info!("Creating VertexBuffer ...");
-        let vertex_data = [
-            Vertex {
-                pos: [-1.0, -1.0, 0.0, 1.0],
-                uv: [0.0, 0.0],
-            },
-            Vertex {
-                pos: [-1.0, 1.0, 0.0, 1.0],
-                uv: [0.0, 1.0],
-            },
-            Vertex {
-                pos: [1.0, 1.0, 0.0, 1.0],
-                uv: [1.0, 1.0],
-            },
-            Vertex {
-                pos: [1.0, -1.0, 0.0, 1.0],
-                uv: [1.0, 0.0],
-            },
+
+        let raw_vertex_data = vec![
+            (-0.5f32, 0.5f32, -0.5f32),
+            (-0.5f32, -0.5f32, -0.5f32),
+            (0.5f32, -0.5f32, -0.5f32),
+            (0.5f32, 0.5f32, -0.5f32),
+            (-0.5f32, 0.5f32, 0.5f32),
+            (-0.5f32, -0.5f32, 0.5f32),
+            (0.5f32, -0.5f32, 0.5f32),
+            (0.5f32, 0.5f32, 0.5f32),
+            (0.5f32, 0.5f32, -0.5f32),
+            (0.5f32, -0.5f32, -0.5f32),
+            (0.5f32, -0.5f32, 0.5f32),
+            (0.5f32, 0.5f32, 0.5f32),
+            (-0.5f32, 0.5f32, -0.5f32),
+            (-0.5f32, -0.5f32, -0.5f32),
+            (-0.5f32, -0.5f32, 0.5f32),
+            (-0.5f32, 0.5f32, 0.5f32),
+            (-0.5f32, 0.5f32, 0.5f32),
+            (-0.5f32, 0.5f32, -0.5f32),
+            (0.5f32, 0.5f32, -0.5f32),
+            (0.5f32, 0.5f32, 0.5f32),
+            (-0.5f32, -0.5f32, 0.5f32),
+            (-0.5f32, -0.5f32, -0.5f32),
+            (0.5f32, -0.5f32, -0.5f32),
+            (0.5f32, -0.5f32, 0.5f32),
         ];
 
+        let raw_uv_data = vec![
+            (0, 0),
+            (0, 1),
+            (1, 1),
+            (1, 0),
+            (0, 0),
+            (0, 1),
+            (1, 1),
+            (1, 0),
+            (0, 0),
+            (0, 1),
+            (1, 1),
+            (1, 0),
+            (0, 0),
+            (0, 1),
+            (1, 1),
+            (1, 0),
+            (0, 0),
+            (0, 1),
+            (1, 1),
+            (1, 0),
+            (0, 0),
+            (0, 1),
+            (1, 1),
+            (1, 0),
+        ];
+
+        let vertex_data: Vec<Vertex> = raw_vertex_data
+            .iter()
+            .enumerate()
+            .map(|(idx, coord)| Vertex {
+                pos: [coord.0, coord.1, coord.2, 1.0],
+                uv: [raw_uv_data[idx].0 as f32, raw_uv_data[idx].1 as f32],
+            })
+            .collect();
+
         result.vertex_buffer = BufferSet::new(
-            mem::size_of_val(&vertex_data) as u64,
+            mem::size_of_val(&vertex_data[..]) as u64,
             vk::BufferUsageFlags::VERTEX_BUFFER,
             vk::SharingMode::EXCLUSIVE,
             &interface.device,
@@ -95,13 +143,13 @@ impl Engine {
             &interface.device,
             &interface.phy_device,
             align_of::<Vertex>() as u64,
-            mem::size_of_val(&vertex_data) as u64,
+            mem::size_of_val(&vertex_data[..]) as u64,
             &vertex_data,
         );
 
         log::info!("Creating UniformBuffer ...");
         result.uniform_buffer = BufferSet::new(
-            mem::size_of_val(&uniform) as u64,
+            mem::size_of::<Uniform>() as u64,
             vk::BufferUsageFlags::UNIFORM_BUFFER,
             vk::SharingMode::EXCLUSIVE,
             &interface.device,
@@ -110,8 +158,8 @@ impl Engine {
             &interface.device,
             &interface.phy_device,
             align_of::<Uniform>() as u64,
-            mem::size_of_val(&uniform) as u64,
-            &[uniform],
+            mem::size_of::<Uniform>() as u64,
+            &[uniform.clone()],
         );
 
         log::info!("Creating OctreeBuffer ...");
@@ -210,7 +258,7 @@ impl Engine {
                 .create_descriptor_set_layout(
                     vk::DescriptorType::UNIFORM_BUFFER,
                     1,
-                    vk::ShaderStageFlags::FRAGMENT,
+                    vk::ShaderStageFlags::ALL_GRAPHICS,
                     &interface.device,
                 )
                 // Octree Set

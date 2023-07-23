@@ -104,6 +104,32 @@ impl BufferSet {
             result
         }
     }
+
+    pub fn rewrite_mem<Type: Copy>(
+        &self,
+        interface: &Interface,
+        alignment: u64,
+        size: u64,
+        data: &[Type],
+    ) {
+        unsafe {
+            let buffer_ptr = interface
+                .device
+                .map_memory(
+                    self.mem,
+                    0,
+                    std::mem::size_of_val(data) as u64,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .unwrap();
+
+            // Align memory
+            let mut aligned_slice = Align::new(buffer_ptr, alignment, size);
+
+            aligned_slice.copy_from_slice(&data);
+            interface.device.unmap_memory(self.mem);
+        }
+    }
 }
 
 impl Default for BufferSet {

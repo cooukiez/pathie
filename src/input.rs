@@ -81,8 +81,8 @@ impl Input {
                 Action::RESET => interface
                     .window
                     .set_cursor_position(PhysicalPosition::new(
-                        uniform.resolution.x / 2.0,
-                        uniform.resolution.x / 2.0,
+                        uniform.res.x / 2.0,
+                        uniform.res.x / 2.0,
                     ))
                     .unwrap(),
 
@@ -93,7 +93,8 @@ impl Input {
 
     pub fn handle_mouse_input(&self, position: PhysicalPosition<f64>, uniform: &mut Uniform) {
         let relative_mouse_pos = Vector2::new(position.x as f32, position.y as f32);
-        let absolute_mouse_pos = relative_mouse_pos - uniform.resolution / 2.0;
+        let absolute_mouse_pos = relative_mouse_pos - uniform.res / 2.0;
+
         uniform.move_mouse(absolute_mouse_pos);
     }
 }

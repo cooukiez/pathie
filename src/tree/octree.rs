@@ -1,11 +1,13 @@
 use cgmath::Vector3;
 
+use crate::{pipe::pipe::Vertex, mask_to_vec, ftv3};
+
 use super::{
     octant::Octant,
     trace::{BranchInfo, PosInfo},
 };
 
-pub const MAX_DEPTH: usize = 10;
+pub const MAX_DEPTH: usize = 4;
 
 pub struct Octree {
     // RootIndex = 0
@@ -33,7 +35,7 @@ impl Octree {
 
         for _ in 1..MAX_DEPTH {
             if pos_info.branch(&branch_data).node.is_subdiv() {
-                pos_info.select_child(&mut branch_data, |branch| {
+                pos_info.move_into_child(&mut branch_data, |branch| {
                     let mut branch = branch.clone();
 
                     (branch.index, branch.node) =
@@ -67,7 +69,7 @@ impl Octree {
         };
 
         for _ in 1..MAX_DEPTH {
-            pos_info.select_child(&mut branch_data, |branch| {
+            pos_info.move_into_child(&mut branch_data, |branch| {
                 let mut branch = branch.clone();
 
                 if !branch.parent.is_subdiv() {
@@ -100,25 +102,30 @@ impl Octree {
         pos_info
     }
 
-    pub fn collect_branch(&self, branch_data: &[BranchInfo; MAX_DEPTH], pos_info: &PosInfo) -> [BranchInfo; MAX_DEPTH] {
+    pub fn branch_to_mesh(
+        &self,
+        branch_data: &[BranchInfo; MAX_DEPTH],
+        pos_info: &PosInfo,
+        vertex_data: &mut Vec<Vertex>,
+        index_data: &mut Vec<u32>,
+    ) -> [BranchInfo; MAX_DEPTH] {
         let mut branch_data = branch_data.clone();
-        let mut pos_info = pos_info.clone();
 
         for idx in 0..8 {
-            pos_info.move_into_child(&mut branch_data);
+            let mut pos_info = pos_info.clone();
 
-            let mut branch = branch_data[pos_info.depth_idx()].clone();
+            pos_info.update_branch_to_child(&mut branch_data);
+            let mut branch = pos_info.branch(&branch_data);
 
-            (
-                branch.index,
-                branch.node,
-            ) = branch.get_child(&self.octant_data, idx);
+            (branch.index, branch.node) = branch.get_child(&self.octant_data, idx);
+
+            pos_info.local_pos += mask_to_vec!(idx).extend(0.0) * (branch.span / 2.0);
 
             if branch.node.is_subdiv() {
                 branch_data[pos_info.depth_idx()] = branch;
-                branch_data = self.collect_branch(&branch_data, &pos_info);
+                branch_data = self.branch_to_mesh(&branch_data, &pos_info, vertex_data, index_data);
             } else if branch.node.is_leaf() {
-                // Add to vertex data
+                
             }
         }
 
@@ -131,7 +138,7 @@ impl Octree {
 
         self.insert_node(Vector3::new(0.0, 0.0, 0.0));
 
-        self.insert_node(Vector3::new(10.0, 10.0, 10.0));
+        self.insert_node(Vector3::new(4.0, 4.0, 4.0));
 
         for nude in self.octant_data.clone() {
             log::info!(

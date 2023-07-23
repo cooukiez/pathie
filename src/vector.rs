@@ -15,6 +15,33 @@ pub fn vec_three_dee<Type: std::clone::Clone>(side_len: usize, content: Type) ->
 
 */
 
+/// convert float to vec two
+
+#[macro_export]
+macro_rules! ftv2 {
+    ($num : expr) => {
+        Vector2::from([$num; 2])
+    };
+}
+
+/// convert float to vec three
+
+#[macro_export]
+macro_rules! ftv3 {
+    ($num : expr) => {
+        Vector3::from([$num; 3])
+    };
+}
+
+/// convert float to vec four
+
+#[macro_export]
+macro_rules! ftv4 {
+    ($num : expr) => {
+        Vector4::from([$num; 4])
+    };
+}
+
 trait Num {
     // Move Number back into boundary
     fn boundary(&self, min: Self, max: Self) -> Self;
