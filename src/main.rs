@@ -1,8 +1,8 @@
 use std::{
     borrow::BorrowMut,
     io::Write,
-    thread,
-    time::{Duration, Instant}, mem,
+    mem, thread,
+    time::{Duration, Instant},
 };
 
 use ash::vk;
@@ -67,6 +67,8 @@ pub struct Pref {
 
     pub use_render_res: bool,
     pub render_res: vk::Extent2D,
+
+    pub mov_speed: f32,
 }
 
 fn main() {
@@ -76,7 +78,7 @@ fn main() {
         buf_style.set_color(Color::Yellow).set_bold(true);
 
         let time = chrono::Local::now().format("%H:%M:%S");
-        
+
         writeln!(
             buf,
             "[ {} {} ] {}",
@@ -117,6 +119,8 @@ impl Render {
                 width: 1920,
                 height: 1080,
             },
+
+            mov_speed: 0.1,
         };
 
         let state = RenderState {
@@ -137,6 +141,7 @@ impl Render {
             interface.surface.surface_res.width as f32,
             interface.surface.surface_res.height as f32,
         );
+        uniform.mouse_pos = uniform.res / 2.0; 
 
         let mut graphic_pipe = Engine::create_base(&interface, &uniform, &octree);
         // graphic_pipe = graphic_pipe.create_compute(&interface, &uniform, &octree);
@@ -178,9 +183,10 @@ impl Render {
                         self.input.handle_key_input(
                             &keycode,
                             &state,
-                            &self.interface,
                             &mut self.uniform,
+                            &self.pref,
                             &self.octree,
+                            &self.interface,
                         )
                     }
 
@@ -190,6 +196,7 @@ impl Render {
                     } => {
                         self.input.handle_mouse_input(position, &mut self.uniform);
                         self.interface.window.set_cursor_visible(false);
+                        /*
                         self.interface
                             .window
                             .set_cursor_position(PhysicalPosition::new(
@@ -197,6 +204,7 @@ impl Render {
                                 self.uniform.res.y / 2.0,
                             ))
                             .unwrap();
+                        */
                     }
 
                     Event::WindowEvent {

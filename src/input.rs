@@ -1,13 +1,12 @@
 use cgmath::{Vector2, Vector3};
+use nalgebra_glm::{normalize, cross, Vec3};
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, VirtualKeyCode},
     window::Fullscreen,
 };
 
-use crate::{interface::interface::Interface, uniform::Uniform, tree::octree::Octree};
-
-const MOVEMENT_INC: f32 = 0.3;
+use crate::{interface::interface::Interface, uniform::{Uniform, self}, tree::octree::Octree, Pref};
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Action {
@@ -55,19 +54,20 @@ impl Input {
         &self,
         keycode: &VirtualKeyCode,
         state: &ElementState,
-        interface: &Interface,
         uniform: &mut Uniform,
+        pref: &Pref,
         octree: &Octree,
+        interface: &Interface,
     ) {
         if state == &ElementState::Pressed {
             match self.binding_list[*keycode as usize] {
-                Action::FORWARD => uniform.apply_velocity(Vector3::new(0.0, 0.0, MOVEMENT_INC), octree),
-                Action::BACKWARD => uniform.apply_velocity(Vector3::new(0.0, 0.0, -MOVEMENT_INC), octree),
-                Action::LEFT => uniform.apply_velocity(Vector3::new(MOVEMENT_INC, 0.0, 0.0), octree),
-                Action::RIGHT => uniform.apply_velocity(Vector3::new(-MOVEMENT_INC, 0.0, 0.0), octree),
+                Action::FORWARD => uniform.apply_velocity(Vec3::new(0.0, 0.0, -1.0) * pref.mov_speed, octree),
+                Action::BACKWARD => uniform.apply_velocity(- Vec3::new(0.0, 0.0, -1.0) * pref.mov_speed, octree),
+                // Action::LEFT => uniform.apply_velocity(- normalize(&cross(&uniform.cam_front, &uniform.cam_up)) * pref.mov_speed, octree),
+                // Action::RIGHT => uniform.apply_velocity(normalize(&cross(&uniform.cam_front, &uniform.cam_up)) * pref.mov_speed, octree),
 
-                Action::JUMP => uniform.apply_velocity(Vector3::new(0.0, MOVEMENT_INC, 0.0), octree),
-                Action::SHIFT => uniform.apply_velocity(Vector3::new(0.0, -MOVEMENT_INC, 0.0), octree),
+                // Action::JUMP => uniform.apply_velocity(Vector3::new(0.0, MOVEMENT_INC, 0.0), octree),
+                // Action::SHIFT => uniform.apply_velocity(Vector3::new(0.0, -MOVEMENT_INC, 0.0), octree),
 
                 Action::FULLSCREEN => interface.window.set_fullscreen(Some(Fullscreen::Exclusive(
                     interface
@@ -92,9 +92,8 @@ impl Input {
     }
 
     pub fn handle_mouse_input(&self, position: PhysicalPosition<f64>, uniform: &mut Uniform) {
-        let relative_mouse_pos = Vector2::new(position.x as f32, position.y as f32);
-        let absolute_mouse_pos = relative_mouse_pos - uniform.res / 2.0;
+        let mouse_pos = Vector2::new(position.x as f32, position.y as f32);
 
-        uniform.move_mouse(absolute_mouse_pos);
+        uniform.move_mouse(mouse_pos);
     }
 }

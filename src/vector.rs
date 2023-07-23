@@ -42,7 +42,7 @@ macro_rules! ftv4 {
     };
 }
 
-trait Num {
+pub trait Num {
     // Move Number back into boundary
     fn boundary(&self, min: Self, max: Self) -> Self;
 }
