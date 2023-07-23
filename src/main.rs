@@ -68,8 +68,7 @@ pub struct Pref {
     pub use_render_res: bool,
     pub render_res: vk::Extent2D,
 }
-
-fn main() {
+  
     let log_format = |buf: &mut Formatter, record: &Record| {
         let mut buf_style = buf.style();
 
