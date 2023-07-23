@@ -61,10 +61,10 @@ impl Input {
     ) {
         if state == &ElementState::Pressed {
             match self.binding_list[*keycode as usize] {
-                Action::FORWARD => uniform.apply_velocity(Vec3::new(0.0, 0.0, -1.0) * pref.mov_speed, octree),
-                Action::BACKWARD => uniform.apply_velocity(- Vec3::new(0.0, 0.0, -1.0) * pref.mov_speed, octree),
-                // Action::LEFT => uniform.apply_velocity(- normalize(&cross(&uniform.cam_front, &uniform.cam_up)) * pref.mov_speed, octree),
-                // Action::RIGHT => uniform.apply_velocity(normalize(&cross(&uniform.cam_front, &uniform.cam_up)) * pref.mov_speed, octree),
+                Action::FORWARD => uniform.apply_velocity(nalgebra_glm::normalize(&uniform.look_dir) * pref.mov_speed, octree),
+                Action::BACKWARD => uniform.apply_velocity(- nalgebra_glm::normalize(&uniform.look_dir) * pref.mov_speed, octree),
+                Action::LEFT => uniform.apply_velocity(- normalize(&cross(&nalgebra_glm::normalize(&uniform.look_dir), &uniform.cam_up)) * pref.mov_speed, octree),
+                Action::RIGHT => uniform.apply_velocity(normalize(&cross(&nalgebra_glm::normalize(&uniform.look_dir), &uniform.cam_up)) * pref.mov_speed, octree),
 
                 // Action::JUMP => uniform.apply_velocity(Vector3::new(0.0, MOVEMENT_INC, 0.0), octree),
                 // Action::SHIFT => uniform.apply_velocity(Vector3::new(0.0, -MOVEMENT_INC, 0.0), octree),
@@ -93,7 +93,8 @@ impl Input {
 
     pub fn handle_mouse_input(&self, position: PhysicalPosition<f64>, uniform: &mut Uniform) {
         let mouse_pos = Vector2::new(position.x as f32, position.y as f32);
+        let mouse_delta = mouse_pos - uniform.res / 2.0;
 
-        uniform.move_mouse(mouse_pos);
+        uniform.move_mouse(mouse_delta);
     }
 }

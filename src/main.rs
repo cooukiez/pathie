@@ -102,7 +102,7 @@ impl Render {
         let event_loop = EventLoop::new();
 
         let pref = Pref {
-            pref_present_mode: vk::PresentModeKHR::IMMEDIATE,
+            pref_present_mode: vk::PresentModeKHR::FIFO,
             img_filter: vk::Filter::LINEAR,
             img_scale: 1.0,
 
@@ -120,7 +120,7 @@ impl Render {
                 height: 1080,
             },
 
-            mov_speed: 0.1,
+            mov_speed: 0.2,
         };
 
         let state = RenderState {
@@ -196,7 +196,6 @@ impl Render {
                     } => {
                         self.input.handle_mouse_input(position, &mut self.uniform);
                         self.interface.window.set_cursor_visible(false);
-                        /*
                         self.interface
                             .window
                             .set_cursor_position(PhysicalPosition::new(
@@ -204,7 +203,6 @@ impl Render {
                                 self.uniform.res.y / 2.0,
                             ))
                             .unwrap();
-                        */
                     }
 
                     Event::WindowEvent {

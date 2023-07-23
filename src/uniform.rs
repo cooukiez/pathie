@@ -39,7 +39,7 @@ pub struct Uniform {
 impl Uniform {
     pub fn new(root_span: f32) -> Self {
         Self {
-            pos: Vector4::new(10.0, 0.0, -5.0, 0.0),
+            pos: Vector4::new(0.0, 0.0, -10.0, 0.0),
             cam_up: nalgebra_glm::Vec3::new(0.0, 1.0, 0.0),
             root_span,
 
@@ -57,10 +57,9 @@ impl Uniform {
         self.cam_pos += vc;
     }
 
-    pub fn move_mouse(&mut self, mouse_pos: Vector2<f32>) {
+    pub fn move_mouse(&mut self, mouse_delta: Vector2<f32>) {
         // Update mouse pos
-        self.mouse_delta = mouse_pos - self.mouse_pos;
-        self.mouse_pos = mouse_pos;
+        self.mouse_delta = mouse_delta;
 
         self.mouse_rot += self.mouse_delta * 0.1;
         self.mouse_rot.y = self.mouse_rot.y.boundary(-89.0, 89.0);
@@ -69,19 +68,21 @@ impl Uniform {
         let yaw = self.mouse_rot.x.to_radians();
         let pitch = self.mouse_rot.y.to_radians();
 
+        log::info!("{}", self.mouse_rot.x);
+
         self.look_dir = nalgebra_glm::Vec3::new(
             yaw.cos() * pitch.cos(),
             pitch.sin(),
             yaw.sin() * pitch.cos(),
         );
-
-        self.cam_front = nalgebra_glm::normalize(&self.look_dir);
     }
 
     pub fn update_uniform(&mut self, cur_time: Duration) {
         self.time = cur_time.as_millis() as u32;
 
         let view = nalgebra_glm::translation(&nalgebra_glm::make_vec3(&[0.0; 3]));
+
+        self.cam_front = self.cam_pos + nalgebra_glm::normalize(&self.look_dir);
         let look_at = nalgebra_glm::look_at(
             &self.cam_pos,
             &self.cam_front,
