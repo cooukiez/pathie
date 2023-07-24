@@ -4,6 +4,7 @@ use std::{
 };
 
 use ash::vk;
+use cgmath::Vector3;
 
 use crate::{
     interface::interface::Interface,
@@ -11,9 +12,9 @@ use crate::{
         descriptor::DescriptorPool,
         pipe::{Pipe, Vertex},
     },
-    tree::octree::Octree,
+    tree::{octree::{Octree, MAX_DEPTH}, trace::{BranchInfo, PosInfo}, octant::Octant},
     uniform::Uniform,
-    Pref, DEFAULT_STORAGE_BUFFER_SIZE, DEFAULT_UNIFORM_BUFFER_SIZE,
+    Pref, DEFAULT_STORAGE_BUFFER_SIZE, DEFAULT_UNIFORM_BUFFER_SIZE, vector::Vector,
 };
 
 use super::{buffer::BufferSet, image::ImageTarget};
@@ -49,11 +50,10 @@ impl Engine {
             .map(|_| ImageTarget::attachment_img(interface, interface.surface.render_res))
             .collect();
 
+        let (vertex_data, index_data) = Pipe::get_octree_vert_data(octree);
+
         log::info!("Creating IndexBuffer ...");
-        result.index_data = vec![
-            0, 1, 3, 3, 1, 2, 4, 5, 7, 7, 5, 6, 8, 9, 11, 11, 9, 10, 12, 13, 15, 15, 13, 14, 16,
-            17, 19, 19, 17, 18, 20, 21, 23, 23, 21, 22,
-        ];
+        result.index_data = index_data;
         result.index_buffer = BufferSet::new(
             mem::size_of_val(&result.index_data[..]) as u64,
             vk::BufferUsageFlags::INDEX_BUFFER,
@@ -69,70 +69,6 @@ impl Engine {
         );
 
         log::info!("Creating VertexBuffer ...");
-
-        let raw_vertex_data = vec![
-            (-0.5f32, 0.5f32, -0.5f32),
-            (-0.5f32, -0.5f32, -0.5f32),
-            (0.5f32, -0.5f32, -0.5f32),
-            (0.5f32, 0.5f32, -0.5f32),
-            (-0.5f32, 0.5f32, 0.5f32),
-            (-0.5f32, -0.5f32, 0.5f32),
-            (0.5f32, -0.5f32, 0.5f32),
-            (0.5f32, 0.5f32, 0.5f32),
-            (0.5f32, 0.5f32, -0.5f32),
-            (0.5f32, -0.5f32, -0.5f32),
-            (0.5f32, -0.5f32, 0.5f32),
-            (0.5f32, 0.5f32, 0.5f32),
-            (-0.5f32, 0.5f32, -0.5f32),
-            (-0.5f32, -0.5f32, -0.5f32),
-            (-0.5f32, -0.5f32, 0.5f32),
-            (-0.5f32, 0.5f32, 0.5f32),
-            (-0.5f32, 0.5f32, 0.5f32),
-            (-0.5f32, 0.5f32, -0.5f32),
-            (0.5f32, 0.5f32, -0.5f32),
-            (0.5f32, 0.5f32, 0.5f32),
-            (-0.5f32, -0.5f32, 0.5f32),
-            (-0.5f32, -0.5f32, -0.5f32),
-            (0.5f32, -0.5f32, -0.5f32),
-            (0.5f32, -0.5f32, 0.5f32),
-        ];
-
-        let raw_uv_data = vec![
-            (0, 0),
-            (0, 1),
-            (1, 1),
-            (1, 0),
-            (0, 0),
-            (0, 1),
-            (1, 1),
-            (1, 0),
-            (0, 0),
-            (0, 1),
-            (1, 1),
-            (1, 0),
-            (0, 0),
-            (0, 1),
-            (1, 1),
-            (1, 0),
-            (0, 0),
-            (0, 1),
-            (1, 1),
-            (1, 0),
-            (0, 0),
-            (0, 1),
-            (1, 1),
-            (1, 0),
-        ];
-
-        let vertex_data: Vec<Vertex> = raw_vertex_data
-            .iter()
-            .enumerate()
-            .map(|(idx, coord)| Vertex {
-                pos: [coord.0, coord.1, coord.2, 1.0],
-                uv: [raw_uv_data[idx].0 as f32, raw_uv_data[idx].1 as f32],
-            })
-            .collect();
-
         result.vertex_buffer = BufferSet::new(
             mem::size_of_val(&vertex_data[..]) as u64,
             vk::BufferUsageFlags::VERTEX_BUFFER,

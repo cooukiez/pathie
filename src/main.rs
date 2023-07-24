@@ -11,12 +11,13 @@ use env_logger::fmt::{Color, Formatter};
 use input::Input;
 use interface::interface::Interface;
 use log::Record;
+use nalgebra_glm::{cross, normalize};
 use pipe::engine::Engine;
 use tree::octree::Octree;
 use uniform::Uniform;
 use winit::{
     dpi::PhysicalPosition,
-    event::{Event, KeyboardInput, WindowEvent},
+    event::{Event, KeyboardInput, WindowEvent, VirtualKeyCode},
     event_loop::{ControlFlow, EventLoop},
     platform::run_return::EventLoopExtRunReturn,
 };
@@ -120,7 +121,7 @@ impl Render {
                 height: 1080,
             },
 
-            mov_speed: 0.2,
+            mov_speed: 0.05,
         };
 
         let state = RenderState {
@@ -236,6 +237,7 @@ impl Render {
 
                             // Update Uniform
                             self.uniform.update_uniform(app_start.elapsed());
+                            
                             self.graphic_pipe.uniform_buffer.rewrite_mem(
                                 &self.interface,
                                 mem::align_of::<Uniform>() as u64,
@@ -250,6 +252,28 @@ impl Render {
                                 .draw_graphic(&self.interface, &self.pref, &self.uniform)
                                 .expect("RENDER_FAILED");
                             self.state.frame_time = start.elapsed();
+
+                            if self.input.key_down[VirtualKeyCode::W as usize] == true {
+                                self.uniform.velocity += nalgebra_glm::normalize(&self.uniform.look_dir) * self.pref.mov_speed;
+                                self.uniform.apply_velocity();
+                            }
+                            if self.input.key_down[VirtualKeyCode::S as usize] == true {
+                                self.uniform.velocity -= nalgebra_glm::normalize(&self.uniform.look_dir) * self.pref.mov_speed;
+                                self.uniform.apply_velocity();
+                            }
+                            if self.input.key_down[VirtualKeyCode::A as usize] == true {
+                                self.uniform.velocity -= normalize(&cross(&nalgebra_glm::normalize(&self.uniform.look_dir), &self.uniform.cam_up)) * self.pref.mov_speed;
+                                self.uniform.apply_velocity();
+                            }
+                            if self.input.key_down[VirtualKeyCode::D as usize] == true {
+                                self.uniform.velocity += normalize(&cross(&nalgebra_glm::normalize(&self.uniform.look_dir), &self.uniform.cam_up)) * self.pref.mov_speed;
+                                self.uniform.apply_velocity();
+                            }
+                            if self.input.key_down[VirtualKeyCode::LShift as usize] == true {
+                                self.pref.mov_speed = 0.3;
+                            } else {
+                                self.pref.mov_speed = 0.05;
+                            }
                         }
                     }
 

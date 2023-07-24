@@ -15,6 +15,7 @@ pub struct Uniform {
     pub view_proj: nalgebra_glm::Mat4,
     pub pos: Vector4<f32>,
     pub look_dir: nalgebra_glm::Vec3,
+    pub velocity: nalgebra_glm::Vec3,
     pub cam_front: nalgebra_glm::Vec3,
     pub cam_pos: nalgebra_glm::Vec3,
     pub cam_up: nalgebra_glm::Vec3,
@@ -51,17 +52,17 @@ impl Uniform {
         self.res = Vector2::new(resolution.width as f32, resolution.height as f32);
     }
 
-    pub fn apply_velocity(&mut self, vc: nalgebra_glm::Vec3, octree: &Octree) {
-        self.pos += Vector4::new(vc.x, vc.y, vc.z, 0.0);
-        self.pos_info = octree.node_at_pos(self.pos.truncate());
-        self.cam_pos += vc;
+    pub fn apply_velocity(&mut self) {
+        self.pos += Vector4::new(self.velocity.x, self.velocity.y, self.velocity.z, 0.0);
+        self.cam_pos += self.velocity;
+        self.velocity = nalgebra_glm::Vec3::default();
     }
 
     pub fn move_mouse(&mut self, mouse_delta: Vector2<f32>) {
         // Update mouse pos
         self.mouse_delta = mouse_delta;
 
-        self.mouse_rot += self.mouse_delta * 0.1;
+        self.mouse_rot += self.mouse_delta * 0.05;
         self.mouse_rot.y = self.mouse_rot.y.boundary(-89.0, 89.0);
 
         // Update cam
@@ -106,6 +107,7 @@ impl Default for Uniform {
             view_proj: Default::default(),
             pos: Vector4::new(0.5, 0.5, 0.5, 0.0),
             look_dir: Default::default(),
+            velocity: Default::default(),
             cam_pos: Default::default(),
             cam_front: Default::default(),
             cam_up: Default::default(),

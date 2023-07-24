@@ -28,6 +28,7 @@ pub enum Action {
 
 pub struct Input {
     pub binding_list: [Action; 256],
+    pub key_down: [bool; 256],
 }
 
 impl Input {
@@ -47,11 +48,11 @@ impl Input {
 
         binding_list[VirtualKeyCode::R as usize] = Action::RESET;
 
-        Input { binding_list }
+        Input { binding_list, key_down: [false; 256] }
     }
 
     pub fn handle_key_input(
-        &self,
+        &mut self,
         keycode: &VirtualKeyCode,
         state: &ElementState,
         uniform: &mut Uniform,
@@ -60,11 +61,13 @@ impl Input {
         interface: &Interface,
     ) {
         if state == &ElementState::Pressed {
+            self.key_down[*keycode as usize] = true;
+            /*
             match self.binding_list[*keycode as usize] {
-                Action::FORWARD => uniform.apply_velocity(nalgebra_glm::normalize(&uniform.look_dir) * pref.mov_speed, octree),
-                Action::BACKWARD => uniform.apply_velocity(- nalgebra_glm::normalize(&uniform.look_dir) * pref.mov_speed, octree),
-                Action::LEFT => uniform.apply_velocity(- normalize(&cross(&nalgebra_glm::normalize(&uniform.look_dir), &uniform.cam_up)) * pref.mov_speed, octree),
-                Action::RIGHT => uniform.apply_velocity(normalize(&cross(&nalgebra_glm::normalize(&uniform.look_dir), &uniform.cam_up)) * pref.mov_speed, octree),
+                Action::FORWARD => uniform.velocity += nalgebra_glm::normalize(&uniform.look_dir) * pref.mov_speed,
+                Action::BACKWARD => uniform.velocity -= nalgebra_glm::normalize(&uniform.look_dir) * pref.mov_speed,
+                Action::LEFT => uniform.velocity -= normalize(&cross(&nalgebra_glm::normalize(&uniform.look_dir), &uniform.cam_up)) * pref.mov_speed,
+                Action::RIGHT => uniform.velocity += normalize(&cross(&nalgebra_glm::normalize(&uniform.look_dir), &uniform.cam_up)) * pref.mov_speed,
 
                 // Action::JUMP => uniform.apply_velocity(Vector3::new(0.0, MOVEMENT_INC, 0.0), octree),
                 // Action::SHIFT => uniform.apply_velocity(Vector3::new(0.0, -MOVEMENT_INC, 0.0), octree),
@@ -88,6 +91,9 @@ impl Input {
 
                 _ => (),
             }
+            */
+        } else if state == &ElementState::Released {
+            self.key_down[*keycode as usize] = false;
         }
     }
 

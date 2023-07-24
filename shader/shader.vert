@@ -8,6 +8,7 @@ layout (location = 0) in vec4 inPos;
 layout (location = 1) in vec2 inCoord;
 
 layout (location = 0) out vec2 localPos;
+layout (location = 1) out vec4 outPos;
 
 struct PosInfo {
     vec4 local_pos;
@@ -37,4 +38,5 @@ layout (set = 0, binding = 0) uniform Uniform {
 void main() {
     localPos = inCoord;
     gl_Position = uniform_buffer.view_proj * inPos;
+    outPos = gl_Position;
 }

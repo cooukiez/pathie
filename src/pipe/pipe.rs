@@ -1,8 +1,17 @@
 use std::{ffi::CString, io::Cursor, mem};
 
 use ash::{util::read_spv, vk, Device};
+use cgmath::Vector3;
 
-use crate::{interface::surface::SurfaceGroup, offset_of, Pref};
+use crate::{
+    ftv3,
+    interface::surface::SurfaceGroup,
+    offset_of,
+    pipe::obj::{BASE_CUBE_IDX, BASE_CUBE_UV, BASE_CUBE_VERT},
+    tree::{octant::Octant, octree::Octree},
+    vector::Vector,
+    Pref,
+};
 
 use super::{descriptor::DescriptorPool, image::ImageTarget};
 
@@ -84,6 +93,48 @@ impl Pipe {
 
             result
         }
+    }
+
+    pub fn get_octree_vert_data(octree: &Octree) -> (Vec<Vertex>, Vec<u32>) {
+        let mut vertex_data = vec![];
+        let mut index_data = vec![];
+
+        let (branch_data, pos_info) = octree.get_new_root_info(Vector3::default());
+        let mut leaf_data = vec![];
+        octree.collect_branch(&branch_data, &pos_info, &mut leaf_data, 6);
+
+        log::info!("{:#034b}", leaf_data[0].1.node.get_child_bitmask());
+
+        leaf_data
+            .iter()
+            .enumerate()
+            .for_each(|(leaf_idx, (pos_info, branch_info))| {
+                let center = pos_info.local_pos.truncate() * 4.0 + ftv3!(branch_info.span / 2.0);
+
+                BASE_CUBE_VERT
+                    .iter()
+                    .enumerate()
+                    .for_each(|(vert_idx, coord)| {
+                        vertex_data.push(Vertex {
+                            pos: [
+                                coord.0 * branch_info.span + center.x,
+                                coord.1 * branch_info.span + center.y,
+                                coord.2 * branch_info.span + center.z,
+                                1.0,
+                            ],
+                            uv: [
+                                BASE_CUBE_UV[vert_idx].0 as f32,
+                                BASE_CUBE_UV[vert_idx].1 as f32,
+                            ],
+                        })
+                    });
+
+                BASE_CUBE_IDX
+                    .iter()
+                    .for_each(|idx| index_data.push((idx + (leaf_idx as i32 + 1) * 24) as u32))
+            });
+
+        (vertex_data, index_data)
     }
 
     pub fn create_graphic_pipe(
