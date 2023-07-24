@@ -109,7 +109,7 @@ impl Pipe {
             .iter()
             .enumerate()
             .for_each(|(leaf_idx, (pos_info, branch_info))| {
-                let center = pos_info.local_pos.truncate() * 4.0 + ftv3!(branch_info.span / 2.0);
+                let center = pos_info.local_pos.truncate() * 2.0 + ftv3!(branch_info.span / 2.0);
 
                 BASE_CUBE_VERT
                     .iter()
@@ -131,7 +131,7 @@ impl Pipe {
 
                 BASE_CUBE_IDX
                     .iter()
-                    .for_each(|idx| index_data.push((idx + (leaf_idx as i32 + 1) * 24) as u32))
+                    .for_each(|idx| index_data.push((idx + (leaf_idx as i32) * 24) as u32))
             });
 
         (vertex_data, index_data)
