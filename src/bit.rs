@@ -96,11 +96,12 @@ macro_rules! write_bitrange {
 #[macro_export]
 macro_rules! mask_to_vec {
     ($mask : expr) => {{
-        Vector3 {
-            x: (($mask >> 0) & 1) as f32,
-            y: (($mask >> 2) & 1) as f32,
-            z: (($mask >> 1) & 1) as f32,
-        }
+        nalgebra_glm::Vec4::new(
+            (($mask >> 0) & 1) as f32,
+            (($mask >> 2) & 1) as f32,
+            (($mask >> 1) & 1) as f32,
+            0.0,
+        )
     }};
 }
 
@@ -111,6 +112,6 @@ macro_rules! vec_to_mask {
         let y_bit = if $input_vec.y > 0.0 { 1 } else { 0 };
         let z_bit = if $input_vec.z > 0.0 { 1 } else { 0 };
 
-        (x_bit << 0) | (y_bit << 1) | (z_bit << 2)
+        (x_bit << 0) | (z_bit << 1) | (y_bit << 2) 
     }};
 }

@@ -6,19 +6,59 @@ struct PosInfo {
     uint padding[3];
 };
 
+struct BranchInfo {
+    uint node;
+    uint parent;
+
+    uint index;
+    uint parent_index;
+
+    float span;
+
+    uint mask_info;
+
+    uint padding[2];
+};
+
+struct LocInfo {
+    vec4 pos_on_edge;
+
+    uint node;
+    uint parent;
+
+    uint index;
+    uint parent_index;
+
+    float span;
+    uint depth;
+
+    uint padding [2];
+};
+
+struct Ray {
+    vec3 origin;
+    vec3 dir;
+
+    vec3 invRayDir; // Used for RayCube Intersection
+};
 
 // Uniform
 mat4 view_proj;
 vec4 pos;
 
+vec4 cam_pos;
+vec4 cam_front;
+vec4 cam_up;
+vec4 look_dir;
+
 vec2 res;
 vec2 mouse_delta;
 vec2 mouse_pos;
-vec2 rot;
 
 float root_span;
 uint time;
 
 uint padding[2];
 
-PosInfo pos_info;
+// TreeNode
+uint node;

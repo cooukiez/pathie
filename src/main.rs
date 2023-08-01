@@ -11,7 +11,7 @@ use env_logger::fmt::{Color, Formatter};
 use input::Input;
 use interface::interface::Interface;
 use log::Record;
-use nalgebra_glm::{cross, normalize};
+use nalgebra_glm::{cross, normalize, Vec2, vec3_to_vec4};
 use pipe::engine::Engine;
 use tree::octree::Octree;
 use uniform::Uniform;
@@ -138,11 +138,10 @@ impl Render {
         octree.test_scene();
 
         let interface = Interface::init(&event_loop, &pref);
-        uniform.res = Vector2::new(
+        uniform.res = Vec2::new(
             interface.surface.surface_res.width as f32,
             interface.surface.surface_res.height as f32,
         );
-        uniform.mouse_pos = uniform.res / 2.0; 
 
         let mut graphic_pipe = Engine::create_base(&interface, &uniform, &octree);
         // graphic_pipe = graphic_pipe.create_compute(&interface, &uniform, &octree);
@@ -262,11 +261,11 @@ impl Render {
                                 self.uniform.apply_velocity();
                             }
                             if self.input.key_down[VirtualKeyCode::A as usize] == true {
-                                self.uniform.velocity -= normalize(&cross(&nalgebra_glm::normalize(&self.uniform.look_dir), &self.uniform.cam_up)) * self.pref.mov_speed;
+                                self.uniform.velocity -= vec3_to_vec4(&normalize(&cross(&nalgebra_glm::normalize(&self.uniform.look_dir.xyz()), &self.uniform.cam_up.xyz()))) * self.pref.mov_speed;
                                 self.uniform.apply_velocity();
                             }
                             if self.input.key_down[VirtualKeyCode::D as usize] == true {
-                                self.uniform.velocity += normalize(&cross(&nalgebra_glm::normalize(&self.uniform.look_dir), &self.uniform.cam_up)) * self.pref.mov_speed;
+                                self.uniform.velocity += vec3_to_vec4(&normalize(&cross(&nalgebra_glm::normalize(&self.uniform.look_dir.xyz()), &self.uniform.cam_up.xyz()))) * self.pref.mov_speed;
                                 self.uniform.apply_velocity();
                             }
                             if self.input.key_down[VirtualKeyCode::LShift as usize] == true {

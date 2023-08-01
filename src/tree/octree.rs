@@ -1,6 +1,6 @@
-use cgmath::Vector3;
+use nalgebra_glm::Vec4;
 
-use crate::mask_to_vec;
+use crate::{mask_to_vec, vector::Vector};
 
 use super::{
     octant::Octant,
@@ -16,7 +16,7 @@ pub struct Octree {
 }
 
 impl Octree {
-    pub fn get_new_root_info(&self, pos: Vector3<f32>) -> ([BranchInfo; MAX_DEPTH], PosInfo) {
+    pub fn get_new_root_info(&self, pos: Vec4) -> ([BranchInfo; MAX_DEPTH], PosInfo) {
         let mut branch_data = [BranchInfo::default(); MAX_DEPTH];
         branch_data[0] = BranchInfo {
             node: self.octant_data[0],
@@ -26,17 +26,24 @@ impl Octree {
             ..Default::default()
         };
 
+        let local_pos = Vec4::new(
+            pos.x % self.root_span,
+            pos.y % self.root_span,
+            pos.z % self.root_span,
+            0.0,
+        );
+
         let pos_info = PosInfo {
-            local_pos: (pos % self.root_span).extend(0.0),
-            pos_on_edge: (pos - (pos % self.root_span)).extend(0.0),
+            local_pos,
+            pos_on_edge: pos - local_pos,
 
             ..Default::default()
         };
-        
+
         (branch_data, pos_info)
     }
 
-    pub fn node_at_pos(&self, pos: Vector3<f32>) -> PosInfo {
+    pub fn node_at_pos(&self, pos: Vec4) -> PosInfo {
         let (mut branch_data, mut pos_info) = self.get_new_root_info(pos);
 
         for _ in 1..MAX_DEPTH {
@@ -57,7 +64,7 @@ impl Octree {
         pos_info
     }
 
-    pub fn insert_node(&mut self, insert_pos: Vector3<f32>) -> PosInfo {
+    pub fn insert_node(&mut self, insert_pos: Vec4) -> PosInfo {
         let (mut branch_data, mut pos_info) = self.get_new_root_info(insert_pos);
 
         for _ in 1..MAX_DEPTH {
@@ -111,7 +118,7 @@ impl Octree {
 
             (branch.index, branch.node) = branch.get_child(&self.octant_data, idx);
 
-            pos_info.local_pos += mask_to_vec!(idx).extend(0.0) * (branch.span / 2.0);
+            pos_info.pos_on_edge += mask_to_vec!(idx) * (branch.span / 2.0);
 
             if branch.node.is_subdiv() && pos_info.depth < max_depth {
                 branch_data[pos_info.depth_idx()] = branch;
@@ -128,13 +135,13 @@ impl Octree {
         // let fbm = Fbm::<Perlin>::new(0);
         // let mut rng = rand::thread_rng();
 
-        self.insert_node(Vector3::new(0.0, 0.0, 0.0));
+        self.insert_node(Vec4::ftv(0.0));
 
-        self.insert_node(Vector3::new(4.0, 4.0, 4.0));
+        self.insert_node(Vec4::ftv(2.0));
 
-        self.insert_node(Vector3::new(2.0, 2.0, 2.0));
+        self.insert_node(Vec4::ftv(4.0));
 
-        self.insert_node(Vector3::new(32.0, 32.0, 32.0));
+        self.insert_node(Vec4::ftv(32.0));
 
         for nude in self.octant_data.clone() {
             log::info!(

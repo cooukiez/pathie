@@ -211,6 +211,43 @@ impl ImageTarget {
         result
     }
 
+    pub fn depth_img(interface: &Interface, extent: vk::Extent3D) -> Self {
+        unsafe {
+            let mut result = Self::default();
+
+            let img_info = vk::ImageCreateInfo::builder()
+                .image_type(vk::ImageType::TYPE_2D)
+                .format(vk::Format::D16_UNORM)
+                .extent(extent)
+                .mip_levels(1)
+                .array_layers(1)
+                .samples(vk::SampleCountFlags::TYPE_1)
+                .tiling(vk::ImageTiling::OPTIMAL)
+                .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .build();
+
+            let view_info = vk::ImageViewCreateInfo::builder()
+                .subresource_range(
+                    vk::ImageSubresourceRange::builder()
+                        .aspect_mask(vk::ImageAspectFlags::DEPTH)
+                        .level_count(1)
+                        .layer_count(1)
+                        .build(),
+                )
+                .format(img_info.format)
+                .view_type(vk::ImageViewType::TYPE_2D)
+                .build();
+
+            result = result
+                .create_img(img_info, &interface.device)
+                .create_img_memory(&interface.device, &interface.phy_device)
+                .create_view(view_info, &interface.device);
+
+            result
+        }
+    }
+
     /// Destroy image and image view
 
     pub fn destroy(&self, device: &Device) {

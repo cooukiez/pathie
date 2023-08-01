@@ -1,12 +1,10 @@
-use cgmath::{Vector2, Vector3};
-use nalgebra_glm::{normalize, cross, Vec3};
+use nalgebra_glm::Vec2;
 use winit::{
     dpi::PhysicalPosition,
     event::{ElementState, VirtualKeyCode},
-    window::Fullscreen,
 };
 
-use crate::{interface::interface::Interface, uniform::{Uniform, self}, tree::octree::Octree, Pref};
+use crate::{interface::interface::Interface, uniform::Uniform, tree::octree::Octree, Pref};
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Action {
@@ -98,7 +96,7 @@ impl Input {
     }
 
     pub fn handle_mouse_input(&self, position: PhysicalPosition<f64>, uniform: &mut Uniform) {
-        let mouse_pos = Vector2::new(position.x as f32, position.y as f32);
+        let mouse_pos = Vec2::new(position.x as f32, position.y as f32);
         let mouse_delta = mouse_pos - uniform.res / 2.0;
 
         uniform.move_mouse(mouse_delta);

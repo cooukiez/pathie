@@ -10,11 +10,16 @@ use crate::{
     interface::interface::Interface,
     pipe::{
         descriptor::DescriptorPool,
-        pipe::{Pipe, Vertex},
+        pipe::{LocInfo, Pipe, Vertex},
     },
-    tree::{octree::{Octree, MAX_DEPTH}, trace::{BranchInfo, PosInfo}, octant::Octant},
+    tree::{
+        octant::Octant,
+        octree::{Octree, MAX_DEPTH},
+        trace::{BranchInfo, PosInfo},
+    },
     uniform::Uniform,
-    Pref, DEFAULT_STORAGE_BUFFER_SIZE, DEFAULT_UNIFORM_BUFFER_SIZE, vector::Vector,
+    vector::Vector,
+    Pref, DEFAULT_STORAGE_BUFFER_SIZE, DEFAULT_UNIFORM_BUFFER_SIZE,
 };
 
 use super::{buffer::BufferSet, image::ImageTarget};
@@ -22,6 +27,7 @@ use super::{buffer::BufferSet, image::ImageTarget};
 #[derive(Clone)]
 pub struct Engine {
     pub image_target_list: Vec<ImageTarget>,
+    pub depth_image: ImageTarget,
 
     pub index_data: Vec<u32>,
 
@@ -30,6 +36,7 @@ pub struct Engine {
 
     pub uniform_buffer: BufferSet,
     pub octree_buffer: BufferSet,
+    pub loc_info_buffer: BufferSet,
 
     pub pool_comp: DescriptorPool,
     pub pipe_comp: Pipe,
@@ -50,7 +57,9 @@ impl Engine {
             .map(|_| ImageTarget::attachment_img(interface, interface.surface.render_res))
             .collect();
 
-        let (vertex_data, index_data) = Pipe::get_octree_vert_data(octree);
+        result.depth_image = ImageTarget::depth_img(interface, interface.surface.render_res.into());
+
+        let (vertex_data, index_data, loc_info) = Pipe::get_octree_vert_data(octree);
 
         log::info!("Creating IndexBuffer ...");
         result.index_data = index_data;
@@ -111,6 +120,21 @@ impl Engine {
             align_of::<u32>() as u64,
             DEFAULT_STORAGE_BUFFER_SIZE,
             &octree.octant_data,
+        );
+
+        log::info!("Creating Location Info Buffer ...");
+        result.loc_info_buffer = BufferSet::new(
+            (mem::size_of::<LocInfo>() * loc_info.len()) as u64,
+            vk::BufferUsageFlags::UNIFORM_BUFFER,
+            vk::SharingMode::EXCLUSIVE,
+            &interface.device,
+        )
+        .create_memory(
+            &interface.device,
+            &interface.phy_device,
+            align_of::<LocInfo>() as u64,
+            (mem::size_of::<LocInfo>() * loc_info.len()) as u64,
+            &loc_info,
         );
 
         result
@@ -203,6 +227,13 @@ impl Engine {
                     1,
                     vk::ShaderStageFlags::FRAGMENT,
                     &interface.device,
+                )
+                // location info set
+                .create_descriptor_set_layout(
+                    vk::DescriptorType::UNIFORM_BUFFER,
+                    1,
+                    vk::ShaderStageFlags::FRAGMENT,
+                    &interface.device,
                 );
 
             result.pool_graphic = result
@@ -226,6 +257,15 @@ impl Engine {
                 1,
                 0,
                 vk::DescriptorType::STORAGE_BUFFER,
+                &interface.device,
+            );
+
+            result.pool_graphic.write_buffer_desc(
+                &self.loc_info_buffer,
+                vk::WHOLE_SIZE,
+                2,
+                0,
+                vk::DescriptorType::UNIFORM_BUFFER,
                 &interface.device,
             );
 
@@ -370,6 +410,19 @@ impl Engine {
 
                         let color_attachment_list = [color_attachment_info];
 
+                        let depth_attachment_info = vk::RenderingAttachmentInfo::builder()
+                            .image_view(self.depth_image.view)
+                            .load_op(vk::AttachmentLoadOp::CLEAR)
+                            .image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                            .resolve_image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                            .clear_value(vk::ClearValue {
+                                depth_stencil: vk::ClearDepthStencilValue {
+                                    depth: 1.0,
+                                    stencil: 0,
+                                },
+                            })
+                            .build();
+
                         let rendering_info = vk::RenderingInfoKHR::builder()
                             .render_area(vk::Rect2D {
                                 offset: vk::Offset2D { x: 0, y: 0 },
@@ -377,6 +430,7 @@ impl Engine {
                             })
                             .layer_count(1)
                             .color_attachments(&color_attachment_list)
+                            .depth_attachment(&depth_attachment_info)
                             .build();
 
                         // Dispatch Compute Pipe
@@ -482,6 +536,8 @@ impl Engine {
             target.destroy(&interface.device);
         });
 
+        self.depth_image.destroy(&interface.device);
+
         interface.swapchain.destroy(&interface.device);
 
         interface.surface =
@@ -503,6 +559,8 @@ impl Engine {
             .map(|_| ImageTarget::attachment_img(interface, interface.surface.render_res))
             .collect();
 
+        self.depth_image = ImageTarget::depth_img(interface, interface.surface.render_res.into());
+
         self.pipe_graphic.viewport = vec![vk::Viewport {
             width: interface.surface.render_res.width as f32,
             height: interface.surface.render_res.height as f32,
@@ -519,11 +577,13 @@ impl Default for Engine {
     fn default() -> Self {
         Self {
             image_target_list: Default::default(),
+            depth_image: Default::default(),
             index_data: Default::default(),
             index_buffer: Default::default(),
             vertex_buffer: Default::default(),
             uniform_buffer: Default::default(),
             octree_buffer: Default::default(),
+            loc_info_buffer: Default::default(),
             pool_comp: Default::default(),
             pipe_comp: Default::default(),
             vk_pipe_comp: Default::default(),

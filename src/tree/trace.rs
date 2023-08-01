@@ -1,4 +1,4 @@
-use cgmath::{Vector3, Vector4};
+use nalgebra_glm::Vec4;
 
 use crate::{mask_to_vec, read_bitrange, vec_to_mask, vector::Vector};
 
@@ -7,8 +7,8 @@ use super::{octant::Octant, octree::MAX_DEPTH};
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Ray {
-    pub origin: Vector3<f32>,
-    pub dir: Vector3<f32>,
+    pub origin: Vec4,
+    pub dir: Vec4,
 }
 
 #[repr(C)]
@@ -30,8 +30,8 @@ pub struct BranchInfo {
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct PosInfo {
-    pub local_pos: Vector4<f32>,   // Origin in CurNode
-    pub pos_on_edge: Vector4<f32>, // Origin on first edge of CurNode
+    pub local_pos: Vec4,   // Origin in CurNode
+    pub pos_on_edge: Vec4, // Origin on first edge of CurNode
 
     pub depth: u32,
 
@@ -65,7 +65,6 @@ impl BranchInfo {
 
     pub fn get_child(&self, octant_data: &Vec<u32>, child_mask: u32) -> (u32, u32) {
         let child_idx = self.parent_child_offset() + child_mask;
-        log::info!("ci {}", child_idx);
         (child_idx, octant_data[child_idx as usize])
     }
 
@@ -137,17 +136,14 @@ impl PosInfo {
     pub fn move_up(&mut self, branch_data: &[BranchInfo; MAX_DEPTH]) {
         let branch = branch_data[self.depth_idx()].clone();
 
-        let mask_vec = mask_to_vec!(branch.mask_info).extend(0.0);
+        let mask_vec = mask_to_vec!(branch.mask_info);
         self.pos_on_edge -= mask_vec * branch.span;
         self.local_pos += mask_vec * branch.span;
 
         self.depth -= 1;
     }
 
-    pub fn update_branch_to_child(
-        &mut self,
-        branch_data: &mut [BranchInfo; MAX_DEPTH],
-    ) {
+    pub fn update_branch_to_child(&mut self, branch_data: &mut [BranchInfo; MAX_DEPTH]) {
         let old_branch = branch_data[self.depth_idx()].clone();
 
         self.depth += 1;
@@ -171,11 +167,10 @@ impl PosInfo {
         let mut branch = self.branch(branch_data);
 
         // Get which child node to choose
-        branch.mask_info =
-            vec_to_mask!(self.local_pos.truncate() - Vector3::from([branch.span; 3]));
+        branch.mask_info = vec_to_mask!(self.local_pos - Vec4::ftv(branch.span));
 
-        self.pos_on_edge += mask_to_vec!(branch.mask_info).extend(0.0) * branch.span;
-        self.local_pos -= mask_to_vec!(branch.mask_info).extend(0.0) * branch.span;
+        self.pos_on_edge += mask_to_vec!(branch.mask_info) * branch.span;
+        self.local_pos -= mask_to_vec!(branch.mask_info) * branch.span;
 
         branch = select_idx(&branch);
         branch_data[self.depth_idx()] = branch;
@@ -185,8 +180,8 @@ impl PosInfo {
 impl Default for Ray {
     fn default() -> Self {
         Self {
-            origin: Vector3::default(),
-            dir: Vector3::default(),
+            origin: Default::default(),
+            dir: Default::default(),
         }
     }
 }
@@ -194,17 +189,13 @@ impl Default for Ray {
 impl Default for BranchInfo {
     fn default() -> Self {
         Self {
-            node: 0,
-            parent: 0,
-
-            index: 0,
-            parent_index: 0,
-
-            span: 0.0,
-
-            mask_info: 0,
-
-            padding: [0; 2],
+            node: Default::default(),
+            parent: Default::default(),
+            index: Default::default(),
+            parent_index: Default::default(),
+            span: Default::default(),
+            mask_info: Default::default(),
+            padding: Default::default(),
         }
     }
 }
@@ -212,12 +203,10 @@ impl Default for BranchInfo {
 impl Default for PosInfo {
     fn default() -> Self {
         Self {
-            local_pos: Vector4::default(),
-            pos_on_edge: Vector4::default(),
-
-            depth: 0,
-
-            padding: [0; 3],
+            local_pos: Default::default(),
+            pos_on_edge: Default::default(),
+            depth: Default::default(),
+            padding: Default::default(),
         }
     }
 }

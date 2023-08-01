@@ -1,14 +1,17 @@
 use std::{ffi::CString, io::Cursor, mem};
 
 use ash::{util::read_spv, vk, Device};
-use cgmath::Vector3;
+use nalgebra_glm::{Vec3, Vec4};
 
 use crate::{
-    ftv3,
     interface::surface::SurfaceGroup,
     offset_of,
     pipe::obj::{BASE_CUBE_IDX, BASE_CUBE_UV, BASE_CUBE_VERT},
-    tree::{octant::Octant, octree::Octree},
+    tree::{
+        octant::Octant,
+        octree::Octree,
+        trace::{BranchInfo, PosInfo},
+    },
     vector::Vector,
     Pref,
 };
@@ -19,6 +22,23 @@ use super::{descriptor::DescriptorPool, image::ImageTarget};
 pub struct Vertex {
     pub pos: [f32; 4],
     pub uv: [f32; 2],
+    pub loc_idx: u32,
+}
+
+#[derive(Clone, Debug, Copy)]
+pub struct LocInfo {
+    pub pos_on_edge: Vec4,
+
+    pub node: u32,
+    pub parent: u32,
+
+    pub index: u32,
+    pub parent_index: u32,
+
+    pub span: f32,
+    pub depth: u32,
+
+    padding: [u32; 2],
 }
 
 #[derive(Clone)]
@@ -95,11 +115,12 @@ impl Pipe {
         }
     }
 
-    pub fn get_octree_vert_data(octree: &Octree) -> (Vec<Vertex>, Vec<u32>) {
+    pub fn get_octree_vert_data(octree: &Octree) -> (Vec<Vertex>, Vec<u32>, Vec<LocInfo>) {
         let mut vertex_data = vec![];
         let mut index_data = vec![];
+        let mut loc_data = vec![];
 
-        let (branch_data, pos_info) = octree.get_new_root_info(Vector3::default());
+        let (branch_data, pos_info) = octree.get_new_root_info(Vec4::default());
         let mut leaf_data = vec![];
         octree.collect_branch(&branch_data, &pos_info, &mut leaf_data, 6);
 
@@ -109,7 +130,7 @@ impl Pipe {
             .iter()
             .enumerate()
             .for_each(|(leaf_idx, (pos_info, branch_info))| {
-                let center = pos_info.local_pos.truncate() * 2.0 + ftv3!(branch_info.span / 2.0);
+                let center = pos_info.pos_on_edge.xyz() * 2.0 + Vec3::ftv(branch_info.span / 2.0);
 
                 BASE_CUBE_VERT
                     .iter()
@@ -126,15 +147,28 @@ impl Pipe {
                                 BASE_CUBE_UV[vert_idx].0 as f32,
                                 BASE_CUBE_UV[vert_idx].1 as f32,
                             ],
-                        })
+                            loc_idx: loc_data.len() as u32,
+                        });
                     });
 
                 BASE_CUBE_IDX
                     .iter()
-                    .for_each(|idx| index_data.push((idx + (leaf_idx as i32) * 24) as u32))
+                    .for_each(|idx| index_data.push((idx + (leaf_idx as i32) * 24) as u32));
+
+                loc_data.push(LocInfo {
+                    pos_on_edge: pos_info.pos_on_edge,
+                    node: branch_info.node,
+                    parent: branch_info.parent,
+                    index: branch_info.index,
+                    parent_index: branch_info.parent_index,
+                    span: branch_info.span,
+                    depth: pos_info.depth,
+
+                    ..Default::default()
+                });
             });
 
-        (vertex_data, index_data)
+        (vertex_data, index_data, loc_data)
     }
 
     pub fn create_graphic_pipe(
@@ -245,7 +279,7 @@ impl Pipe {
                 .build();
 
             log::info!("Creating color blending state ...");
-            let blend_attachment_list = [vk::PipelineColorBlendAttachmentState {
+            let color_attachment_list = [vk::PipelineColorBlendAttachmentState {
                 blend_enable: 0,
 
                 src_color_blend_factor: vk::BlendFactor::SRC_COLOR,
@@ -259,9 +293,25 @@ impl Pipe {
                 color_write_mask: vk::ColorComponentFlags::RGBA,
             }];
 
-            let blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
+            let color_state = vk::PipelineColorBlendStateCreateInfo::builder()
                 .logic_op(vk::LogicOp::CLEAR)
-                .attachments(&blend_attachment_list)
+                .attachments(&color_attachment_list)
+                .build();
+
+            let noop_state = vk::StencilOpState::builder()
+                .fail_op(vk::StencilOp::KEEP)
+                .pass_op(vk::StencilOp::KEEP)
+                .depth_fail_op(vk::StencilOp::KEEP)
+                .compare_op(vk::CompareOp::ALWAYS)
+                .build();
+
+            let depth_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                .depth_test_enable(true)
+                .depth_write_enable(true)
+                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                .front(noop_state)
+                .back(noop_state)
+                .max_depth_bounds(1.0)
                 .build();
 
             log::info!("Creating DynamicState ...");
@@ -271,9 +321,9 @@ impl Pipe {
                 .build();
 
             log::info!("Creating pipeline rendering ...");
-            let format_list = [surface.format.format];
             let mut rendering = vk::PipelineRenderingCreateInfoKHR::builder()
-                .color_attachment_formats(&format_list)
+                .color_attachment_formats(&[surface.format.format])
+                .depth_attachment_format(vk::Format::D16_UNORM)
                 .build();
 
             let graphic_pipe_info = vk::GraphicsPipelineCreateInfo::builder()
@@ -283,7 +333,8 @@ impl Pipe {
                 .viewport_state(&viewport_state)
                 .rasterization_state(&raster_state)
                 .multisample_state(&multisample_state)
-                .color_blend_state(&blend_state)
+                .color_blend_state(&color_state)
+                .depth_stencil_state(&depth_state)
                 .dynamic_state(&dynamic_state)
                 .layout(result.pipe_layout)
                 .push_next(&mut rendering)
@@ -510,6 +561,21 @@ impl Default for Shader {
             code: Default::default(),
             module: Default::default(),
             stage_info: Default::default(),
+        }
+    }
+}
+
+impl Default for LocInfo {
+    fn default() -> Self {
+        Self {
+            pos_on_edge: Default::default(),
+            node: Default::default(),
+            parent: Default::default(),
+            index: Default::default(),
+            parent_index: Default::default(),
+            span: Default::default(),
+            depth: Default::default(),
+            padding: Default::default(),
         }
     }
 }

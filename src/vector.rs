@@ -1,5 +1,3 @@
-use cgmath::{Vector2, Vector3, Vector4};
-
 /*
 
 pub type TwoDeeVec<Type> = Vec<Vec<Type>>;
@@ -15,32 +13,7 @@ pub fn vec_three_dee<Type: std::clone::Clone>(side_len: usize, content: Type) ->
 
 */
 
-/// convert float to vec two
-
-#[macro_export]
-macro_rules! ftv2 {
-    ($num : expr) => {
-        Vector2::from([$num; 2])
-    };
-}
-
-/// convert float to vec three
-
-#[macro_export]
-macro_rules! ftv3 {
-    ($num : expr) => {
-        Vector3::from([$num; 3])
-    };
-}
-
-/// convert float to vec four
-
-#[macro_export]
-macro_rules! ftv4 {
-    ($num : expr) => {
-        Vector4::from([$num; 4])
-    };
-}
+use nalgebra_glm::{Vec2, Vec3, Vec4};
 
 pub trait Num {
     // Move Number back into boundary
@@ -69,142 +42,114 @@ pub trait Vector {
     // Move Vector back into boundary
     fn boundary(&self, min: Self, max: Self) -> Self;
 
-    fn default() -> Self;
-
     fn any(&self, condition: fn(f32) -> bool) -> bool;
+
+    // convert float to vec
+    fn ftv(num: f32) -> Self;
 }
 
-impl Vector for Vector4<f32> {
+impl Vector for Vec4 {
     fn step(&self, edge: Self) -> Self {
-        Self {
-            x: (edge.x < self.x).into(),
-            y: (edge.y < self.y).into(),
-            z: (edge.z < self.z).into(),
-            w: (edge.w < self.w).into(),
-        }
+        Self::new(
+            (edge.x < self.x).into(),
+            (edge.y < self.y).into(),
+            (edge.z < self.z).into(),
+            (edge.w < self.w).into(),
+        )
     }
 
     fn floor(&self) -> Self {
-        Self {
-            x: self.x.floor(),
-            y: self.y.floor(),
-            z: self.z.floor(),
-            w: self.w.floor(),
-        }
+        Self::new(
+            self.x.floor(),
+            self.y.floor(),
+            self.z.floor(),
+            self.w.floor(),
+        )
     }
 
     fn sign(&self) -> Self {
-        Self {
-            x: self.x.signum(),
-            y: self.y.signum(),
-            z: self.z.signum(),
-            w: self.w.signum(),
-        }
+        Self::new(
+            self.x.signum(),
+            self.y.signum(),
+            self.z.signum(),
+            self.w.signum(),
+        )
     }
 
     fn boundary(&self, min: Self, max: Self) -> Self {
-        Self {
-            x: self.x.boundary(min.x, max.x),
-            y: self.y.boundary(min.y, max.y),
-            z: self.z.boundary(min.z, max.z),
-            w: self.w.boundary(min.w, max.w),
-        }
-    }
-
-    fn default() -> Self {
-        Self {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-            w: 0.0,
-        }
+        Self::new(
+            self.x.boundary(min.x, max.x),
+            self.y.boundary(min.y, max.y),
+            self.z.boundary(min.z, max.z),
+            self.w.boundary(min.w, max.w),
+        )
     }
 
     fn any(&self, condition: fn(f32) -> bool) -> bool {
         condition(self.x) || condition(self.y) || condition(self.z) || condition(self.w)
     }
+
+    fn ftv(num: f32) -> Self {
+        Self::new(num, num, num, num)
+    }
 }
 
-impl Vector for Vector3<f32> {
+impl Vector for Vec3 {
     fn step(&self, edge: Self) -> Self {
-        Self {
-            x: (edge.x < self.x).into(),
-            y: (edge.y < self.y).into(),
-            z: (edge.z < self.z).into(),
-        }
+        Self::new(
+            (edge.x < self.x).into(),
+            (edge.y < self.y).into(),
+            (edge.z < self.z).into(),
+        )
     }
 
     fn floor(&self) -> Self {
-        Self {
-            x: self.x.floor(),
-            y: self.y.floor(),
-            z: self.z.floor(),
-        }
+        Self::new(self.x.floor(), self.y.floor(), self.z.floor())
     }
 
     fn sign(&self) -> Self {
-        Self {
-            x: self.x.signum(),
-            y: self.y.signum(),
-            z: self.z.signum(),
-        }
+        Self::new(self.x.signum(), self.y.signum(), self.z.signum())
     }
 
     fn boundary(&self, min: Self, max: Self) -> Self {
-        Self {
-            x: self.x.boundary(min.x, max.x),
-            y: self.y.boundary(min.y, max.y),
-            z: self.z.boundary(min.z, max.z),
-        }
-    }
-
-    fn default() -> Self {
-        Self {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-        }
+        Self::new(
+            self.x.boundary(min.x, max.x),
+            self.y.boundary(min.y, max.y),
+            self.z.boundary(min.z, max.z),
+        )
     }
 
     fn any(&self, condition: fn(f32) -> bool) -> bool {
         condition(self.x) || condition(self.y) || condition(self.z)
     }
+
+    fn ftv(num: f32) -> Self {
+        Self::new(num, num, num)
+    }
 }
 
-impl Vector for Vector2<f32> {
+impl Vector for Vec2 {
     fn step(&self, edge: Self) -> Self {
-        Self {
-            x: (edge.x < self.x).into(),
-            y: (edge.y < self.y).into(),
-        }
+        Self::new((edge.x < self.x).into(), (edge.y < self.y).into())
     }
 
     fn floor(&self) -> Self {
-        Self {
-            x: self.x.floor(),
-            y: self.y.floor(),
-        }
+        Self::new(self.x.floor(), self.y.floor())
     }
 
     fn sign(&self) -> Self {
-        Self {
-            x: self.x.signum(),
-            y: self.y.signum(),
-        }
+        Self::new(self.x.signum(), self.y.signum())
     }
 
     fn boundary(&self, min: Self, max: Self) -> Self {
-        Self {
-            x: self.x.boundary(min.x, max.x),
-            y: self.y.boundary(min.y, max.y),
-        }
-    }
-
-    fn default() -> Self {
-        Self { x: 0.0, y: 0.0 }
+        Self::new(self.x.boundary(min.x, max.x), self.y.boundary(min.y, max.y))
     }
 
     fn any(&self, condition: fn(f32) -> bool) -> bool {
         condition(self.x) || condition(self.y)
+    }
+
+    fn ftv(num: f32) -> Self {
+        Self::new(num, num)
     }
 }

@@ -183,7 +183,7 @@ impl Interface {
 
             let device_ext_list = [
                 Swapchain::name().as_ptr(),
-                DynamicRendering::name().as_ptr(),
+                // DynamicRendering::name().as_ptr(),
                 #[cfg(any(target_os = "macos", target_os = "ios",))]
                 KhrPortabilitySubsetFn::name().as_ptr(),
             ];
