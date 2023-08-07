@@ -59,12 +59,12 @@ impl BranchInfo {
         read_bitrange!(self.parent, 16, 23)
     }
 
-    pub fn parent_child_offset(&self) -> u32 {
+    pub fn first_child_idx(&self) -> u32 {
         read_bitrange!(self.parent, 0, 15)
     }
 
     pub fn get_child(&self, octant_data: &Vec<u32>, child_mask: u32) -> (u32, u32) {
-        let child_idx = self.parent_child_offset() + child_mask;
+        let child_idx = self.first_child_idx() + child_mask;
         (child_idx, octant_data[child_idx as usize])
     }
 

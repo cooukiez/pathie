@@ -9,8 +9,7 @@ use crate::{
     pipe::obj::{BASE_CUBE_IDX, BASE_CUBE_UV, BASE_CUBE_VERT},
     tree::{
         octant::Octant,
-        octree::Octree,
-        trace::{BranchInfo, PosInfo},
+        octree::{Octree, MAX_DEPTH_LIMIT},
     },
     vector::Vector,
     Pref,
@@ -23,22 +22,15 @@ pub struct Vertex {
     pub pos: [f32; 4],
     pub uv: [f32; 2],
     pub loc_idx: u32,
+    pub span: f32,
 }
 
 #[derive(Clone, Debug, Copy)]
 pub struct LocInfo {
-    pub pos_on_edge: Vec4,
-
-    pub node: u32,
-    pub parent: u32,
-
-    pub index: u32,
-    pub parent_index: u32,
-
-    pub span: f32,
+    pub parent_list: [u32; MAX_DEPTH_LIMIT],
     pub depth: u32,
 
-    padding: [u32; 2],
+    padding: [u32; 3],
 }
 
 #[derive(Clone)]
@@ -124,12 +116,13 @@ impl Pipe {
         let mut leaf_data = vec![];
         octree.collect_branch(&branch_data, &pos_info, &mut leaf_data, 6);
 
-        log::info!("{:#034b}", leaf_data[0].1.node.get_child_bitmask());
+        // log::info!("{:#034b}", leaf_data[0].1.node.get_child_bitmask());
 
         leaf_data
             .iter()
             .enumerate()
-            .for_each(|(leaf_idx, (pos_info, branch_info))| {
+            .for_each(|(leaf_idx, (pos_info, loc_branch_data))| {
+                let branch_info = loc_branch_data[pos_info.depth_idx()];
                 let center = pos_info.pos_on_edge.xyz() * 2.0 + Vec3::ftv(branch_info.span / 2.0);
 
                 BASE_CUBE_VERT
@@ -148,6 +141,7 @@ impl Pipe {
                                 BASE_CUBE_UV[vert_idx].1 as f32,
                             ],
                             loc_idx: loc_data.len() as u32,
+                            span: branch_info.span,
                         });
                     });
 
@@ -155,13 +149,14 @@ impl Pipe {
                     .iter()
                     .for_each(|idx| index_data.push((idx + (leaf_idx as i32) * 24) as u32));
 
+                let mut parent_list = [0; MAX_DEPTH_LIMIT];
+                branch_data
+                    .iter()
+                    .enumerate()
+                    .for_each(|(idx, branch_info)| parent_list[idx] = branch_info.node);
+
                 loc_data.push(LocInfo {
-                    pos_on_edge: pos_info.pos_on_edge,
-                    node: branch_info.node,
-                    parent: branch_info.parent,
-                    index: branch_info.index,
-                    parent_index: branch_info.parent_index,
-                    span: branch_info.span,
+                    parent_list,
                     depth: pos_info.depth,
 
                     ..Default::default()
@@ -568,12 +563,7 @@ impl Default for Shader {
 impl Default for LocInfo {
     fn default() -> Self {
         Self {
-            pos_on_edge: Default::default(),
-            node: Default::default(),
-            parent: Default::default(),
-            index: Default::default(),
-            parent_index: Default::default(),
-            span: Default::default(),
+            parent_list: Default::default(),
             depth: Default::default(),
             padding: Default::default(),
         }

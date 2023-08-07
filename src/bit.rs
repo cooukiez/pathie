@@ -114,4 +114,4 @@ macro_rules! vec_to_mask {
 
         (x_bit << 0) | (z_bit << 1) | (y_bit << 2) 
     }};
-}
+}   

@@ -8,6 +8,7 @@ use super::{
 };
 
 pub const MAX_DEPTH: usize = 6;
+pub const MAX_DEPTH_LIMIT: usize = 16;
 
 pub struct Octree {
     // RootIndex = 0
@@ -77,7 +78,7 @@ impl Octree {
                         // Set Nodetype to be subdivide
                         .set_subdiv(true)
                         // Set child offset, offset is index of first child
-                        .set_child_offset(self.octant_data.len() as u32);
+                        .set_first_child_idx(self.octant_data.len() as u32);
 
                     // Add new child to octant data
                     for _ in 0..8 {
@@ -105,7 +106,7 @@ impl Octree {
         &self,
         branch_data: &[BranchInfo; MAX_DEPTH],
         pos_info: &PosInfo,
-        leaf_data: &mut Vec<(PosInfo, BranchInfo)>,
+        leaf_data: &mut Vec<(PosInfo, [BranchInfo; MAX_DEPTH])>,
         max_depth: u32,
     ) -> [BranchInfo; MAX_DEPTH] {
         let mut branch_data = branch_data.clone();
@@ -124,7 +125,7 @@ impl Octree {
                 branch_data[pos_info.depth_idx()] = branch;
                 branch_data = self.collect_branch(&branch_data, &pos_info, leaf_data, max_depth);
             } else if branch.node.is_leaf() || branch.node.is_subdiv() {
-                leaf_data.push((pos_info, branch));
+                leaf_data.push((pos_info, branch_data.clone()));
             }
         }
 
@@ -149,7 +150,7 @@ impl Octree {
                 nude.is_leaf(),
                 nude.is_subdiv(),
                 nude.get_child_bitmask(),
-                nude.get_child_offset()
+                nude.get_first_child_idx()
             );
         }
     }
