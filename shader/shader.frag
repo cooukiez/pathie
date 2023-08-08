@@ -10,10 +10,7 @@
 layout (location = 0) in vec4 screen_pos;
 layout (location = 1) in vec2 out_uv;
 layout (location = 2) in vec4 world_pos; // pos_on_edge + local_pos
-layout (location = 3) in vec4 local_pos;
-layout (location = 4) flat in vec4 pos_on_edge;
-layout (location = 5) flat in uint loc_idx;
-layout (location = 6) flat in float span;
+layout (location = 3) flat in uint loc_idx;
 
 layout (location = 0) out vec4 frag_color;
 
@@ -50,8 +47,9 @@ struct LocInfo {
     // For proper alignment set depth to 16
     uint parent_list[16];
     uint depth;
+    float span;
 
-    uint padding[3];
+    uint padding[2];
 };
 
 layout (set = 0, binding = 0) uniform Uniform {
@@ -89,16 +87,18 @@ vec4 rayCubeIntersect(vec4 origin, vec4 dir, vec4 inv_ray_dir, float span) {
 }
 
 void main() {
-    frag_color = world_pos;
-
     vec4 ray_dir = vec4(normalize(world_pos.xyz - uniform_buffer.pos.xyz), 0);
     // vec4 local_pos = world_pos % loc_info[loc_idx].span;
 
-    float span = span;
+    float span = loc_info[loc_idx].span;
     uint depth = loc_info[loc_idx].depth;
 
-    vec4 local_pos = local_pos;
-    vec4 pos_on_edge = pos_on_edge;
+    span = 8.0;
+    depth = 3;
+
+    vec4 local_pos = mod(world_pos, span);
+    frag_color = local_pos;
+    vec4 pos_on_edge = world_pos - local_pos;
 
     PosInfo pos_info = PosInfo(
         local_pos,
@@ -164,7 +164,7 @@ void main() {
         }
     }
 
-    frag_color *= test;
+    //frag_color *= test;
 
     // necessary
     // hitlist = 4 * 4by

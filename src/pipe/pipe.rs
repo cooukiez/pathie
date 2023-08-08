@@ -20,6 +20,7 @@ use super::{descriptor::DescriptorPool, image::ImageTarget};
 #[derive(Clone, Debug, Copy)]
 pub struct Vertex {
     pub pos: [f32; 4],
+    pub pos_on_edge: [f32; 4],
     pub uv: [f32; 2],
     pub loc_idx: u32,
     pub span: f32,
@@ -29,8 +30,9 @@ pub struct Vertex {
 pub struct LocInfo {
     pub parent_list: [u32; MAX_DEPTH_LIMIT],
     pub depth: u32,
+    pub span: f32,
 
-    padding: [u32; 3],
+    padding: [u32; 2],
 }
 
 #[derive(Clone)]
@@ -114,7 +116,7 @@ impl Pipe {
 
         let (branch_data, pos_info) = octree.get_new_root_info(Vec4::default());
         let mut leaf_data = vec![];
-        octree.collect_branch(&branch_data, &pos_info, &mut leaf_data, 6);
+        octree.collect_branch(&branch_data, &pos_info, &mut leaf_data, 3);
 
         // log::info!("{:#034b}", leaf_data[0].1.node.get_child_bitmask());
 
@@ -136,6 +138,7 @@ impl Pipe {
                                 coord.2 * branch_info.span + center.z,
                                 1.0,
                             ],
+                            pos_on_edge: pos_info.pos_on_edge.into(),
                             uv: [
                                 BASE_CUBE_UV[vert_idx].0 as f32,
                                 BASE_CUBE_UV[vert_idx].1 as f32,
@@ -158,6 +161,7 @@ impl Pipe {
                 loc_data.push(LocInfo {
                     parent_list,
                     depth: pos_info.depth,
+                    span: branch_info.span,
 
                     ..Default::default()
                 });
@@ -565,6 +569,7 @@ impl Default for LocInfo {
         Self {
             parent_list: Default::default(),
             depth: Default::default(),
+            span: Default::default(),
             padding: Default::default(),
         }
     }
