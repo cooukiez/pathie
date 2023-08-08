@@ -3,3 +3,4 @@
 debug/
 target/
 Cargo.lock
+shader/glslang-master-windows-x64-Release/
