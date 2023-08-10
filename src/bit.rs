@@ -15,7 +15,7 @@ macro_rules! bitclear {
         // Shift 1 to right pos
         // Invert all and then do 'and' operator
         // 'and' is zero when both are not 1
-        // therefore if you have only 1 => 
+        // therefore if you have only 1 =>
         // number will not be changed
 
         $num & !(1 << $bit)
@@ -62,7 +62,7 @@ macro_rules! create_mask {
         // Create mask of the range
         // For Example
         // mask = 0000 0000 1111 1111 0000 0000 0000 0000
-        
+
         let len = $e - $s;
         (!0u32 >> (32 - len)) << $s
     }};
@@ -74,7 +74,7 @@ macro_rules! read_bitrange {
         // Compare num to mask, at each 0 in the mask the
         // value will be 0 because of 'and' operator
         // At each 1 the value will be equal to the value in num
-        
+
         ($num & crate::create_mask!($s, $e + 1)) >> $s
     }};
 }
@@ -98,8 +98,8 @@ macro_rules! mask_to_vec {
     ($mask : expr) => {{
         nalgebra_glm::Vec4::new(
             (($mask >> 0) & 1) as f32,
-            (($mask >> 2) & 1) as f32,
             (($mask >> 1) & 1) as f32,
+            (($mask >> 2) & 1) as f32,
             0.0,
         )
     }};
@@ -112,6 +112,6 @@ macro_rules! vec_to_mask {
         let y_bit = if $input_vec.y > 0.0 { 1 } else { 0 };
         let z_bit = if $input_vec.z > 0.0 { 1 } else { 0 };
 
-        (x_bit << 0) | (z_bit << 1) | (y_bit << 2) 
+        (x_bit << 0) | (y_bit << 1) | (z_bit << 2)
     }};
-}   
+}

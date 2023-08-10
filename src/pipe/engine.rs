@@ -1,6 +1,7 @@
 use std::{
     error::Error,
     mem::{self, align_of},
+    path::Path,
 };
 
 use ash::vk;
@@ -28,6 +29,9 @@ use super::{buffer::BufferSet, image::ImageTarget};
 pub struct Engine {
     pub image_target_list: Vec<ImageTarget>,
     pub depth_image: ImageTarget,
+    pub img_buffer: image::ImageBuffer<image::Rgb<u8>, Vec<u8>>,
+    pub vk_img_buffer: BufferSet,
+    pub brick_texture: ImageTarget,
 
     pub index_data: Vec<u32>,
 
@@ -59,7 +63,43 @@ impl Engine {
 
         result.depth_image = ImageTarget::depth_img(interface, interface.surface.render_res.into());
 
-        let (vertex_data, index_data, loc_info) = Pipe::get_octree_vert_data(octree);
+        result.brick_texture = ImageTarget::storage_texture(
+            interface,
+            vk::Format::R8G8B8A8_UNORM,
+            vk::Extent3D {
+                width: 4096,
+                height: 4096,
+                depth: 8,
+            },
+            vk::ImageType::TYPE_3D,
+            vk::ImageViewType::TYPE_3D,
+            1,
+        );
+
+        result.img_buffer = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::new(4096, 4096);
+        //image.put_pixel(0, 0, image::Rgb([0, 0, 0]));
+
+        let (vertex_data, index_data, loc_info) =
+            Pipe::get_octree_vert_data(octree, &mut result.img_buffer);
+
+        let img_data = result.img_buffer.clone().into_raw();
+
+        result.img_buffer.save("out.png").unwrap();
+
+        log::info!("Creating ImageBuffer ...");
+        result.vk_img_buffer = BufferSet::new(
+            (std::mem::size_of::<u8>() * img_data.len()) as u64,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            vk::SharingMode::EXCLUSIVE,
+            &interface.device,
+        )
+        .create_memory(
+            &interface.device,
+            &interface.phy_device,
+            align_of::<u8>() as u64,
+            (std::mem::size_of::<u8>() * img_data.len()) as u64,
+            &img_data,
+        );
 
         log::info!("Creating IndexBuffer ...");
         result.index_data = index_data;
@@ -273,6 +313,82 @@ impl Engine {
                 &interface.device,
                 &interface.surface,
                 &result.pool_graphic,
+            );
+
+            result.pipe_graphic.record_submit_cmd(
+                &interface.device,
+                interface.draw_cmd_fence,
+                interface.draw_cmd_buffer,
+                interface.present_complete,
+                interface.render_complete,
+                interface.present_queue,
+                |cmd_buffer| {
+                    let texture_barrier = vk::ImageMemoryBarrier {
+                        dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                        new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        image: result.brick_texture.img,
+                        subresource_range: vk::ImageSubresourceRange {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            level_count: 1,
+                            layer_count: 1,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    };
+                    interface.device.cmd_pipeline_barrier(
+                        cmd_buffer,
+                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                        vk::PipelineStageFlags::TRANSFER,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[texture_barrier],
+                    );
+                    let buffer_copy = vk::BufferImageCopy::builder()
+                        .image_subresource(
+                            vk::ImageSubresourceLayers::builder()
+                                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                .layer_count(1)
+                                .build(),
+                        )
+                        .image_extent(vk::Extent3D {
+                            width: 4096,
+                            height: 4096,
+                            depth: 1,
+                        })
+                        .build();
+
+                    interface.device.cmd_copy_buffer_to_image(
+                        cmd_buffer,
+                        result.vk_img_buffer.buffer,
+                        result.brick_texture.img,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[buffer_copy],
+                    );
+                    let texture_barrier_end = vk::ImageMemoryBarrier {
+                        src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                        dst_access_mask: vk::AccessFlags::SHADER_READ,
+                        old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                        image: result.brick_texture.img,
+                        subresource_range: vk::ImageSubresourceRange {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            level_count: 1,
+                            layer_count: 1,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    };
+                    interface.device.cmd_pipeline_barrier(
+                        cmd_buffer,
+                        vk::PipelineStageFlags::TRANSFER,
+                        vk::PipelineStageFlags::FRAGMENT_SHADER,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[texture_barrier_end],
+                    );
+                },
             );
 
             result
@@ -578,6 +694,9 @@ impl Default for Engine {
         Self {
             image_target_list: Default::default(),
             depth_image: Default::default(),
+            img_buffer: Default::default(),
+            vk_img_buffer: Default::default(),
+            brick_texture: Default::default(),
             index_data: Default::default(),
             index_buffer: Default::default(),
             vertex_buffer: Default::default(),

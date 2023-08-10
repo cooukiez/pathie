@@ -1,4 +1,4 @@
-use nalgebra_glm::Vec4;
+use nalgebra_glm::{Vec2, Vec3, Vec4};
 
 use crate::{mask_to_vec, vector::Vector};
 
@@ -121,11 +121,55 @@ impl Octree {
 
             pos_info.pos_on_edge += mask_to_vec!(idx) * (branch.span / 2.0);
 
-            if branch.node.is_subdiv() && pos_info.depth < max_depth {
+            if branch.node.is_subdiv() && pos_info.depth < max_depth - 1 {
                 branch_data[pos_info.depth_idx()] = branch;
                 branch_data = self.collect_branch(&branch_data, &pos_info, leaf_data, max_depth);
             } else if branch.node.is_leaf() || branch.node.is_subdiv() {
                 leaf_data.push((pos_info, branch_data.clone()));
+            }
+        }
+
+        branch_data
+    }
+
+    pub fn write_branch_to_texture(
+        &self,
+        branch_data: &[BranchInfo; MAX_DEPTH],
+        pos_info: &PosInfo,
+        img: &mut image::ImageBuffer<image::Rgb<u8>, Vec<u8>>,
+        base_px: Vec2,
+        base_pos: Vec4,
+        base_span: f32,
+        max_depth: u32,
+    ) -> [BranchInfo; MAX_DEPTH] {
+        let mut branch_data = branch_data.clone();
+
+        for idx in 0..8 {
+            let mut pos_info = pos_info.clone();
+
+            pos_info.update_branch_to_child(&mut branch_data);
+            let mut branch = pos_info.branch(&branch_data);
+
+            (branch.index, branch.node) = branch.get_child(&self.octant_data, idx);
+
+            pos_info.pos_on_edge += mask_to_vec!(idx) * (branch.span / 2.0);
+
+            if branch.node.is_subdiv() && pos_info.depth < max_depth - 1 {
+                branch_data[pos_info.depth_idx()] = branch;
+                branch_data = self.write_branch_to_texture(
+                    &branch_data,
+                    &pos_info,
+                    img,
+                    base_px,
+                    base_pos,
+                    base_span,
+                    max_depth,
+                );
+            } else if branch.node.is_leaf() || branch.node.is_subdiv() {
+                let local_pos = pos_info.pos_on_edge - base_pos;
+                let pos = base_px + Vec2::new((local_pos.y * base_span) * local_pos.x, local_pos.z);
+                img.put_pixel(pos.x as u32, pos.y as u32, image::Rgb([255, 255, 255]));
+                // *img.get_pixel_mut(5, 5) = image::Rgb([255, 255, 255]);
             }
         }
 

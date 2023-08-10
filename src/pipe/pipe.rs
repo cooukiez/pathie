@@ -1,7 +1,7 @@
 use std::{ffi::CString, io::Cursor, mem};
 
 use ash::{util::read_spv, vk, Device};
-use nalgebra_glm::{Vec3, Vec4};
+use nalgebra_glm::{Vec2, Vec3, Vec4};
 
 use crate::{
     interface::surface::SurfaceGroup,
@@ -9,7 +9,7 @@ use crate::{
     pipe::obj::{BASE_CUBE_IDX, BASE_CUBE_UV, BASE_CUBE_VERT},
     tree::{
         octant::Octant,
-        octree::{Octree, MAX_DEPTH_LIMIT},
+        octree::{Octree, MAX_DEPTH, MAX_DEPTH_LIMIT},
     },
     vector::Vector,
     Pref,
@@ -109,7 +109,10 @@ impl Pipe {
         }
     }
 
-    pub fn get_octree_vert_data(octree: &Octree) -> (Vec<Vertex>, Vec<u32>, Vec<LocInfo>) {
+    pub fn get_octree_vert_data(
+        octree: &Octree,
+        img: &mut image::ImageBuffer<image::Rgb<u8>, Vec<u8>>,
+    ) -> (Vec<Vertex>, Vec<u32>, Vec<LocInfo>) {
         let mut vertex_data = vec![];
         let mut index_data = vec![];
         let mut loc_data = vec![];
@@ -126,6 +129,16 @@ impl Pipe {
             .for_each(|(leaf_idx, (pos_info, loc_branch_data))| {
                 let branch_info = loc_branch_data[pos_info.depth_idx()];
                 let center = pos_info.pos_on_edge.xyz() * 2.0 + Vec3::ftv(branch_info.span / 2.0);
+
+                octree.write_branch_to_texture(
+                    loc_branch_data,
+                    pos_info,
+                    img,
+                    Vec2::new(0.0, 0.0),
+                    pos_info.pos_on_edge,
+                    branch_info.span,
+                    MAX_DEPTH as u32,
+                );
 
                 BASE_CUBE_VERT
                     .iter()

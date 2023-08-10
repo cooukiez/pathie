@@ -12,18 +12,6 @@ pub struct ImageTarget {
     pub sampler: vk::Sampler,
 }
 
-/// Convert extent two dimensional to three dimensional
-#[macro_export]
-macro_rules! extent_conv {
-    ($extent : expr) => {
-        vk::Extent3D {
-            width: $extent.width,
-            height: $extent.height,
-            depth: 1,
-        }
-    };
-}
-
 pub const SUBRES_RANGE: vk::ImageSubresourceRange = vk::ImageSubresourceRange {
     aspect_mask: vk::ImageAspectFlags::COLOR,
     base_mip_level: 0,
@@ -121,7 +109,7 @@ impl ImageTarget {
 
             let img_info = vk::ImageCreateInfo::builder()
                 .format(interface.surface.format.format)
-                .extent(extent_conv!(extent))
+                .extent(extent.into())
                 .mip_levels(1)
                 .array_layers(1)
                 .samples(vk::SampleCountFlags::TYPE_1)
@@ -164,12 +152,68 @@ impl ImageTarget {
         }
     }
 
+    pub fn storage_texture(
+        interface: &Interface,
+        format: vk::Format,
+        extent: vk::Extent3D,
+        img_type: vk::ImageType,
+        view_type: vk::ImageViewType,
+        array_len: u32,
+    ) -> Self {
+        unsafe {
+            let mut result = Self::default();
+
+            let img_info = vk::ImageCreateInfo::builder()
+                .format(format)
+                .extent(extent)
+                .mip_levels(1)
+                .array_layers(array_len)
+                .samples(vk::SampleCountFlags::TYPE_1)
+                .tiling(vk::ImageTiling::OPTIMAL)
+                .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .initial_layout(vk::ImageLayout::UNDEFINED)
+                .image_type(img_type)
+                .build();
+
+            let sampler_info = vk::SamplerCreateInfo::builder()
+                .mag_filter(vk::Filter::NEAREST)
+                .min_filter(vk::Filter::NEAREST)
+                .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
+                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .mip_lod_bias(0.0)
+                .max_anisotropy(1.0)
+                .compare_op(vk::CompareOp::NEVER)
+                .min_lod(0.0)
+                .max_lod(1.0)
+                .border_color(vk::BorderColor::FLOAT_OPAQUE_WHITE)
+                .build();
+
+            let view_info = vk::ImageViewCreateInfo::builder()
+                .view_type(view_type)
+                .format(img_info.format)
+                .subresource_range(SUBRES_RANGE)
+                .components(COMP_MAP)
+                .build();
+
+            result = result
+                .create_img(img_info, &interface.device)
+                .create_img_memory(&interface.device, &interface.phy_device)
+                .create_sampler(sampler_info, &interface.device)
+                .create_view(view_info, &interface.device);
+
+            result
+        }
+    }
+
     pub fn attachment_img(interface: &Interface, extent: vk::Extent2D) -> Self {
         let mut result = Self::default();
 
         let img_info = vk::ImageCreateInfo::builder()
             .format(interface.surface.format.format)
-            .extent(extent_conv!(extent))
+            .extent(extent.into())
             .mip_levels(1)
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
