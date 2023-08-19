@@ -130,6 +130,13 @@ impl BufferSet {
             interface.device.unmap_memory(self.mem);
         }
     }
+
+    pub fn destroy(&self, device: &Device) {
+        unsafe {
+            device.free_memory(self.mem, None);
+            device.destroy_buffer(self.buffer, None);
+        }
+    }
 }
 
 impl Default for BufferSet {

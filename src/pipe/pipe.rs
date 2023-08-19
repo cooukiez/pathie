@@ -4,7 +4,7 @@ use ash::{util::read_spv, vk, Device};
 use nalgebra_glm::{Vec2, Vec3, Vec4};
 
 use crate::{
-    interface::surface::SurfaceGroup,
+    interface::{surface::SurfaceGroup, interface::Interface},
     offset_of,
     pipe::obj::{BASE_CUBE_IDX, BASE_CUBE_UV, BASE_CUBE_VERT},
     tree::{
@@ -20,10 +20,8 @@ use super::{descriptor::DescriptorPool, image::ImageTarget};
 #[derive(Clone, Debug, Copy)]
 pub struct Vertex {
     pub pos: [f32; 4],
-    pub pos_on_edge: [f32; 4],
     pub uv: [f32; 2],
     pub loc_idx: u32,
-    pub span: f32,
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -119,7 +117,7 @@ impl Pipe {
 
         let (branch_data, pos_info) = octree.get_new_root_info(Vec4::default());
         let mut leaf_data = vec![];
-        octree.collect_branch(&branch_data, &pos_info, &mut leaf_data, 3);
+        octree.collect_branch(&branch_data, &pos_info, &mut leaf_data, 5);
 
         // log::info!("{:#034b}", leaf_data[0].1.node.get_child_bitmask());
 
@@ -130,6 +128,7 @@ impl Pipe {
                 let branch_info = loc_branch_data[pos_info.depth_idx()];
                 let center = pos_info.pos_on_edge.xyz() * 2.0 + Vec3::ftv(branch_info.span / 2.0);
 
+                /*
                 octree.write_branch_to_texture(
                     loc_branch_data,
                     pos_info,
@@ -139,6 +138,7 @@ impl Pipe {
                     branch_info.span,
                     MAX_DEPTH as u32,
                 );
+                */
 
                 BASE_CUBE_VERT
                     .iter()
@@ -151,13 +151,11 @@ impl Pipe {
                                 coord.2 * branch_info.span + center.z,
                                 1.0,
                             ],
-                            pos_on_edge: pos_info.pos_on_edge.into(),
                             uv: [
                                 BASE_CUBE_UV[vert_idx].0 as f32,
                                 BASE_CUBE_UV[vert_idx].1 as f32,
                             ],
                             loc_idx: loc_data.len() as u32,
-                            span: branch_info.span,
                         });
                     });
 
@@ -166,7 +164,7 @@ impl Pipe {
                     .for_each(|idx| index_data.push((idx + (leaf_idx as i32) * 24) as u32));
 
                 let mut parent_list = [0; MAX_DEPTH_LIMIT];
-                branch_data
+                loc_branch_data
                     .iter()
                     .enumerate()
                     .for_each(|(idx, branch_info)| parent_list[idx] = branch_info.node);
@@ -196,7 +194,7 @@ impl Pipe {
             let mut frag_spv = Cursor::new(&include_bytes!("../../shader/frag.spv")[..]);
 
             let vert_code = read_spv(&mut vert_spv).expect("ERR_READ_VERTEX_SPV");
-            let frag_code = read_spv(&mut frag_spv).expect("ERR_READ_VERTEX_SPV");
+            let frag_code = read_spv(&mut frag_spv).expect("ERR_READ_FRAG_SPV");
 
             let vert_shader_info = vk::ShaderModuleCreateInfo::builder()
                 .code(&vert_code)
@@ -564,6 +562,13 @@ impl Pipe {
                 &[swap_present],
             )
         }
+    }
+
+    pub fn drop(&self, device: &Device) {
+        unsafe {
+            device.destroy_pipeline_layout(self.pipe_layout, None);
+            device.destroy_pipeline(self.pipe, None);
+        }  
     }
 }
 

@@ -1,9 +1,7 @@
 struct PosInfo {
-    vec4 local_pos;
-    vec4 pos_on_edge;
+    vec3 local_pos;
+    vec3 pos_on_edge;
     uint depth;
-
-    uint padding[3];
 };
 
 struct BranchInfo {
@@ -21,25 +19,18 @@ struct BranchInfo {
 };
 
 struct LocInfo {
-    vec4 pos_on_edge;
-
-    uint node;
-    uint parent;
-
-    uint index;
-    uint parent_index;
-
-    float span;
+    // For proper alignment set depth to 16
+    uint parent_list[16];
+    uint padding[2];
     uint depth;
-
-    uint padding [2];
+    float span;
 };
 
 struct Ray {
     vec3 origin;
     vec3 dir;
 
-    vec3 invRayDir; // Used for RayCube Intersection
+    vec3 inv_ray_dir; // Used for RayCube Intersection
 };
 
 // Uniform

@@ -14,17 +14,16 @@ pub struct Ray {
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct BranchInfo {
-    pub node: u32,
+    pub parent_idx: u32,
     pub parent: u32,
 
-    pub index: u32,
-    pub parent_index: u32,
+    pub idx: u32,
+    pub node: u32,
 
     pub span: f32,
+    pub mask: u32,
 
-    pub mask_info: u32,
-
-    pub padding: [u32; 2],
+    pub padding: [u32; 3],
 }
 
 #[repr(C)]
@@ -40,11 +39,11 @@ pub struct PosInfo {
 
 impl BranchInfo {
     pub fn idx(&self) -> usize {
-        self.index as usize
+        self.idx as usize
     }
 
     pub fn parent_idx(&self) -> usize {
-        self.parent_index as usize
+        self.parent_idx as usize
     }
 
     pub fn child_bitmask(&self) -> u32 {
@@ -72,9 +71,9 @@ impl BranchInfo {
         let mut branch = self.clone();
         // First get index of first child
         // After that, select neighbor based on mask
-        branch.index = branch.index - branch.mask_info + neighbor_mask;
+        branch.idx = branch.idx - branch.mask + neighbor_mask;
         branch.node = octant_data[branch.idx()];
-        branch.mask_info = neighbor_mask;
+        branch.mask = neighbor_mask;
 
         branch
     }
@@ -102,8 +101,8 @@ impl PosInfo {
 
         for _ in self.depth as usize..max_depth {
             let mut branch = branch_data[self.depth_idx()];
-            let new_mask = branch.mask_info | dir_mask;
-            let move_up = branch.mask_info & dir_mask;
+            let new_mask = branch.mask | dir_mask;
+            let move_up = branch.mask & dir_mask;
 
             // Check if move up
             if move_up > 0 {
@@ -119,8 +118,8 @@ impl PosInfo {
                     pos_info.move_into_child(branch_data, |branch| {
                         let mut branch = branch.clone();
 
-                        (branch.index, branch.node) =
-                            branch.get_child(&octant_data, branch.mask_info);
+                        (branch.idx, branch.node) =
+                            branch.get_child(&octant_data, branch.mask);
 
                         branch
                     });
@@ -136,44 +135,58 @@ impl PosInfo {
     pub fn move_up(&mut self, branch_data: &[BranchInfo; MAX_DEPTH]) {
         let branch = branch_data[self.depth_idx()].clone();
 
-        let mask_vec = mask_to_vec!(branch.mask_info);
+        let mask_vec = mask_to_vec!(branch.mask);
         self.pos_on_edge -= mask_vec * branch.span;
         self.local_pos += mask_vec * branch.span;
 
         self.depth -= 1;
     }
 
-    pub fn update_branch_to_child(&mut self, branch_data: &mut [BranchInfo; MAX_DEPTH]) {
+    /// This function will auto update the depth and create new branch
+    /// with parent, parent index, local pos, pos on edge and span auto set, the rest has to be done
+    /// in the function update
+
+    pub fn update_branch_to_child<Function: FnOnce(&BranchInfo) -> BranchInfo>(
+        &mut self,
+        branch_data: &mut [BranchInfo; MAX_DEPTH],
+        update: Function,
+    ) {
         let old_branch = branch_data[self.depth_idx()].clone();
 
         self.depth += 1;
 
-        branch_data[self.depth_idx()] = BranchInfo {
+        let mut branch = BranchInfo {
             parent: old_branch.node,
-            parent_index: old_branch.index,
+            parent_idx: old_branch.idx,
             span: old_branch.span * 0.5,
             ..Default::default()
         };
+
+        branch = update(&branch);
+
+        let mask_vec = mask_to_vec!(branch.mask);
+        self.pos_on_edge -= mask_vec * branch.span;
+        self.local_pos += mask_vec * branch.span;
+
+        branch_data[self.depth_idx()] = branch;
     }
 
     /// Expect parent to be subdivide
 
-    pub fn move_into_child<Function: FnOnce(&BranchInfo) -> BranchInfo>(
+    pub fn move_into_child<Function: FnOnce(BranchInfo) -> BranchInfo>(
         &mut self,
         branch_data: &mut [BranchInfo; MAX_DEPTH],
         select_idx: Function,
     ) {
-        self.update_branch_to_child(branch_data);
-        let mut branch = self.branch(branch_data);
+        let local_pos = self.local_pos;
 
-        // Get which child node to choose
-        branch.mask_info = vec_to_mask!(self.local_pos - Vec4::ftv(branch.span));
+        self.update_branch_to_child(branch_data, |branch| {
+            let mut branch = branch.clone();
+            // Get which child node to choose
+            branch.mask = vec_to_mask!(local_pos.step(Vec4::ftv(branch.span)));
 
-        self.pos_on_edge += mask_to_vec!(branch.mask_info) * branch.span;
-        self.local_pos -= mask_to_vec!(branch.mask_info) * branch.span;
-
-        branch = select_idx(&branch);
-        branch_data[self.depth_idx()] = branch;
+            select_idx(branch)
+        });
     }
 }
 
@@ -189,12 +202,12 @@ impl Default for Ray {
 impl Default for BranchInfo {
     fn default() -> Self {
         Self {
-            node: Default::default(),
+            parent_idx: Default::default(),
             parent: Default::default(),
-            index: Default::default(),
-            parent_index: Default::default(),
+            idx: Default::default(),
+            node: Default::default(),
             span: Default::default(),
-            mask_info: Default::default(),
+            mask: Default::default(),
             padding: Default::default(),
         }
     }

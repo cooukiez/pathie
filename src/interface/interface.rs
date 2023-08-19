@@ -1,9 +1,5 @@
 use crate::{
-    interface::{
-        phydev::PhyDeviceGroup,
-        surface::SurfaceGroup,
-        swapchain::SwapchainGroup,
-    },
+    interface::{phydev::PhyDeviceGroup, surface::SurfaceGroup, swapchain::SwapchainGroup},
     Pref,
 };
 use ash::{
@@ -11,8 +7,7 @@ use ash::{
         ext::DebugUtils,
         khr::{DynamicRendering, Swapchain},
     },
-    vk,
-    Device, Entry, Instance,
+    vk, Device, Entry, Instance,
 };
 use raw_window_handle::HasRawDisplayHandle;
 use std::{
@@ -183,7 +178,7 @@ impl Interface {
 
             let device_ext_list = [
                 Swapchain::name().as_ptr(),
-                // DynamicRendering::name().as_ptr(),
+                DynamicRendering::name().as_ptr(),
                 #[cfg(any(target_os = "macos", target_os = "ios",))]
                 KhrPortabilitySubsetFn::name().as_ptr(),
             ];
@@ -347,5 +342,21 @@ impl Interface {
 
     pub fn wait_for_gpu(&self) -> Result<(), Box<dyn Error>> {
         unsafe { Ok(self.device.device_wait_idle().unwrap()) }
+    }
+}
+
+impl Drop for Interface {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_fence(self.draw_cmd_fence, None);
+            self.device.destroy_fence(self.setup_cmd_fence, None);
+
+            self.device.destroy_semaphore(self.present_complete, None);
+            self.device.destroy_semaphore(self.render_complete, None);
+
+            self.device.free_command_buffers(self.pool, &[self.setup_cmd_buffer, self.draw_cmd_buffer]);
+
+            self.device.destroy_command_pool(self.pool, None);
+        }
     }
 }

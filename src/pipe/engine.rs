@@ -84,7 +84,7 @@ impl Engine {
 
         let img_data = result.img_buffer.clone().into_raw();
 
-        result.img_buffer.save("out.png").unwrap();
+        // result.img_buffer.save("out.png").unwrap();
 
         log::info!("Creating ImageBuffer ...");
         result.vk_img_buffer = BufferSet::new(
@@ -290,7 +290,6 @@ impl Engine {
                 vk::DescriptorType::UNIFORM_BUFFER,
                 &interface.device,
             );
-
             result.pool_graphic.write_buffer_desc(
                 &self.octree_buffer,
                 vk::WHOLE_SIZE,
@@ -314,6 +313,8 @@ impl Engine {
                 &interface.surface,
                 &result.pool_graphic,
             );
+
+            /*
 
             result.pipe_graphic.record_submit_cmd(
                 &interface.device,
@@ -390,6 +391,8 @@ impl Engine {
                     );
                 },
             );
+
+            */
 
             result
         }
@@ -502,7 +505,6 @@ impl Engine {
                     interface.render_complete,
                     interface.present_queue,
                     |cmd_buffer| {
-                        /*
                         self.pool_graphic.write_buffer_desc(
                             &self.uniform_buffer,
                             vk::WHOLE_SIZE,
@@ -511,7 +513,6 @@ impl Engine {
                             vk::DescriptorType::UNIFORM_BUFFER,
                             &interface.device,
                         );
-                        */
 
                         let color_attachment_info = vk::RenderingAttachmentInfoKHR::builder()
                             .image_view(self.image_target_list[present_index as usize].view)
@@ -686,6 +687,42 @@ impl Engine {
         }];
 
         self.pipe_graphic.scissor = vec![interface.surface.render_res.into()];
+    }
+
+    pub fn drop_graphic(&self, interface: &Interface) {
+        unsafe {
+            self.pool_graphic
+                .layout_list
+                .iter()
+                .for_each(|&layout| interface.device.destroy_descriptor_set_layout(layout, None));
+
+            interface
+                .device
+                .free_descriptor_sets(self.pool_graphic.pool, &self.pool_graphic.set_list)
+                .unwrap();
+
+            interface
+                .device
+                .destroy_descriptor_pool(self.pool_graphic.pool, None);
+
+            self.image_target_list.iter().for_each(|target| {
+                target.destroy(&interface.device);
+            });
+
+            self.depth_image.destroy(&interface.device);
+            //self.brick_texture.destroy(&interface.device);
+            //self.vk_img_buffer.destroy(&interface.device);
+
+            self.index_buffer.destroy(&interface.device);
+            self.vertex_buffer.destroy(&interface.device);
+
+            self.uniform_buffer.destroy(&interface.device);
+
+            self.octree_buffer.destroy(&interface.device);
+            self.loc_info_buffer.destroy(&interface.device);
+
+            self.pipe_graphic.drop(&interface.device);
+        }
     }
 }
 

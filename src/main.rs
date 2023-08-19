@@ -96,6 +96,8 @@ fn main() {
 
     let mut render = Render::get_render();
     render.execute(Instant::now());
+    
+    render.graphic_pipe.drop_graphic(&render.interface);    
 }
 
 impl Render {
@@ -103,7 +105,7 @@ impl Render {
         let event_loop = EventLoop::new();
 
         let pref = Pref {
-            pref_present_mode: vk::PresentModeKHR::FIFO,
+            pref_present_mode: vk::PresentModeKHR::IMMEDIATE,
             img_filter: vk::Filter::LINEAR,
             img_scale: 1.0,
 

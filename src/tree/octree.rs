@@ -52,8 +52,8 @@ impl Octree {
                 pos_info.move_into_child(&mut branch_data, |branch| {
                     let mut branch = branch.clone();
 
-                    (branch.index, branch.node) =
-                        branch.get_child(&self.octant_data, branch.mask_info);
+                    (branch.idx, branch.node) =
+                        branch.get_child(&self.octant_data, branch.mask);
 
                     branch
                 });
@@ -88,9 +88,9 @@ impl Octree {
 
                 // Set child filled and update parent in octant data
                 self.octant_data[branch.parent_idx()] =
-                    branch.parent.set_child_filled(branch.mask_info, true);
+                    branch.parent.set_child_filled(branch.mask, true);
 
-                (branch.index, branch.node) = branch.get_child(&self.octant_data, branch.mask_info);
+                (branch.idx, branch.node) = branch.get_child(&self.octant_data, branch.mask);
 
                 branch
             });
@@ -114,17 +114,22 @@ impl Octree {
         for idx in 0..8 {
             let mut pos_info = pos_info.clone();
 
-            pos_info.update_branch_to_child(&mut branch_data);
-            let mut branch = pos_info.branch(&branch_data);
+            pos_info.update_branch_to_child(&mut branch_data, |branch| {
+                let mut branch = branch.clone();
+                branch.mask = idx;
+                (branch.idx, branch.node) = branch.get_child(&self.octant_data, branch.mask);
 
-            (branch.index, branch.node) = branch.get_child(&self.octant_data, idx);
+                branch
+            });
 
-            pos_info.pos_on_edge += mask_to_vec!(idx) * (branch.span / 2.0);
-
+            let branch = pos_info.branch(&branch_data);
+            
             if branch.node.is_subdiv() && pos_info.depth < max_depth - 1 {
-                branch_data[pos_info.depth_idx()] = branch;
                 branch_data = self.collect_branch(&branch_data, &pos_info, leaf_data, max_depth);
+
             } else if branch.node.is_leaf() || branch.node.is_subdiv() {
+                pos_info.move_up(&mut branch_data);
+
                 leaf_data.push((pos_info, branch_data.clone()));
             }
         }
@@ -147,12 +152,17 @@ impl Octree {
         for idx in 0..8 {
             let mut pos_info = pos_info.clone();
 
-            pos_info.update_branch_to_child(&mut branch_data);
-            let mut branch = pos_info.branch(&branch_data);
+            pos_info.depth += 1;
 
-            (branch.index, branch.node) = branch.get_child(&self.octant_data, idx);
+            pos_info.update_branch_to_child(&mut branch_data, |branch| {
+                let mut branch = branch.clone();
+                branch.mask = idx;
+                (branch.idx, branch.node) = branch.get_child(&self.octant_data, branch.mask);
 
-            pos_info.pos_on_edge += mask_to_vec!(idx) * (branch.span / 2.0);
+                branch
+            });
+
+            let branch = pos_info.branch(&branch_data);
 
             if branch.node.is_subdiv() && pos_info.depth < max_depth - 1 {
                 branch_data[pos_info.depth_idx()] = branch;
@@ -166,8 +176,11 @@ impl Octree {
                     max_depth,
                 );
             } else if branch.node.is_leaf() || branch.node.is_subdiv() {
+                pos_info.move_up(&mut branch_data);
+
                 let local_pos = pos_info.pos_on_edge - base_pos;
                 let pos = base_px + Vec2::new((local_pos.y * base_span) * local_pos.x, local_pos.z);
+
                 img.put_pixel(pos.x as u32, pos.y as u32, image::Rgb([255, 255, 255]));
                 // *img.get_pixel_mut(5, 5) = image::Rgb([255, 255, 255]);
             }
