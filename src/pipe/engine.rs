@@ -68,21 +68,23 @@ impl Engine {
             vk::Format::R8G8B8A8_UNORM,
             vk::Extent3D {
                 width: 4096,
-                height: 4096,
-                depth: 8,
+                height: 2048,
+                depth: 1,
             },
             vk::ImageType::TYPE_3D,
             vk::ImageViewType::TYPE_3D,
             1,
         );
 
-        result.img_buffer = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::new(4096, 4096);
+        result.img_buffer = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_pixel(4096, 4096, image::Rgb([0, 255, 0]));
+        
         //image.put_pixel(0, 0, image::Rgb([0, 0, 0]));
 
         let (vertex_data, index_data, loc_info) =
             Pipe::get_octree_vert_data(octree, &mut result.img_buffer);
 
-        let img_data = result.img_buffer.clone().into_raw();
+        let mut img_data = result.img_buffer.clone().into_raw();
+        
 
         // result.img_buffer.save("out.png").unwrap();
 
@@ -165,7 +167,7 @@ impl Engine {
         log::info!("Creating Location Info Buffer ...");
         result.loc_info_buffer = BufferSet::new(
             (mem::size_of::<LocInfo>() * loc_info.len()) as u64,
-            vk::BufferUsageFlags::UNIFORM_BUFFER,
+            vk::BufferUsageFlags::STORAGE_BUFFER,
             vk::SharingMode::EXCLUSIVE,
             &interface.device,
         )
@@ -270,7 +272,13 @@ impl Engine {
                 )
                 // location info set
                 .create_descriptor_set_layout(
-                    vk::DescriptorType::UNIFORM_BUFFER,
+                    vk::DescriptorType::STORAGE_BUFFER,
+                    1,
+                    vk::ShaderStageFlags::FRAGMENT,
+                    &interface.device,
+                )
+                .create_descriptor_set_layout(
+                    vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                     1,
                     vk::ShaderStageFlags::FRAGMENT,
                     &interface.device,
@@ -304,7 +312,16 @@ impl Engine {
                 vk::WHOLE_SIZE,
                 2,
                 0,
-                vk::DescriptorType::UNIFORM_BUFFER,
+                vk::DescriptorType::STORAGE_BUFFER,
+                &interface.device,
+            );
+
+            result.pool_graphic.write_img_desc(
+                &self.brick_texture,
+                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                3,
+                0,
+                vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 &interface.device,
             );
 
@@ -314,14 +331,12 @@ impl Engine {
                 &result.pool_graphic,
             );
 
-            /*
-
             result.pipe_graphic.record_submit_cmd(
                 &interface.device,
-                interface.draw_cmd_fence,
-                interface.draw_cmd_buffer,
-                interface.present_complete,
-                interface.render_complete,
+                interface.setup_cmd_fence,
+                interface.setup_cmd_buffer,
+                &[],
+                &[],
                 interface.present_queue,
                 |cmd_buffer| {
                     let texture_barrier = vk::ImageMemoryBarrier {
@@ -354,7 +369,7 @@ impl Engine {
                         )
                         .image_extent(vk::Extent3D {
                             width: 4096,
-                            height: 4096,
+                            height: 2048,
                             depth: 1,
                         })
                         .build();
@@ -392,8 +407,6 @@ impl Engine {
                 },
             );
 
-            */
-
             result
         }
     }
@@ -415,8 +428,8 @@ impl Engine {
                     &interface.device,
                     interface.draw_cmd_fence,
                     interface.draw_cmd_buffer,
-                    interface.present_complete,
-                    interface.render_complete,
+                    &[interface.present_complete],
+                    &[interface.render_complete],
                     interface.present_queue,
                     |cmd_buffer| {
                         self.pool_comp.write_img_desc(
@@ -458,14 +471,12 @@ impl Engine {
                         );
 
                         // First Image Barrier
-                        /*
                         self.pipe_comp.first_img_barrier(
                             &self.image_target_list[present_index as usize],
                             interface.swapchain.img_list[present_index as usize],
                             &interface.device,
                             cmd_buffer,
                         );
-                        */
                         // Copy image memory
                         self.pipe_comp.copy_image(
                             &interface.device,
@@ -476,13 +487,11 @@ impl Engine {
                             interface.surface.render_res,
                             interface.surface.surface_res,
                         );
-                        /*
                         self.pipe_comp.sec_img_barrier(
                             interface.swapchain.img_list[present_index as usize],
                             &interface.device,
                             cmd_buffer,
                         );
-                        */
                     },
                 );
             })
@@ -501,8 +510,8 @@ impl Engine {
                     &interface.device,
                     interface.draw_cmd_fence,
                     interface.draw_cmd_buffer,
-                    interface.present_complete,
-                    interface.render_complete,
+                    &[interface.present_complete],
+                    &[interface.render_complete],
                     interface.present_queue,
                     |cmd_buffer| {
                         self.pool_graphic.write_buffer_desc(

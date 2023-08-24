@@ -5,12 +5,15 @@
 // #extension EXT_gpu_shader4 : require
 
 #define MAX_DEPTH 6
-#define MAX_STEP 40
+#define MAX_STEP 300
+
+precision lowp float;
 
 layout (location = 0) in vec4 screen_pos;
-layout (location = 1) in vec2 out_uv;
+layout (location = 1) flat in vec4 pos_on_edge;
 layout (location = 2) in vec4 world_pos; // pos_on_edge + local_pos
-layout (location = 3) flat in uint loc_idx;
+layout (location = 3) in vec2 out_uv;
+layout (location = 4) flat in uint loc_idx;
 
 layout (location = 0) out vec4 frag_color;
 
@@ -37,7 +40,10 @@ struct Ray {
 struct LocInfo {
     // For proper alignment set depth to 16
     uint parent_list[16];
+    uint last_hit_idx[16];
+
     uint padding[2];
+
     uint depth;
     float span;
 };
@@ -76,112 +82,106 @@ vec3 rayCubeIntersect(vec3 origin, vec3 dir, vec3 inv_ray_dir, float span) {
 }
 
 void main() {
+    frag_color = vec4(0);
+
     vec3 world_pos = world_pos.xyz;
-    vec3 ray_dir = normalize(world_pos - uniform_buffer.pos.xyz);
-    // vec4 local_pos = world_pos % loc_info[loc_idx].span;
 
     float span = loc_info[loc_idx].span;
     int depth = int(loc_info[loc_idx].depth);
 
-    //span = 8.0;
-    //depth = 0;
+    vec3 pos_on_edge = pos_on_edge.xyz;
+    vec3 local_pos = world_pos - pos_on_edge;
 
-    vec3 local_pos = mod(world_pos, span);
-    // frag_color = vec4(local_pos, 0);
-    vec3 pos_on_edge = world_pos - local_pos;
-
-    // debugPrintfEXT("\n%d", parent_list[0]);
-
-    // debugPrintfEXT("\nc%d", get_child(parent_list[0], 0));
+    if (gl_FragCoord.xy.x < 4 && gl_FragCoord.xy.y < 4) {
+        //debugPrintfEXT("\n%f %d %d", span, depth, loc_info[loc_idx].parent_list[0]);
+    }
 
     // depth set to 16 for proper alignment
     uint parent_list[16] = loc_info[loc_idx].parent_list;
-    // set to something that is not an actual index to indicate
-    // wether there is an active index in use or not
-    uint last_hit_idx[16] = uint[16](8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8);
+    uint last_hit_idx[16] = loc_info[loc_idx].last_hit_idx;
+
+    vec3 ray_dir = normalize(world_pos - uniform_buffer.cam_front.xyz);
     vec3 inv_ray_dir = 1.0 / max(abs(ray_dir), 0.001);
     Ray ray = Ray(world_pos, ray_dir, inv_ray_dir);
 
-    uint a = node_data[child_idx(0, 0)];
-    uint b = uint(is_subdiv(node_data[child_idx(node_data[0], 0)]));
-
-    uint pos_mask;
+    uint pos_mask = last_hit_idx[depth];
     uint dir_mask;
-    uint _i_debug = 0;
+
+    // show if move in negative dir
+    bool inv = false;
 
     bool out_parent = false;
 
+    vec3 vec_pos_mask;
+    vec3 local_pos_on_edge;
+
+    uint node;
+
     for (uint iter = 0; iter < MAX_STEP; iter += 1) {
-
-        span *= 0.5;
-
-        // get if not already visited by checking if index is valid
-        if (last_hit_idx[depth] > 7) {
-            // Get in which child we are
-            vec3 stepped = step(vec3(span), local_pos);
-
-            pos_mask = vec_to_mask(stepped);
-            last_hit_idx[depth] = pos_mask;
-        }
-
-        vec3 vec_pos_mask = mask_to_vec(pos_mask);
-        vec3 local_pos_on_edge = vec_pos_mask * span;
-
-        _i_debug = parent_list[depth - 1];
-
         if (out_parent) {
             last_hit_idx[depth] = 8;
 
             depth -= 1;
-            span *= 4; // we set the span at the start to the child span
+            span *= 2; // move to parent layer
 
-            if (depth < 0) {
-                // frag_color = vec4(0,0,0,0);
+            if (depth < 1) {
+                // frag_color = vec4(0,1,0,0);
                 return;
             }
+
+            pos_mask = last_hit_idx[depth];
+            vec_pos_mask = mask_to_vec(pos_mask);
+
+            local_pos_on_edge = vec_pos_mask * span;
+            pos_on_edge -= local_pos_on_edge;
+
+            uint out_parent_raw = inv ? ~pos_mask & dir_mask : pos_mask & dir_mask;
+            out_parent = out_parent_raw > 0;
+
+            pos_mask = inv ? pos_mask ^ dir_mask : pos_mask | dir_mask;
         } else {
-            uint node = get_child(parent_list[depth - 1], pos_mask);
-            last_hit_idx[depth] = pos_mask;
+            node = get_child(parent_list[depth - 1], pos_mask);
+
+            vec_pos_mask = mask_to_vec(pos_mask);
+            local_pos_on_edge = vec_pos_mask * span;
+
+            local_pos = world_pos - pos_on_edge - local_pos_on_edge;
 
             if (is_subdiv(node)) {
                 parent_list[depth] = node;
-                depth += 1;
-                //debugPrintfEXT("\n%d", 1);
-            } else if (is_leaf(node)) {
-                frag_color = vec4(1,0,1,0);
-                return;
-            } else {
-                // Else move forward
+                last_hit_idx[depth] = pos_mask;
 
-                // Update local pos and pos on edge
-                local_pos -= local_pos_on_edge;
+                depth += 1;
+                span *= 0.5;
+
                 pos_on_edge += local_pos_on_edge;
 
+                vec3 stepped = step(vec3(span), local_pos);
+                pos_mask = vec_to_mask(stepped);
+            } else if (is_leaf(node)) {
+                frag_color = vec4(1,0,0,0);
+                return;
+
+            // Else move forward
+            } else {
                 // Get next hit
                 vec3 hit = rayCubeIntersect(local_pos, ray.dir, ray.inv_ray_dir, span);
                 vec3 hit_mask_vec = vec3(lessThan(hit, min(hit.yzx, hit.zxy)));
 
                 float len = dot(hit, hit_mask_vec);
-
-                vec3 new_voxel = hit_mask_vec * sign(ray.dir) * span;
-
-                local_pos += ray.dir * len - new_voxel;
-                pos_on_edge += new_voxel;
+                world_pos += ray.dir * len;
 
                 // get dir mask without sign information
                 dir_mask = vec_to_mask(hit_mask_vec);
+
                 // extract sign information
                 float dir_sign = dot(hit_mask_vec, sign(ray.dir));
-                bool inv = dir_sign < 0;
+                inv = dir_sign < 0;
 
                 uint out_parent_raw = inv ? ~pos_mask & dir_mask : pos_mask & dir_mask;
                 out_parent = out_parent_raw > 0;
 
-                pos_mask = pos_mask | dir_mask;
-
-                // reset back to parent
-                local_pos += local_pos_on_edge + new_voxel;
-                pos_on_edge -= local_pos_on_edge - new_voxel;
+                pos_mask = inv ? pos_mask ^ dir_mask : pos_mask | dir_mask;
             }
         }
     }

@@ -1,15 +1,16 @@
 use std::{ffi::CString, io::Cursor, mem};
 
 use ash::{util::read_spv, vk, Device};
+use cgmath::num_traits::Pow;
 use nalgebra_glm::{Vec2, Vec3, Vec4};
 
 use crate::{
-    interface::{surface::SurfaceGroup, interface::Interface},
+    interface::{interface::Interface, surface::SurfaceGroup},
     offset_of,
     pipe::obj::{BASE_CUBE_IDX, BASE_CUBE_UV, BASE_CUBE_VERT},
     tree::{
         octant::Octant,
-        octree::{Octree, MAX_DEPTH, MAX_DEPTH_LIMIT},
+        octree::{Octree, MAX_DEPTH, MAX_DEPTH_LIMIT, TEXTURE_ALIGN},
     },
     vector::Vector,
     Pref,
@@ -20,6 +21,7 @@ use super::{descriptor::DescriptorPool, image::ImageTarget};
 #[derive(Clone, Debug, Copy)]
 pub struct Vertex {
     pub pos: [f32; 4],
+    pub pos_on_edge: [f32; 4],
     pub uv: [f32; 2],
     pub loc_idx: u32,
 }
@@ -27,6 +29,7 @@ pub struct Vertex {
 #[derive(Clone, Debug, Copy)]
 pub struct LocInfo {
     pub parent_list: [u32; MAX_DEPTH_LIMIT],
+    pub last_hit_idx: [u32; MAX_DEPTH_LIMIT],
     pub depth: u32,
     pub span: f32,
 
@@ -126,19 +129,21 @@ impl Pipe {
             .enumerate()
             .for_each(|(leaf_idx, (pos_info, loc_branch_data))| {
                 let branch_info = loc_branch_data[pos_info.depth_idx()];
-                let center = pos_info.pos_on_edge.xyz() * 2.0 + Vec3::ftv(branch_info.span / 2.0);
+                let center = pos_info.local_pos.xyz() * 2.0 + Vec3::ftv(branch_info.span / 2.0);
 
-                /*
+                let length = TEXTURE_ALIGN.pow(2) as f32 * leaf_idx as f32;
+                let base_px =
+                    Vec2::new((length / img.height() as f32).floor() * TEXTURE_ALIGN, length % img.height() as f32);
+
                 octree.write_branch_to_texture(
                     loc_branch_data,
                     pos_info,
                     img,
-                    Vec2::new(0.0, 0.0),
-                    pos_info.pos_on_edge,
-                    branch_info.span,
+                    base_px,
+                    pos_info.local_pos,
+                    TEXTURE_ALIGN,
                     MAX_DEPTH as u32,
                 );
-                */
 
                 BASE_CUBE_VERT
                     .iter()
@@ -150,6 +155,12 @@ impl Pipe {
                                 coord.1 * branch_info.span + center.y,
                                 coord.2 * branch_info.span + center.z,
                                 1.0,
+                            ],
+                            pos_on_edge: [
+                                pos_info.local_pos.x,
+                                pos_info.local_pos.y,
+                                pos_info.local_pos.z,
+                                0.0,
                             ],
                             uv: [
                                 BASE_CUBE_UV[vert_idx].0 as f32,
@@ -164,13 +175,22 @@ impl Pipe {
                     .for_each(|idx| index_data.push((idx + (leaf_idx as i32) * 24) as u32));
 
                 let mut parent_list = [0; MAX_DEPTH_LIMIT];
+
+                // set to something that is not an actual index to indicate
+                // wether there is an active index in use or not
+                let mut last_hit_idx = [8; MAX_DEPTH_LIMIT];
+
                 loc_branch_data
                     .iter()
                     .enumerate()
-                    .for_each(|(idx, branch_info)| parent_list[idx] = branch_info.node);
+                    .for_each(|(idx, branch_info)| {
+                        parent_list[idx] = branch_info.node;
+                        last_hit_idx[idx] = branch_info.mask;
+                    });
 
                 loc_data.push(LocInfo {
                     parent_list,
+                    last_hit_idx,
                     depth: pos_info.depth,
                     span: branch_info.span,
 
@@ -191,7 +211,7 @@ impl Pipe {
 
             log::info!("Getting ShaderCode ...");
             let mut vert_spv = Cursor::new(&include_bytes!("../../shader/vert.spv")[..]);
-            let mut frag_spv = Cursor::new(&include_bytes!("../../shader/frag.spv")[..]);
+            let mut frag_spv = Cursor::new(&include_bytes!("../../shader/tex_frag.spv")[..]);
 
             let vert_code = read_spv(&mut vert_spv).expect("ERR_READ_VERTEX_SPV");
             let frag_code = read_spv(&mut frag_spv).expect("ERR_READ_FRAG_SPV");
@@ -246,8 +266,20 @@ impl Pipe {
                 vk::VertexInputAttributeDescription {
                     location: 1,
                     binding: 0,
+                    format: vk::Format::R32G32B32A32_SFLOAT,
+                    offset: offset_of!(Vertex, pos_on_edge) as u32,
+                },
+                vk::VertexInputAttributeDescription {
+                    location: 2,
+                    binding: 0,
                     format: vk::Format::R32G32_SFLOAT,
                     offset: offset_of!(Vertex, uv) as u32,
+                },
+                vk::VertexInputAttributeDescription {
+                    location: 3,
+                    binding: 0,
+                    format: vk::Format::R32_UINT,
+                    offset: offset_of!(Vertex, loc_idx) as u32,
                 },
             ];
 
@@ -367,8 +399,8 @@ impl Pipe {
         device: &Device,
         draw_cmd_fence: vk::Fence,
         draw_cmd_buffer: vk::CommandBuffer,
-        present_complete: vk::Semaphore,
-        render_complete: vk::Semaphore,
+        present_complete: &[vk::Semaphore],
+        render_complete: &[vk::Semaphore],
         present_queue: vk::Queue,
         function: Function,
     ) {
@@ -403,9 +435,9 @@ impl Pipe {
 
             let submit_info = vk::SubmitInfo::builder()
                 .wait_dst_stage_mask(&[vk::PipelineStageFlags::BOTTOM_OF_PIPE])
-                .wait_semaphores(&[present_complete])
+                .wait_semaphores(present_complete)
                 .command_buffers(&[draw_cmd_buffer])
-                .signal_semaphores(&[render_complete])
+                .signal_semaphores(render_complete)
                 .build();
 
             device
@@ -568,7 +600,7 @@ impl Pipe {
         unsafe {
             device.destroy_pipeline_layout(self.pipe_layout, None);
             device.destroy_pipeline(self.pipe, None);
-        }  
+        }
     }
 }
 
@@ -586,6 +618,7 @@ impl Default for LocInfo {
     fn default() -> Self {
         Self {
             parent_list: Default::default(),
+            last_hit_idx: Default::default(),
             depth: Default::default(),
             span: Default::default(),
             padding: Default::default(),

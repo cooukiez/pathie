@@ -46,18 +46,6 @@ impl BranchInfo {
         self.parent_idx as usize
     }
 
-    pub fn child_bitmask(&self) -> u32 {
-        read_bitrange!(self.node, 16, 23)
-    }
-
-    pub fn child_offset(&self) -> u32 {
-        read_bitrange!(self.node, 0, 15)
-    }
-
-    pub fn parent_bitmask(&self) -> u32 {
-        read_bitrange!(self.parent, 16, 23)
-    }
-
     pub fn first_child_idx(&self) -> u32 {
         read_bitrange!(self.parent, 0, 15)
     }

@@ -81,7 +81,7 @@ impl Uniform {
             (self.res.x / self.res.y) as f32,
             45f32.to_radians(),
             0.1,
-            100.0,
+            200.0,
         );
 
         self.cam_front = self.cam_pos + normalize(&self.look_dir);

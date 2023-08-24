@@ -9,6 +9,7 @@ use super::{
 
 pub const MAX_DEPTH: usize = 6;
 pub const MAX_DEPTH_LIMIT: usize = 16;
+pub const TEXTURE_ALIGN: f32 = 16.0;
 
 pub struct Octree {
     // RootIndex = 0
@@ -143,7 +144,7 @@ impl Octree {
         pos_info: &PosInfo,
         img: &mut image::ImageBuffer<image::Rgb<u8>, Vec<u8>>,
         base_px: Vec2,
-        base_pos: Vec4,
+        pos_on_edge: Vec4,
         base_span: f32,
         max_depth: u32,
     ) -> [BranchInfo; MAX_DEPTH] {
@@ -151,8 +152,6 @@ impl Octree {
 
         for idx in 0..8 {
             let mut pos_info = pos_info.clone();
-
-            pos_info.depth += 1;
 
             pos_info.update_branch_to_child(&mut branch_data, |branch| {
                 let mut branch = branch.clone();
@@ -165,21 +164,20 @@ impl Octree {
             let branch = pos_info.branch(&branch_data);
 
             if branch.node.is_subdiv() && pos_info.depth < max_depth - 1 {
-                branch_data[pos_info.depth_idx()] = branch;
                 branch_data = self.write_branch_to_texture(
                     &branch_data,
                     &pos_info,
                     img,
                     base_px,
-                    base_pos,
+                    pos_on_edge,
                     base_span,
                     max_depth,
                 );
             } else if branch.node.is_leaf() || branch.node.is_subdiv() {
                 pos_info.move_up(&mut branch_data);
 
-                let local_pos = pos_info.pos_on_edge - base_pos;
-                let pos = base_px + Vec2::new((local_pos.y * base_span) * local_pos.x, local_pos.z);
+                let local_pos = pos_info.local_pos - pos_on_edge;
+                let pos = base_px + Vec2::new(local_pos.x, local_pos.y + (local_pos.z * base_span));
 
                 img.put_pixel(pos.x as u32, pos.y as u32, image::Rgb([255, 255, 255]));
                 // *img.get_pixel_mut(5, 5) = image::Rgb([255, 255, 255]);

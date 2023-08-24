@@ -3,4 +3,5 @@
 "%VULKAN_SDK%\Bin\glslangValidator.exe" -V shader.vert -o vert.spv
 "%VULKAN_SDK%\Bin\glslangValidator.exe" -V texture_traverse.frag -o tex_frag.spv
 "%VULKAN_SDK%\Bin\glslangValidator.exe" -V test.frag -o test.spv
+"%VULKAN_SDK%\Bin\glslangValidator.exe" -V JFA.comp -o JFA.spv
 pause
