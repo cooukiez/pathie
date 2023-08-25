@@ -88,19 +88,13 @@ void main() {
     vec3 world_pos = world_pos.xyz;
 
     float span = loc_info[loc_idx].span;
-    int depth = int(loc_info[loc_idx].depth);
 
     vec3 pos_on_edge = pos_on_edge.xyz;
     vec3 local_pos = world_pos - pos_on_edge;
-    local_pos = vec3(0);
 
     if (gl_FragCoord.xy.x < 4 && gl_FragCoord.xy.y < 4) {
         //debugPrintfEXT("\n%f %d %d", span, depth, loc_info[loc_idx].parent_list[0]);
     }
-
-    // depth set to 16 for proper alignment
-    uint parent_list[16] = loc_info[loc_idx].parent_list;
-    uint last_hit_idx[16] = loc_info[loc_idx].last_hit_idx;
 
     vec3 ray_dir = normalize(world_pos - uniform_buffer.cam_front.xyz);
     vec3 inv_ray_dir = 1.0 / max(abs(ray_dir), 0.001);
@@ -120,12 +114,8 @@ void main() {
 
     bool out_parent = false;
 
-    if (gl_FragCoord.xy.x < 4 && gl_FragCoord.xy.y < 4) {
-        debugPrintfEXT("\n%v4f", texelFetch(brick_texture, ivec2(0,0), 0));
-    }
-
     for (uint iter = 0; iter < MAX_STEP; iter += 1) {
-        if (col.w > 0.0) {
+        if (col.r > 0.0) {
             frag_color = vec4(0, 1, 0, 0);
             return;
         }
@@ -135,10 +125,10 @@ void main() {
 
         len = dot(hit, hit_mask_vec);
 
-        px += pos_to_px(floor(hit_mask_vec));
+        px += pos_to_px((floor(hit_mask_vec) * sign(ray.dir)));
         local_pos += len * ray.dir;
 
-        vec4 col = texelFetch(brick_texture, ivec2(px), 0);
+        col = texelFetch(brick_texture, ivec2(px), 0);
         out_parent = len > max_len;
         if (out_parent) {
             return;

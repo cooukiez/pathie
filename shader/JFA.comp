@@ -27,24 +27,15 @@ float get_distance(vec3 pos, vec3 point) {
     return dot(dist, relevant_component);
 }
 
-void compare_neighbor(vec3 own_pos, vec3 check_n, vec2 base_texel, inout vec3 cur_near, inout float cn_dist) {
-    vec2 texel = get_neighbor(base_texel, check_n);
+void compare_neighbor(vec3 own_pos, vec3 check_neighbor, vec2 base_texel, inout vec3 cur_near, inout float cur_dist) {
+    vec2 texel = get_neighbor(base_texel, check_neighbor);
     vec4 val = texelFetch(brick_texture, ivec2(base_texel), 0);
 
-    // check if there is no val
-    if (!(val.x > 0.0)) {
-        return;
-    }
+    // neighbor is full or stored distance
+    float dist = val.x > 0.0 ? get_distance(own_pos, own_pos + check_neighbor) : val.w;
 
-    // the full neighbor of neighbor
-    vec3 n_full = val.xyz;
-    // get corresponding distance
-    float n_dist = get_distance(own_pos, n_full);
-
-    if (n_dist < cn_dist) {
-        cn_dist = n_dist;
-        cur_near = n_full;
-    }
+    // get smallest value
+    cur_dist = min(cur_dist, val.w);
 }
 
 void main() {

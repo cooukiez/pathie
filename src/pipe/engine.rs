@@ -71,12 +71,12 @@ impl Engine {
                 height: 2048,
                 depth: 1,
             },
-            vk::ImageType::TYPE_3D,
-            vk::ImageViewType::TYPE_3D,
+            vk::ImageType::TYPE_2D,
+            vk::ImageViewType::TYPE_2D,
             1,
         );
 
-        result.img_buffer = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_pixel(4096, 4096, image::Rgb([0, 255, 0]));
+        result.img_buffer = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_pixel(4096, 4096, image::Rgb([0, 0, 0]));
         
         //image.put_pixel(0, 0, image::Rgb([0, 0, 0]));
 
@@ -254,6 +254,82 @@ impl Engine {
         unsafe {
             let mut result = self.clone();
 
+            result.pipe_graphic.record_submit_cmd(
+                &interface.device,
+                interface.setup_cmd_fence,
+                interface.setup_cmd_buffer,
+                &[],
+                &[],
+                interface.present_queue,
+                |cmd_buffer| {
+                    let texture_barrier = vk::ImageMemoryBarrier {
+                        dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                        new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        image: result.brick_texture.img,
+                        subresource_range: vk::ImageSubresourceRange {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            level_count: 1,
+                            layer_count: 1,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    };
+                    interface.device.cmd_pipeline_barrier(
+                        cmd_buffer,
+                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                        vk::PipelineStageFlags::TRANSFER,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[texture_barrier],
+                    );
+                    let buffer_copy = vk::BufferImageCopy::builder()
+                        .image_subresource(
+                            vk::ImageSubresourceLayers::builder()
+                                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                .layer_count(1)
+                                .build(),
+                        )
+                        .image_extent(vk::Extent3D {
+                            width: 4096,
+                            height: 2048,
+                            depth: 1,
+                        })
+                        .build();
+
+                    interface.device.cmd_copy_buffer_to_image(
+                        cmd_buffer,
+                        result.vk_img_buffer.buffer,
+                        result.brick_texture.img,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[buffer_copy],
+                    );
+                    let texture_barrier_end = vk::ImageMemoryBarrier {
+                        src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                        dst_access_mask: vk::AccessFlags::SHADER_READ,
+                        old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                        image: result.brick_texture.img,
+                        subresource_range: vk::ImageSubresourceRange {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            level_count: 1,
+                            layer_count: 1,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    };
+                    interface.device.cmd_pipeline_barrier(
+                        cmd_buffer,
+                        vk::PipelineStageFlags::TRANSFER,
+                        vk::PipelineStageFlags::FRAGMENT_SHADER,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[texture_barrier_end],
+                    );
+                },
+            );
+
             log::info!("Creating descriptor set layout list ...");
             result.pool_graphic = DescriptorPool::default()
                 // Uniform Set
@@ -329,82 +405,6 @@ impl Engine {
                 &interface.device,
                 &interface.surface,
                 &result.pool_graphic,
-            );
-
-            result.pipe_graphic.record_submit_cmd(
-                &interface.device,
-                interface.setup_cmd_fence,
-                interface.setup_cmd_buffer,
-                &[],
-                &[],
-                interface.present_queue,
-                |cmd_buffer| {
-                    let texture_barrier = vk::ImageMemoryBarrier {
-                        dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
-                        new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                        image: result.brick_texture.img,
-                        subresource_range: vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            level_count: 1,
-                            layer_count: 1,
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    };
-                    interface.device.cmd_pipeline_barrier(
-                        cmd_buffer,
-                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                        vk::PipelineStageFlags::TRANSFER,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[texture_barrier],
-                    );
-                    let buffer_copy = vk::BufferImageCopy::builder()
-                        .image_subresource(
-                            vk::ImageSubresourceLayers::builder()
-                                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                                .layer_count(1)
-                                .build(),
-                        )
-                        .image_extent(vk::Extent3D {
-                            width: 4096,
-                            height: 2048,
-                            depth: 1,
-                        })
-                        .build();
-
-                    interface.device.cmd_copy_buffer_to_image(
-                        cmd_buffer,
-                        result.vk_img_buffer.buffer,
-                        result.brick_texture.img,
-                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                        &[buffer_copy],
-                    );
-                    let texture_barrier_end = vk::ImageMemoryBarrier {
-                        src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
-                        dst_access_mask: vk::AccessFlags::SHADER_READ,
-                        old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                        new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        image: result.brick_texture.img,
-                        subresource_range: vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            level_count: 1,
-                            layer_count: 1,
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    };
-                    interface.device.cmd_pipeline_barrier(
-                        cmd_buffer,
-                        vk::PipelineStageFlags::TRANSFER,
-                        vk::PipelineStageFlags::FRAGMENT_SHADER,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[texture_barrier_end],
-                    );
-                },
             );
 
             result
