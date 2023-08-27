@@ -611,7 +611,7 @@ impl Engine {
                         vk::PipelineBindPoint::COMPUTE,
                         self.jfa_pipe.pipe_layout,
                         0,
-                        &self.pool_comp.set_list[..],
+                        &self.jfa_pool.set_list[..],
                         &[],
                     );
 
