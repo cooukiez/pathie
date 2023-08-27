@@ -571,7 +571,12 @@ impl Engine {
         }
     }
 
-    pub fn run_jfa_iteration(&self, interface: &Interface, tex_extent: vk::Extent3D, dist_between: u32) {
+    pub fn run_jfa_iteration(
+        &self,
+        interface: &Interface,
+        tex_extent: vk::Extent3D,
+        dist_between: u32,
+    ) {
         unsafe {
             interface.record_submit_cmd(
                 interface.comp_cmd_fence,
@@ -593,7 +598,13 @@ impl Engine {
                         self.jfa_pipe.pipe,
                     );
 
-                    interface.device.cmd_push_constants(cmd_buffer, self.jfa_pipe.pipe_layout, vk::ShaderStageFlags::COMPUTE, 0, &[dist_between as u8]);
+                    interface.device.cmd_push_constants(
+                        cmd_buffer,
+                        self.jfa_pipe.pipe_layout,
+                        vk::ShaderStageFlags::COMPUTE,
+                        0,
+                        &[dist_between as u8],
+                    );
 
                     interface.device.cmd_bind_descriptor_sets(
                         cmd_buffer,
@@ -604,12 +615,7 @@ impl Engine {
                         &[],
                     );
 
-                    interface.device.cmd_dispatch(
-                        cmd_buffer,
-                        gcx,
-                        gcy,
-                        1,
-                    );
+                    interface.device.cmd_dispatch(cmd_buffer, gcx, gcy, 1);
                 },
             )
         }
