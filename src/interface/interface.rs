@@ -36,13 +36,15 @@ pub struct Interface {
 
     pub pool: vk::CommandPool,
     pub setup_cmd_buffer: vk::CommandBuffer,
+    pub comp_cmd_buffer: vk::CommandBuffer,
     pub draw_cmd_buffer: vk::CommandBuffer,
 
     pub present_complete: vk::Semaphore,
     pub render_complete: vk::Semaphore,
 
-    pub draw_cmd_fence: vk::Fence,
     pub setup_cmd_fence: vk::Fence,
+    pub comp_cmd_fence: vk::Fence,
+    pub draw_cmd_fence: vk::Fence,
 }
 
 #[macro_export]
@@ -220,7 +222,7 @@ impl Interface {
 
             log::info!("Creating CommandBuffer ...");
             let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
-                .command_buffer_count(2)
+                .command_buffer_count(3)
                 .command_pool(pool)
                 .level(vk::CommandBufferLevel::PRIMARY);
 
@@ -229,6 +231,7 @@ impl Interface {
                 .unwrap();
 
             let setup_cmd_buffer = command_buffer_list[0];
+            let comp_cmd_buffer = command_buffer_list[1];
             let draw_cmd_buffer = command_buffer_list[1];
 
             log::info!("Load PresentImgList ...");
@@ -238,10 +241,13 @@ impl Interface {
             let fence_create_info =
                 vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
 
-            let draw_cmd_fence = device
+            let setup_cmd_fence = device
                 .create_fence(&fence_create_info, None)
                 .expect("FENCE_CREATE_ERR");
-            let setup_cmd_fence = device
+            let comp_cmd_fence = device
+                .create_fence(&fence_create_info, None)
+                .expect("FENCE_CREATE_ERR");
+            let draw_cmd_fence = device
                 .create_fence(&fence_create_info, None)
                 .expect("FENCE_CREATE_ERR");
 
@@ -278,13 +284,15 @@ impl Interface {
 
                 pool,
                 setup_cmd_buffer,
+                comp_cmd_buffer,
                 draw_cmd_buffer,
 
                 present_complete,
                 render_complete,
 
-                draw_cmd_fence,
                 setup_cmd_fence,
+                comp_cmd_fence,
+                draw_cmd_fence,
             }
         }
     }
@@ -337,6 +345,60 @@ impl Interface {
             }
 
             Ok(false)
+        }
+    }
+
+    /// Submit command buffer with
+    /// sync setup. With draw command buffer and
+    /// present queue.
+
+    pub fn record_submit_cmd<Function: FnOnce(vk::CommandBuffer)>(
+        &self,
+        fence: vk::Fence,
+        cmd_buffer: vk::CommandBuffer,
+        present_complete: &[vk::Semaphore],
+        render_complete: &[vk::Semaphore],
+        function: Function,
+    ) {
+        unsafe {
+            self.device
+                .wait_for_fences(&[fence], true, std::u64::MAX)
+                .expect("DEVICE_LOST");
+
+            self.device
+                .reset_fences(&[fence])
+                .expect("FENCE_RESET_FAILED");
+
+            self.device
+                .reset_command_buffer(
+                    cmd_buffer,
+                    vk::CommandBufferResetFlags::RELEASE_RESOURCES,
+                )
+                .expect("ERR_RESET_CMD_BUFFER");
+
+            let cmd_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
+                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+
+            self.device
+                .begin_command_buffer(cmd_buffer, &cmd_buffer_begin_info)
+                .expect("ERR_BEGIN_CMD_BUFFER");
+
+            function(cmd_buffer);
+
+            self.device
+                .end_command_buffer(cmd_buffer)
+                .expect("ERR_END_CMD_BUFFER");
+
+            let submit_info = vk::SubmitInfo::builder()
+                .wait_dst_stage_mask(&[vk::PipelineStageFlags::BOTTOM_OF_PIPE])
+                .wait_semaphores(present_complete)
+                .command_buffers(&[cmd_buffer])
+                .signal_semaphores(render_complete)
+                .build();
+
+            self.device
+                .queue_submit(self.present_queue, &[submit_info], fence)
+                .expect("QUEUE_SUBMIT_FAILED");
         }
     }
 

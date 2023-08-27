@@ -5,7 +5,7 @@
 // #extension EXT_gpu_shader4 : require
 
 #define MAX_DEPTH 6
-#define MAX_STEP 10
+#define MAX_STEP 50
 #define TEXTURE_ALIGN 16
 
 layout (location = 0) in vec4 screen_pos;
@@ -89,28 +89,32 @@ void main() {
 
     float span = loc_info[loc_idx].span;
 
-    vec3 pos_on_edge = pos_on_edge.xyz;
+    vec3 ray_dir = normalize(world_pos - uniform_buffer.cam_front.xyz);
+    vec3 inv_ray_dir = 1.0 / max(abs(ray_dir), 0.001);
+    Ray ray = Ray(world_pos, ray_dir, inv_ray_dir);
+
+    vec3 base_pos_on_edge = pos_on_edge.xyz;
+
+    vec3 hit = rayCubeIntersect(world_pos - base_pos_on_edge, ray.dir, ray.inv_ray_dir, span);
+    vec3 hit_mask_vec = vec3(lessThan(hit, min(hit.yzx, hit.zxy)));
+    float len = dot(hit, hit_mask_vec);
+
+    vec3 pos_on_edge = floor(world_pos);
     vec3 local_pos = world_pos - pos_on_edge;
 
     if (gl_FragCoord.xy.x < 4 && gl_FragCoord.xy.y < 4) {
         //debugPrintfEXT("\n%f %d %d", span, depth, loc_info[loc_idx].parent_list[0]);
     }
 
-    vec3 ray_dir = normalize(world_pos - uniform_buffer.cam_front.xyz);
-    vec3 inv_ray_dir = 1.0 / max(abs(ray_dir), 0.001);
-    Ray ray = Ray(world_pos, ray_dir, inv_ray_dir);
-
-    vec3 hit = rayCubeIntersect(local_pos, ray.dir, ray.inv_ray_dir, span);
-    vec3 hit_mask_vec = vec3(lessThan(hit, min(hit.yzx, hit.zxy)));
-    float len = dot(hit, hit_mask_vec);
+    len = 50.0;
 
     float max_len = len;
+    float dist = 0.0;
 
     vec2 base_pos = vec2(0); // todo
     // vec2 max_pos = vec2(TEXTURE_ALIGN, TEXTURE_ALIGN + (TEXTURE_ALIGN * TEXTURE_ALIGN)) + base_pos;
 
-    vec2 px = base_pos + pos_to_px(floor(local_pos));
-    vec4 col = texelFetch(brick_texture, ivec2(px), 0);
+    vec4 col = texelFetch(brick_texture, ivec2(pos_to_px(pos_on_edge)), 0);
 
     bool out_parent = false;
 
@@ -125,13 +129,16 @@ void main() {
 
         len = dot(hit, hit_mask_vec);
 
-        px += pos_to_px((floor(hit_mask_vec) * sign(ray.dir)));
+        vec3 local_pos_on_edge = hit_mask_vec * sign(ray.dir);
+
+        local_pos += ray.dir * len - local_pos_on_edge;
+        pos_on_edge += local_pos_on_edge;
+
+        dist += len;
+
         local_pos += len * ray.dir;
 
-        col = texelFetch(brick_texture, ivec2(px), 0);
-        out_parent = len > max_len;
-        if (out_parent) {
-            return;
-        }
+        col = texelFetch(brick_texture, ivec2(pos_to_px(pos_on_edge)), 0);
+        out_parent = dist > max_len;
     }
 }

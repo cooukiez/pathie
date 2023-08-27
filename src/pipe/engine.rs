@@ -11,7 +11,7 @@ use crate::{
     interface::interface::Interface,
     pipe::{
         descriptor::DescriptorPool,
-        pipe::{LocInfo, Pipe, Vertex},
+        pipe::{JFAPush, LocInfo, Pipe, Vertex},
     },
     tree::{
         octant::Octant,
@@ -46,143 +46,228 @@ pub struct Engine {
     pub pipe_comp: Pipe,
     pub vk_pipe_comp: vk::Pipeline,
 
+    pub jfa_pool: DescriptorPool,
+    pub jfa_pipe: Pipe,
+    pub vk_jfa_comp: vk::Pipeline,
+
     pub pool_graphic: DescriptorPool,
     pub pipe_graphic: Pipe,
 }
 
 impl Engine {
     pub fn create_base(interface: &Interface, uniform: &Uniform, octree: &Octree) -> Self {
-        let mut result = Self::default();
+        unsafe {
+            let mut result = Self::default();
 
-        result.image_target_list = interface
-            .swapchain
-            .img_list
-            .iter()
-            .map(|_| ImageTarget::attachment_img(interface, interface.surface.render_res))
-            .collect();
+            result.image_target_list = interface
+                .swapchain
+                .img_list
+                .iter()
+                .map(|_| ImageTarget::attachment_img(interface, interface.surface.render_res))
+                .collect();
 
-        result.depth_image = ImageTarget::depth_img(interface, interface.surface.render_res.into());
+            result.depth_image =
+                ImageTarget::depth_img(interface, interface.surface.render_res.into());
 
-        result.brick_texture = ImageTarget::storage_texture(
-            interface,
-            vk::Format::R8G8B8A8_UNORM,
-            vk::Extent3D {
-                width: 4096,
-                height: 2048,
-                depth: 1,
-            },
-            vk::ImageType::TYPE_2D,
-            vk::ImageViewType::TYPE_2D,
-            1,
-        );
+            result.brick_texture = ImageTarget::storage_texture(
+                interface,
+                vk::Format::R8G8B8A8_UNORM,
+                vk::Extent3D {
+                    width: 4096,
+                    height: 2048,
+                    depth: 1,
+                },
+                vk::ImageType::TYPE_2D,
+                vk::ImageViewType::TYPE_2D,
+                1,
+            );
 
-        result.img_buffer = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_pixel(4096, 4096, image::Rgb([0, 0, 0]));
-        
-        //image.put_pixel(0, 0, image::Rgb([0, 0, 0]));
+            result.img_buffer = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_pixel(
+                4096,
+                4096,
+                image::Rgb([0, 0, 0]),
+            );
 
-        let (vertex_data, index_data, loc_info) =
-            Pipe::get_octree_vert_data(octree, &mut result.img_buffer);
+            //image.put_pixel(0, 0, image::Rgb([0, 0, 0]));
 
-        let mut img_data = result.img_buffer.clone().into_raw();
-        
+            let (vertex_data, index_data, loc_info) =
+                Pipe::get_octree_vert_data(octree, &mut result.img_buffer);
 
-        // result.img_buffer.save("out.png").unwrap();
+            let mut img_data = result.img_buffer.clone().into_raw();
 
-        log::info!("Creating ImageBuffer ...");
-        result.vk_img_buffer = BufferSet::new(
-            (std::mem::size_of::<u8>() * img_data.len()) as u64,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            vk::SharingMode::EXCLUSIVE,
-            &interface.device,
-        )
-        .create_memory(
-            &interface.device,
-            &interface.phy_device,
-            align_of::<u8>() as u64,
-            (std::mem::size_of::<u8>() * img_data.len()) as u64,
-            &img_data,
-        );
+            // result.img_buffer.save("out.png").unwrap();
 
-        log::info!("Creating IndexBuffer ...");
-        result.index_data = index_data;
-        result.index_buffer = BufferSet::new(
-            mem::size_of_val(&result.index_data[..]) as u64,
-            vk::BufferUsageFlags::INDEX_BUFFER,
-            vk::SharingMode::EXCLUSIVE,
-            &interface.device,
-        )
-        .create_memory(
-            &interface.device,
-            &interface.phy_device,
-            align_of::<u32>() as u64,
-            mem::size_of_val(&result.index_data[..]) as u64,
-            &result.index_data,
-        );
+            log::info!("Creating ImageBuffer ...");
+            result.vk_img_buffer = BufferSet::new(
+                (std::mem::size_of::<u8>() * img_data.len()) as u64,
+                vk::BufferUsageFlags::TRANSFER_SRC,
+                vk::SharingMode::EXCLUSIVE,
+                &interface.device,
+            )
+            .create_memory(
+                &interface.device,
+                &interface.phy_device,
+                align_of::<u8>() as u64,
+                (std::mem::size_of::<u8>() * img_data.len()) as u64,
+                &img_data,
+            );
 
-        log::info!("Creating VertexBuffer ...");
-        result.vertex_buffer = BufferSet::new(
-            mem::size_of_val(&vertex_data[..]) as u64,
-            vk::BufferUsageFlags::VERTEX_BUFFER,
-            vk::SharingMode::EXCLUSIVE,
-            &interface.device,
-        )
-        .create_memory(
-            &interface.device,
-            &interface.phy_device,
-            align_of::<Vertex>() as u64,
-            mem::size_of_val(&vertex_data[..]) as u64,
-            &vertex_data,
-        );
+            log::info!("Creating IndexBuffer ...");
+            result.index_data = index_data;
+            result.index_buffer = BufferSet::new(
+                mem::size_of_val(&result.index_data[..]) as u64,
+                vk::BufferUsageFlags::INDEX_BUFFER,
+                vk::SharingMode::EXCLUSIVE,
+                &interface.device,
+            )
+            .create_memory(
+                &interface.device,
+                &interface.phy_device,
+                align_of::<u32>() as u64,
+                mem::size_of_val(&result.index_data[..]) as u64,
+                &result.index_data,
+            );
 
-        log::info!("Creating UniformBuffer ...");
-        result.uniform_buffer = BufferSet::new(
-            mem::size_of::<Uniform>() as u64,
-            vk::BufferUsageFlags::UNIFORM_BUFFER,
-            vk::SharingMode::EXCLUSIVE,
-            &interface.device,
-        )
-        .create_memory(
-            &interface.device,
-            &interface.phy_device,
-            align_of::<Uniform>() as u64,
-            mem::size_of::<Uniform>() as u64,
-            &[uniform.clone()],
-        );
+            log::info!("Creating VertexBuffer ...");
+            result.vertex_buffer = BufferSet::new(
+                mem::size_of_val(&vertex_data[..]) as u64,
+                vk::BufferUsageFlags::VERTEX_BUFFER,
+                vk::SharingMode::EXCLUSIVE,
+                &interface.device,
+            )
+            .create_memory(
+                &interface.device,
+                &interface.phy_device,
+                align_of::<Vertex>() as u64,
+                mem::size_of_val(&vertex_data[..]) as u64,
+                &vertex_data,
+            );
 
-        log::info!("Creating OctreeBuffer ...");
-        result.octree_buffer = BufferSet::new(
-            DEFAULT_STORAGE_BUFFER_SIZE,
-            vk::BufferUsageFlags::STORAGE_BUFFER,
-            vk::SharingMode::EXCLUSIVE,
-            &interface.device,
-        )
-        .create_memory(
-            &interface.device,
-            &interface.phy_device,
-            align_of::<u32>() as u64,
-            DEFAULT_STORAGE_BUFFER_SIZE,
-            &octree.octant_data,
-        );
+            log::info!("Creating UniformBuffer ...");
+            result.uniform_buffer = BufferSet::new(
+                mem::size_of::<Uniform>() as u64,
+                vk::BufferUsageFlags::UNIFORM_BUFFER,
+                vk::SharingMode::EXCLUSIVE,
+                &interface.device,
+            )
+            .create_memory(
+                &interface.device,
+                &interface.phy_device,
+                align_of::<Uniform>() as u64,
+                mem::size_of::<Uniform>() as u64,
+                &[uniform.clone()],
+            );
 
-        log::info!("Creating Location Info Buffer ...");
-        result.loc_info_buffer = BufferSet::new(
-            (mem::size_of::<LocInfo>() * loc_info.len()) as u64,
-            vk::BufferUsageFlags::STORAGE_BUFFER,
-            vk::SharingMode::EXCLUSIVE,
-            &interface.device,
-        )
-        .create_memory(
-            &interface.device,
-            &interface.phy_device,
-            align_of::<LocInfo>() as u64,
-            (mem::size_of::<LocInfo>() * loc_info.len()) as u64,
-            &loc_info,
-        );
+            log::info!("Creating OctreeBuffer ...");
+            result.octree_buffer = BufferSet::new(
+                DEFAULT_STORAGE_BUFFER_SIZE,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::SharingMode::EXCLUSIVE,
+                &interface.device,
+            )
+            .create_memory(
+                &interface.device,
+                &interface.phy_device,
+                align_of::<u32>() as u64,
+                DEFAULT_STORAGE_BUFFER_SIZE,
+                &octree.octant_data,
+            );
 
-        result
+            log::info!("Creating Location Info Buffer ...");
+            result.loc_info_buffer = BufferSet::new(
+                (mem::size_of::<LocInfo>() * loc_info.len()) as u64,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                vk::SharingMode::EXCLUSIVE,
+                &interface.device,
+            )
+            .create_memory(
+                &interface.device,
+                &interface.phy_device,
+                align_of::<LocInfo>() as u64,
+                (mem::size_of::<LocInfo>() * loc_info.len()) as u64,
+                &loc_info,
+            );
+
+            interface.record_submit_cmd(
+                interface.setup_cmd_fence,
+                interface.setup_cmd_buffer,
+                &[],
+                &[],
+                |cmd_buffer| {
+                    let texture_barrier = vk::ImageMemoryBarrier {
+                        dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                        new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        image: result.brick_texture.img,
+                        subresource_range: vk::ImageSubresourceRange {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            level_count: 1,
+                            layer_count: 1,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    };
+                    interface.device.cmd_pipeline_barrier(
+                        cmd_buffer,
+                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                        vk::PipelineStageFlags::TRANSFER,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[texture_barrier],
+                    );
+
+                    let buffer_copy = vk::BufferImageCopy::builder()
+                        .image_subresource(
+                            vk::ImageSubresourceLayers::builder()
+                                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                .layer_count(1)
+                                .build(),
+                        )
+                        .image_extent(vk::Extent3D {
+                            width: 4096,
+                            height: 2048,
+                            depth: 1,
+                        })
+                        .build();
+
+                    interface.device.cmd_copy_buffer_to_image(
+                        cmd_buffer,
+                        result.vk_img_buffer.buffer,
+                        result.brick_texture.img,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[buffer_copy],
+                    );
+                    let texture_barrier_end = vk::ImageMemoryBarrier {
+                        src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
+                        dst_access_mask: vk::AccessFlags::SHADER_READ,
+                        old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                        image: result.brick_texture.img,
+                        subresource_range: vk::ImageSubresourceRange {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            level_count: 1,
+                            layer_count: 1,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    };
+                    interface.device.cmd_pipeline_barrier(
+                        cmd_buffer,
+                        vk::PipelineStageFlags::TRANSFER,
+                        vk::PipelineStageFlags::FRAGMENT_SHADER,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[texture_barrier_end],
+                    );
+                },
+            );
+
+            result
+        }
     }
 
-    pub fn create_compute(
+    pub fn create_draw_compute(
         &self,
         interface: &Interface,
         uniform: &Uniform,
@@ -239,7 +324,67 @@ impl Engine {
                 &interface.device,
             );
 
-            result.pipe_comp = Pipe::create_comp_pipe(&interface.device, &result.pool_comp);
+            result.pipe_comp = Pipe::create_comp_pipe(&interface.device, &result.pool_comp, &[]);
+
+            result
+        }
+    }
+
+    pub fn create_jfa_comp(
+        &self,
+        interface: &Interface,
+        uniform: &Uniform,
+        octree: &Octree,
+    ) -> Self {
+        unsafe {
+            let mut result = self.clone();
+
+            log::info!("Creating descriptor set layout list ...");
+            result.jfa_pool = DescriptorPool::default()
+                .create_descriptor_set_layout(
+                    vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                    1,
+                    vk::ShaderStageFlags::COMPUTE,
+                    &interface.device,
+                )
+                .create_descriptor_set_layout(
+                    vk::DescriptorType::STORAGE_IMAGE,
+                    1,
+                    vk::ShaderStageFlags::COMPUTE,
+                    &interface.device,
+                );
+
+            result.jfa_pool = result
+                .jfa_pool
+                .create_descriptor_pool(&interface.device)
+                .write_descriptor_pool(&interface.device);
+
+            log::info!("Writing descriptor list ...");
+            result.jfa_pool.write_img_desc(
+                &self.brick_texture,
+                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                0,
+                0,
+                vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                &interface.device,
+            );
+
+            result.jfa_pool.write_img_desc(
+                &self.brick_texture,
+                vk::ImageLayout::GENERAL,
+                1,
+                0,
+                vk::DescriptorType::STORAGE_IMAGE,
+                &interface.device,
+            );
+
+            let push_constant = vk::PushConstantRange::builder()
+                .size(mem::size_of::<JFAPush>() as u32)
+                .stage_flags(vk::ShaderStageFlags::COMPUTE)
+                .build();
+
+            result.jfa_pipe =
+                Pipe::create_comp_pipe(&interface.device, &result.pool_comp, &[push_constant]);
 
             result
         }
@@ -253,82 +398,6 @@ impl Engine {
     ) -> Self {
         unsafe {
             let mut result = self.clone();
-
-            result.pipe_graphic.record_submit_cmd(
-                &interface.device,
-                interface.setup_cmd_fence,
-                interface.setup_cmd_buffer,
-                &[],
-                &[],
-                interface.present_queue,
-                |cmd_buffer| {
-                    let texture_barrier = vk::ImageMemoryBarrier {
-                        dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
-                        new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                        image: result.brick_texture.img,
-                        subresource_range: vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            level_count: 1,
-                            layer_count: 1,
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    };
-                    interface.device.cmd_pipeline_barrier(
-                        cmd_buffer,
-                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                        vk::PipelineStageFlags::TRANSFER,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[texture_barrier],
-                    );
-                    let buffer_copy = vk::BufferImageCopy::builder()
-                        .image_subresource(
-                            vk::ImageSubresourceLayers::builder()
-                                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                                .layer_count(1)
-                                .build(),
-                        )
-                        .image_extent(vk::Extent3D {
-                            width: 4096,
-                            height: 2048,
-                            depth: 1,
-                        })
-                        .build();
-
-                    interface.device.cmd_copy_buffer_to_image(
-                        cmd_buffer,
-                        result.vk_img_buffer.buffer,
-                        result.brick_texture.img,
-                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                        &[buffer_copy],
-                    );
-                    let texture_barrier_end = vk::ImageMemoryBarrier {
-                        src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
-                        dst_access_mask: vk::AccessFlags::SHADER_READ,
-                        old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                        new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        image: result.brick_texture.img,
-                        subresource_range: vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            level_count: 1,
-                            layer_count: 1,
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    };
-                    interface.device.cmd_pipeline_barrier(
-                        cmd_buffer,
-                        vk::PipelineStageFlags::TRANSFER,
-                        vk::PipelineStageFlags::FRAGMENT_SHADER,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[texture_barrier_end],
-                    );
-                },
-            );
 
             log::info!("Creating descriptor set layout list ...");
             result.pool_graphic = DescriptorPool::default()
@@ -405,6 +474,7 @@ impl Engine {
                 &interface.device,
                 &interface.surface,
                 &result.pool_graphic,
+                &[],
             );
 
             result
@@ -415,6 +485,10 @@ impl Engine {
     /// Get swapchain image, begin draw, render with
     /// pipe onto image target and finally blit to swapchain
     /// image. Then end draw.
+    ///
+    /// Originally used for drawing, now we use draw_graphic with
+    /// normal vertex pipeline, no quad just mesh until certain level and
+    /// then tracing further.
 
     pub fn draw_comp(
         &self,
@@ -424,13 +498,11 @@ impl Engine {
     ) -> Result<bool, Box<dyn Error>> {
         unsafe {
             interface.swap_draw_next(|present_index| {
-                self.pipe_comp.record_submit_cmd(
-                    &interface.device,
+                interface.record_submit_cmd(
                     interface.draw_cmd_fence,
                     interface.draw_cmd_buffer,
                     &[interface.present_complete],
                     &[interface.render_complete],
-                    interface.present_queue,
                     |cmd_buffer| {
                         self.pool_comp.write_img_desc(
                             &self.image_target_list[present_index as usize],
@@ -453,7 +525,7 @@ impl Engine {
                         interface.device.cmd_bind_pipeline(
                             cmd_buffer,
                             vk::PipelineBindPoint::COMPUTE,
-                            self.vk_pipe_comp,
+                            self.pipe_comp.pipe,
                         );
                         interface.device.cmd_bind_descriptor_sets(
                             cmd_buffer,
@@ -498,6 +570,41 @@ impl Engine {
         }
     }
 
+    pub fn run_jfa_iteration(&self, interface: &Interface, pref: &Pref, uniform: &Uniform) {
+        unsafe {
+            interface.record_submit_cmd(
+                interface.comp_cmd_fence,
+                interface.comp_cmd_buffer,
+                &[],
+                &[],
+                |cmd_buffer| {
+                    // Dispatch Compute Pipe
+                    interface.device.cmd_bind_pipeline(
+                        cmd_buffer,
+                        vk::PipelineBindPoint::COMPUTE,
+                        self.jfa_pipe.pipe,
+                    );
+
+                    interface.device.cmd_bind_descriptor_sets(
+                        cmd_buffer,
+                        vk::PipelineBindPoint::COMPUTE,
+                        self.jfa_pipe.pipe_layout,
+                        0,
+                        &self.pool_comp.set_list[..],
+                        &[],
+                    );
+
+                    interface.device.cmd_dispatch(
+                        cmd_buffer,
+                        interface.surface.render_res.width / 16, // todo
+                        interface.surface.render_res.height / 16, // todo
+                        1,
+                    );
+                },
+            )
+        }
+    }
+
     pub fn draw_graphic(
         &self,
         interface: &Interface,
@@ -506,13 +613,11 @@ impl Engine {
     ) -> Result<bool, Box<dyn Error>> {
         unsafe {
             interface.swap_draw_next(|present_index| {
-                self.pipe_graphic.record_submit_cmd(
-                    &interface.device,
+                interface.record_submit_cmd(
                     interface.draw_cmd_fence,
                     interface.draw_cmd_buffer,
                     &[interface.present_complete],
                     &[interface.render_complete],
-                    interface.present_queue,
                     |cmd_buffer| {
                         self.pool_graphic.write_buffer_desc(
                             &self.uniform_buffer,
@@ -752,6 +857,9 @@ impl Default for Engine {
             pool_comp: Default::default(),
             pipe_comp: Default::default(),
             vk_pipe_comp: Default::default(),
+            jfa_pool: Default::default(),
+            jfa_pipe: Default::default(),
+            vk_jfa_comp: Default::default(),
             pool_graphic: Default::default(),
             pipe_graphic: Default::default(),
         }

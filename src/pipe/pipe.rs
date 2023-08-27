@@ -1,6 +1,6 @@
 use std::{ffi::CString, io::Cursor, mem};
 
-use ash::{util::read_spv, vk, Device};
+use ash::{util::read_spv, vk::{self, PushConstantRange}, Device};
 use cgmath::num_traits::Pow;
 use nalgebra_glm::{Vec2, Vec3, Vec4};
 
@@ -54,16 +54,23 @@ pub struct Pipe {
     pub pipe: vk::Pipeline,
 }
 
+#[derive(Clone, Debug, Copy)]
+pub struct JFAPush {
+    pub px_per_group: Vec2,
+}
+
 // "../../shader/comp.spv"
 // include_bytes!("../../shader/comp.spv")
 
 impl Pipe {
-    pub fn create_layout(&self, descriptor_pool: &DescriptorPool, device: &Device) -> Self {
+    pub fn create_layout(&self, descriptor_pool: &DescriptorPool, push_constant_list: &[PushConstantRange], device: &Device) -> Self {
         unsafe {
             let mut result = self.clone();
 
-            let info =
-                vk::PipelineLayoutCreateInfo::builder().set_layouts(&descriptor_pool.layout_list);
+            let info = vk::PipelineLayoutCreateInfo::builder()
+                .set_layouts(&descriptor_pool.layout_list)
+                .push_constant_ranges(push_constant_list)
+                .build();
 
             log::info!("Creating PipelineLayout ...");
             result.pipe_layout = device.create_pipeline_layout(&info, None).unwrap();
@@ -72,7 +79,7 @@ impl Pipe {
         }
     }
 
-    pub fn create_comp_pipe(device: &Device, pool: &DescriptorPool) -> Self {
+    pub fn create_comp_pipe(device: &Device, pool: &DescriptorPool, push_constant_list: &[PushConstantRange]) -> Self {
         unsafe {
             let mut result = Self::default();
 
@@ -95,7 +102,7 @@ impl Pipe {
                 ..Default::default()
             };
 
-            result = result.create_layout(pool, device);
+            result = result.create_layout(pool, push_constant_list, device);
 
             let compute_pipe_info = vk::ComputePipelineCreateInfo::builder()
                 .stage(shader_stage)
@@ -132,8 +139,10 @@ impl Pipe {
                 let center = pos_info.local_pos.xyz() * 2.0 + Vec3::ftv(branch_info.span / 2.0);
 
                 let length = TEXTURE_ALIGN.pow(2) as f32 * leaf_idx as f32;
-                let base_px =
-                    Vec2::new((length / img.height() as f32).floor() * TEXTURE_ALIGN, length % img.height() as f32);
+                let base_px = Vec2::new(
+                    (length / img.height() as f32).floor() * TEXTURE_ALIGN,
+                    length % img.height() as f32,
+                );
 
                 octree.write_branch_to_texture(
                     loc_branch_data,
@@ -205,6 +214,7 @@ impl Pipe {
         device: &Device,
         surface: &SurfaceGroup,
         pool: &DescriptorPool,
+        push_constant_list: &[PushConstantRange],
     ) -> Self {
         unsafe {
             let mut result = Self::default();
@@ -248,7 +258,7 @@ impl Pipe {
                 },
             ];
 
-            result = result.create_layout(pool, device);
+            result = result.create_layout(pool, push_constant_list, device);
 
             let vertex_binding_list = vec![vk::VertexInputBindingDescription {
                 binding: 0,
@@ -387,62 +397,6 @@ impl Pipe {
                 .expect("ERROR_CREATE_PIPELINE")[0];
 
             result
-        }
-    }
-
-    /// Submit command buffer with
-    /// sync setup. With draw command buffer and
-    /// present queue.
-
-    pub fn record_submit_cmd<Function: FnOnce(vk::CommandBuffer)>(
-        &self,
-        device: &Device,
-        draw_cmd_fence: vk::Fence,
-        draw_cmd_buffer: vk::CommandBuffer,
-        present_complete: &[vk::Semaphore],
-        render_complete: &[vk::Semaphore],
-        present_queue: vk::Queue,
-        function: Function,
-    ) {
-        unsafe {
-            device
-                .wait_for_fences(&[draw_cmd_fence], true, std::u64::MAX)
-                .expect("DEVICE_LOST");
-
-            device
-                .reset_fences(&[draw_cmd_fence])
-                .expect("FENCE_RESET_FAILED");
-
-            device
-                .reset_command_buffer(
-                    draw_cmd_buffer,
-                    vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-                )
-                .expect("ERR_RESET_CMD_BUFFER");
-
-            let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
-                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-
-            device
-                .begin_command_buffer(draw_cmd_buffer, &command_buffer_begin_info)
-                .expect("ERR_BEGIN_CMD_BUFFER");
-
-            function(draw_cmd_buffer);
-
-            device
-                .end_command_buffer(draw_cmd_buffer)
-                .expect("ERR_END_CMD_BUFFER");
-
-            let submit_info = vk::SubmitInfo::builder()
-                .wait_dst_stage_mask(&[vk::PipelineStageFlags::BOTTOM_OF_PIPE])
-                .wait_semaphores(present_complete)
-                .command_buffers(&[draw_cmd_buffer])
-                .signal_semaphores(render_complete)
-                .build();
-
-            device
-                .queue_submit(present_queue, &[submit_info], draw_cmd_fence)
-                .expect("QUEUE_SUBMIT_FAILED");
         }
     }
 
