@@ -13,9 +13,10 @@ layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0) uniform sampler2D brick_texture;
 layout (set = 1, binding = 0, rgba8) uniform image2D out_brick_texture;
 
-layout (set = 2, binding = 0) uniform JFA {
+layout( push_constant ) uniform PushConstant
+{
     vec2 px_per_group;
-} jfa_buffer;
+} constant;
 
 
 // get minimum value in which it could go
@@ -40,7 +41,7 @@ void compare_neighbor(vec3 own_pos, vec3 check_neighbor, vec2 base_texel, inout 
 
 void main() {
     vec2 group_pos = vec2(gl_GlobalInvocationID.xy);
-    vec2 base_texel = group_pos * jfa_buffer.px_per_group;
+    vec2 base_texel = group_pos * constant.px_per_group;
 
     float z_comp = floor(base_texel.y / TEXTURE_ALIGN);
     vec3 base_pos = vec3(base_texel.x, base_texel.y - z_comp, z_comp);
@@ -58,4 +59,5 @@ void main() {
     compare_neighbor(base_pos, vec3(-1, -1, -1), base_texel, cur_near, cur_dist);
 
     imageStore(out_brick_texture, ivec2(group_pos), vec4(cur_near, cur_dist));
+    imageStore(out_brick_texture, ivec2(vec2(0, 1)), vec4(1, 1, 1, 0));
 }

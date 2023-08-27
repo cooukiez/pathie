@@ -98,7 +98,7 @@ impl ImageTarget {
             result
         }
     }
-
+    
     /// Create new image target with image, image view, image memory and
     /// image sampler. It is only intended to be used as two dimensional image.
     /// Will return new image target object.
@@ -170,7 +170,7 @@ impl ImageTarget {
                 .array_layers(array_len)
                 .samples(vk::SampleCountFlags::TYPE_1)
                 .tiling(vk::ImageTiling::OPTIMAL)
-                .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
+                .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::STORAGE)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
                 .image_type(img_type)

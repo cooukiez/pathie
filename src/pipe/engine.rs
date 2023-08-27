@@ -6,6 +6,7 @@ use std::{
 
 use ash::vk;
 use cgmath::Vector3;
+use nalgebra_glm::Vec2;
 
 use crate::{
     interface::interface::Interface,
@@ -29,7 +30,7 @@ use super::{buffer::BufferSet, image::ImageTarget};
 pub struct Engine {
     pub image_target_list: Vec<ImageTarget>,
     pub depth_image: ImageTarget,
-    pub img_buffer: image::ImageBuffer<image::Rgb<u8>, Vec<u8>>,
+    pub img_buffer: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
     pub vk_img_buffer: BufferSet,
     pub brick_texture: ImageTarget,
 
@@ -74,7 +75,7 @@ impl Engine {
                 vk::Format::R8G8B8A8_UNORM,
                 vk::Extent3D {
                     width: 4096,
-                    height: 2048,
+                    height: 4096,
                     depth: 1,
                 },
                 vk::ImageType::TYPE_2D,
@@ -82,10 +83,10 @@ impl Engine {
                 1,
             );
 
-            result.img_buffer = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_pixel(
+            result.img_buffer = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_pixel(
                 4096,
                 4096,
-                image::Rgb([0, 0, 0]),
+                image::Rgba([0, 0, 0, 0]),
             );
 
             //image.put_pixel(0, 0, image::Rgb([0, 0, 0]));
@@ -225,7 +226,7 @@ impl Engine {
                         )
                         .image_extent(vk::Extent3D {
                             width: 4096,
-                            height: 2048,
+                            height: 4096,
                             depth: 1,
                         })
                         .build();
@@ -570,7 +571,7 @@ impl Engine {
         }
     }
 
-    pub fn run_jfa_iteration(&self, interface: &Interface, pref: &Pref, uniform: &Uniform) {
+    pub fn run_jfa_iteration(&self, interface: &Interface, tex_extent: vk::Extent3D, dist_between: u32) {
         unsafe {
             interface.record_submit_cmd(
                 interface.comp_cmd_fence,
@@ -578,12 +579,21 @@ impl Engine {
                 &[],
                 &[],
                 |cmd_buffer| {
+                    let gcx = tex_extent.width / dist_between;
+                    let gcy = tex_extent.height / dist_between;
+
+                    let push = JFAPush {
+                        px_per_group: Vec2::new(dist_between as f32, dist_between as f32),
+                    };
+
                     // Dispatch Compute Pipe
                     interface.device.cmd_bind_pipeline(
                         cmd_buffer,
                         vk::PipelineBindPoint::COMPUTE,
                         self.jfa_pipe.pipe,
                     );
+
+                    interface.device.cmd_push_constants(cmd_buffer, self.jfa_pipe.pipe_layout, vk::ShaderStageFlags::COMPUTE, 0, &[dist_between as u8]);
 
                     interface.device.cmd_bind_descriptor_sets(
                         cmd_buffer,
@@ -596,8 +606,8 @@ impl Engine {
 
                     interface.device.cmd_dispatch(
                         cmd_buffer,
-                        interface.surface.render_res.width / 16, // todo
-                        interface.surface.render_res.height / 16, // todo
+                        gcx,
+                        gcy,
                         1,
                     );
                 },

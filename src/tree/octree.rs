@@ -142,7 +142,7 @@ impl Octree {
         &self,
         branch_data: &[BranchInfo; MAX_DEPTH],
         pos_info: &PosInfo,
-        img: &mut image::ImageBuffer<image::Rgb<u8>, Vec<u8>>,
+        img: &mut image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
         base_px: Vec2,
         pos_on_edge: Vec4,
         base_span: f32,
@@ -179,7 +179,7 @@ impl Octree {
                 let local_pos = pos_info.local_pos - pos_on_edge;
                 let pos = base_px + Vec2::new(local_pos.x, local_pos.y + (local_pos.z * base_span));
 
-                img.put_pixel(pos.x as u32, pos.y as u32, image::Rgb([255, 255, 255]));
+                img.put_pixel(pos.x as u32, pos.y as u32, image::Rgba([255, 255, 255, 0]));
                 // *img.get_pixel_mut(5, 5) = image::Rgb([255, 255, 255]);
             }
         }

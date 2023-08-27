@@ -84,14 +84,14 @@ impl Pipe {
             let mut result = Self::default();
 
             log::info!("Getting ShaderCode ...");
-            let mut spv = Cursor::new(&include_bytes!("../../shader/comp.spv")[..]);
+            let mut spv = Cursor::new(&include_bytes!("../../shader/JFA.spv")[..]);
 
-            let code = read_spv(&mut spv).expect("ERR_READ_VERTEX_SPV");
+            let code = read_spv(&mut spv).expect("ERR_READ_COMP_SPV");
             let shader_info = vk::ShaderModuleCreateInfo::builder().code(&code);
 
             let shader_module = device
                 .create_shader_module(&shader_info, None)
-                .expect("ERR_VERTEX_MODULE");
+                .expect("ERR_COMP_MODULE");
 
             log::info!("Stage Creation ...");
             let shader_entry_name = CString::new("main").unwrap();
@@ -119,7 +119,7 @@ impl Pipe {
 
     pub fn get_octree_vert_data(
         octree: &Octree,
-        img: &mut image::ImageBuffer<image::Rgb<u8>, Vec<u8>>,
+        img: &mut image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
     ) -> (Vec<Vertex>, Vec<u32>, Vec<LocInfo>) {
         let mut vertex_data = vec![];
         let mut index_data = vec![];

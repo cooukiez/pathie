@@ -6,7 +6,7 @@ use std::{
 };
 
 use ash::vk;
-use cgmath::Vector2;
+use cgmath::{Vector2, num_traits::Pow};
 use env_logger::fmt::{Color, Formatter};
 use input::Input;
 use interface::interface::Interface;
@@ -151,6 +151,18 @@ impl Render {
             .create_jfa_comp(&interface, &uniform, &octree)
             .create_graphic(&interface, &uniform, &octree);
 
+        for idx in 0..4 {
+            graphic_pipe.run_jfa_iteration(
+                &interface,
+                vk::Extent3D {
+                    width: 4096,
+                    height: 4096,
+                    depth: 1,
+                },
+                (8.0 * 0.5.pow(idx)) as u32,
+            );
+        }
+        
         Render {
             state,
             event_loop,
