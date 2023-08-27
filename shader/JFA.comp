@@ -13,27 +13,20 @@ layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0) uniform sampler2D brick_texture;
 layout (set = 1, binding = 0, rgba8) uniform image2D out_brick_texture;
 
-layout( push_constant ) uniform PushConstant
-{
+layout(push_constant) uniform PushConstant {
     uint px_per_group;
 } constant;
 
+vec2 min_texel;
+vec2 max_texel;
 
-// get minimum value in which it could go
-// without hitting anything in any direction
-// todo: edit description
-float get_distance(vec3 pos, vec3 point) {
-    vec3 dist = abs(point - pos);
-    vec3 relevant_component = vec3(lessThan(dist, min(dist.yzx, dist.zxy)));
-    return dot(dist, relevant_component);
-}
-
-void compare_neighbor(vec3 own_pos, vec3 check_neighbor, vec2 base_texel, inout vec3 cur_near, inout float cur_dist) {
+void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist) {
     vec2 texel = get_neighbor(base_texel, check_neighbor);
-    vec4 val = texelFetch(brick_texture, ivec2(base_texel), 0);
+    texel = clamp(texel, min_texel, max_texel);
+    vec4 val = texelFetch(brick_texture, ivec2(texel), 0);
 
     // neighbor is full or stored distance
-    float dist = val.x > 0.0 ? get_distance(own_pos, own_pos + check_neighbor) : val.w;
+    float dist = val.x > 0.0 ? 1 : val.w + 1;
 
     // get smallest value
     cur_dist = min(cur_dist, dist);
@@ -41,22 +34,56 @@ void compare_neighbor(vec3 own_pos, vec3 check_neighbor, vec2 base_texel, inout 
 
 void main() {
     vec2 group_pos = vec2(gl_GlobalInvocationID.xy);
-    vec2 base_texel = group_pos * float(constant.px_per_group);
+    vec2 base_texel = group_pos * float(constant.px_per_group) + vec2(constant.px_per_group);
 
-    float z_comp = floor(base_texel.y / TEXTURE_ALIGN);
-    vec3 base_pos = vec3(base_texel.x, base_texel.y - z_comp, z_comp);
+    float min_x = floor(base_texel.x / TEXTURE_ALIGN);
+    float min_y = floor(base_texel.y / (TEXTURE_ALIGN * TEXTURE_ALIGN));
+
+    min_texel = vec2(min_x, min_y);
+    max_texel = vec2(min_x + TEXTURE_ALIGN, min_y + TEXTURE_ALIGN * TEXTURE_ALIGN);
 
     vec4 val = texelFetch(brick_texture, ivec2(base_texel), 0);
 
-    // maybe store in component 1, 2, 3 pos and in 4 distance
-    // great idea !!!
-
-    // get current nearest and corresponding distance
-    vec3 cur_near = val.xyz;
     float cur_dist = val.w;
 
     // loop gonna be unrolled cuz more fast
-    compare_neighbor(base_pos, vec3(-1, -1, -1), base_texel, cur_near, cur_dist);
+    compare_neighbor(vec3(-1, -1, -1), base_texel, cur_dist);
+    compare_neighbor(vec3(0, -1, -1), base_texel, cur_dist);
+    compare_neighbor(vec3(1, -1, -1), base_texel, cur_dist);
 
-    imageStore(out_brick_texture, ivec2(group_pos), vec4(cur_near, cur_dist));
+    compare_neighbor(vec3(-1, -1, 0), base_texel, cur_dist);
+    compare_neighbor(vec3(0, -1, 0), base_texel, cur_dist);
+    compare_neighbor(vec3(1, -1, 0), base_texel, cur_dist);
+
+    compare_neighbor(vec3(-1, -1, 1), base_texel, cur_dist);
+    compare_neighbor(vec3(0, -1, 1), base_texel, cur_dist);
+    compare_neighbor(vec3(1, -1, 1), base_texel, cur_dist);
+
+
+    compare_neighbor(vec3(-1, 0, -1), base_texel, cur_dist);
+    compare_neighbor(vec3(0, 0, -1), base_texel, cur_dist);
+    compare_neighbor(vec3(1, 0, -1), base_texel, cur_dist);
+
+    compare_neighbor(vec3(-1, 0, 0), base_texel, cur_dist);
+
+    compare_neighbor(vec3(1, 0, 0), base_texel, cur_dist);
+
+    compare_neighbor(vec3(-1, 0, 1), base_texel, cur_dist);
+    compare_neighbor(vec3(0, 0, 1), base_texel, cur_dist);
+    compare_neighbor(vec3(1, 0, 1), base_texel, cur_dist);
+
+
+    compare_neighbor(vec3(-1, 1, -1), base_texel, cur_dist);
+    compare_neighbor(vec3(0, 1, -1), base_texel, cur_dist);
+    compare_neighbor(vec3(1, 1, -1), base_texel, cur_dist);
+
+    compare_neighbor(vec3(-1, 1, 0), base_texel, cur_dist);
+    compare_neighbor(vec3(0, 1, 0), base_texel, cur_dist);
+    compare_neighbor(vec3(1, 1, 0), base_texel, cur_dist);
+
+    compare_neighbor(vec3(-1, 1, 1), base_texel, cur_dist);
+    compare_neighbor(vec3(0, 1, 1), base_texel, cur_dist);
+    compare_neighbor(vec3(1, 1, 1), base_texel, cur_dist);
+
+    // imageStore(out_brick_texture, ivec2(group_pos), vec4(val.xyz, cur_dist));
 }
