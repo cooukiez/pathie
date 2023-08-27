@@ -7,7 +7,6 @@
 #define TEXTURE_ALIGN 16
 
 #define pos_to_px(pos) (vec2(pos.x, pos.y + (pos.z * TEXTURE_ALIGN)))
-#define get_neighbor(tex_coord, pos) (tex_coord + pos_to_px(pos))
 
 layout (local_size_x = 16, local_size_y = 16) in;
 layout (set = 0, binding = 0) uniform sampler2D brick_texture;
@@ -20,13 +19,25 @@ layout(push_constant) uniform PushConstant {
 vec2 min_texel;
 vec2 max_texel;
 
+vec2 get_neighbor(vec2 base_texel, vec3 neighbor_pos) {
+    float z_comp = neighbor_pos.z * TEXTURE_ALIGN;
+    float z_with_texel_pos = base_texel.y + z_comp;
+
+    z_comp =
+        float(step(max_texel.y, z_with_texel_pos)) *
+        float(step(z_with_texel_pos, min_texel.y)) *
+        z_comp;
+
+    vec2 new_texel = base_texel + vec2(neighbor_pos.x, neighbor_pos.y + z_comp);
+    return clamp(new_texel, min_texel, max_texel);
+}
+
 void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist) {
     vec2 texel = get_neighbor(base_texel, check_neighbor);
-    texel = clamp(texel, min_texel, max_texel);
     vec4 val = texelFetch(brick_texture, ivec2(texel), 0);
 
     // neighbor is full or stored distance
-    float dist = val.x > 0.0 ? 1 : val.w + 1;
+    float dist = val.x > 0.0 ? 1 : val.w * 256.0 + 1;
 
     // get smallest value
     cur_dist = min(cur_dist, dist);
@@ -44,7 +55,7 @@ void main() {
 
     vec4 val = texelFetch(brick_texture, ivec2(base_texel), 0);
 
-    float cur_dist = val.w;
+    float cur_dist = val.w * 256.0;
 
     // loop gonna be unrolled cuz more fast
     compare_neighbor(vec3(-1, -1, -1), base_texel, cur_dist);
@@ -85,5 +96,5 @@ void main() {
     compare_neighbor(vec3(0, 1, 1), base_texel, cur_dist);
     compare_neighbor(vec3(1, 1, 1), base_texel, cur_dist);
 
-    // imageStore(out_brick_texture, ivec2(group_pos), vec4(val.xyz, cur_dist));
+    imageStore(out_brick_texture, ivec2(group_pos), vec4(val.xyz, cur_dist / 256.0));
 }
