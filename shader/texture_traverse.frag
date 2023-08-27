@@ -119,7 +119,7 @@ void main() {
     bool out_parent = false;
 
     for (uint iter = 0; iter < MAX_STEP; iter += 1) {
-        if (col.r > 0.0) {
+        if (col.w == 0.0) {
             frag_color = vec4(0, 1, 0, 0);
             return;
         }

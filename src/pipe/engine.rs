@@ -86,7 +86,7 @@ impl Engine {
             result.img_buffer = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_pixel(
                 4096,
                 4096,
-                image::Rgba([0, 0, 0, 0]),
+                image::Rgba([0, 0, 0, 1]),
             );
 
             //image.put_pixel(0, 0, image::Rgb([0, 0, 0]));
