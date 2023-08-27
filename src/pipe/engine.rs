@@ -385,7 +385,7 @@ impl Engine {
                 .build();
 
             result.jfa_pipe =
-                Pipe::create_comp_pipe(&interface.device, &result.pool_comp, &[push_constant]);
+                Pipe::create_comp_pipe(&interface.device, &result.jfa_pool, &[push_constant]);
 
             result
         }
