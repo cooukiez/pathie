@@ -51,14 +51,25 @@ void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist
     // neighbor is full then use neighbour position or stored distance
     // direction to seed
     vec3 dts = val.w == 0.0 ? abs(pcsl - base_pos) : abs(pssl - base_pos);
+    dtn = val.w == 0.0 ? pcsl : pssl;
 
     // relevant component, smallest component of x,y,z
     vec3 rc = vec3(lessThan(dts, min(dts.yzx, dts.zxy)));
-    // dot from distance to seed and 
+    // dot from distance to seed and relevant component -> smallest distance
     float dist = dot(dts, rc);
+
+    // if seed, we do not care because we reset late no matter the outcome
+    // but if the xyz of val is 0 there might be an error cause where this could cause some wrong data :)
+    // just be sure there is nothing wrong here
+    dtn = dist > 0.0 ? dtn : vec3(16.0);
+    dist = dist > 0.0 ? dist : float(TEXTURE_ALIGN);
 
     // get smallest value
     cur_dist = min(cur_dist, dist);
+
+    // for future developers who get to work on this, please
+    // rework the arguments / params of function and try to minimize complex code
+    // so tl;dr just make it simple :)
 }
 
 void main() {
@@ -78,7 +89,7 @@ void main() {
 
     float cur_dist = val.w * 256.0;
     int k = int(constant.px_per_group);
-    vec3 direction_to_nearest = vec3(0);
+    vec3 direction_to_nearest = vec3(TEXTURE_ALIGN);
 
     /*
     for (int x; x < 3; x++) {
@@ -129,8 +140,9 @@ void main() {
     compare_neighbor(vec3(0, 1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
     compare_neighbor(vec3(1, 1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
 
-    bool is_seed = val.w == 0.0;
-    cur_dist *= is_seed;
+    bool not_seed = val.w != 0.0;
+    cur_dist *= float(not_seed);
+    direction_to_nearest = not_seed ? direction_to_nearest : val.xyz * 256.0;
 
-    imageStore(out_brick_texture, ivec2(base_texel), vec4(val.xyz, cur_dist / 256.0));
+    imageStore(out_brick_texture, ivec2(base_texel), vec4(direction_to_nearest / 256.0, cur_dist / 256.0));
 }
