@@ -8,7 +8,13 @@
 
 #define pos_to_px(pos) (vec2(pos.x, pos.y + (pos.z * TEXTURE_ALIGN)))
 
-layout (local_size_x = 16, local_size_y = 16) in;
+// tex = texel, cs = cube_start or min_texel
+#define get_depth_comp(tex, cs) (floor((tex.y - cs.y) / TEXTURE_ALIGN))
+
+// tex = texel, cs = cube_start or min_texel, dc = depth_component
+#define px_to_pos(tex, cs, dc) (vec3(tex - cs - vec2(0, dc * TEXTURE_ALIGN), dc))
+
+layout (local_size_x = 1, local_size_y = 1) in;
 layout (set = 0, binding = 0) uniform sampler2D brick_texture;
 layout (set = 1, binding = 0, rgba8) uniform image2D out_brick_texture;
 
@@ -19,25 +25,37 @@ layout(push_constant) uniform PushConstant {
 vec2 min_texel;
 vec2 max_texel;
 
+vec3 base_pos;
+
 vec2 get_neighbor(vec2 base_texel, vec3 neighbor_pos) {
     float z_comp = neighbor_pos.z * TEXTURE_ALIGN;
-    float z_with_texel_pos = base_texel.y + z_comp;
+    float z_within_texel_pos = base_texel.y + z_comp;
 
     z_comp =
-        float(step(max_texel.y, z_with_texel_pos)) *
-        float(step(z_with_texel_pos, min_texel.y)) *
+        float(step(max_texel.y, z_within_texel_pos)) *
+        float(step(z_within_texel_pos, min_texel.y)) *
         z_comp;
 
     vec2 new_texel = base_texel + vec2(neighbor_pos.x, neighbor_pos.y + z_comp);
     return clamp(new_texel, min_texel, max_texel);
 }
 
-void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist) {
-    vec2 texel = get_neighbor(base_texel, check_neighbor);
-    vec4 val = texelFetch(brick_texture, ivec2(texel), 0);
+void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist, float neighbour_dist, inout vec3 dtn) {
+    // potential computed seed location also known as neighbour position
+    vec3 pcsl = clamp(base_pos + check_neighbor, vec3(0), vec3(TEXTURE_ALIGN));
+    vec4 val = texelFetch(brick_texture, ivec2(pos_to_px(pcsl)), 0);
 
-    // neighbor is full or stored distance
-    float dist = val.x > 0.0 ? 1 : val.w * 256.0 + 1;
+    // potential stored seed location
+    vec3 pssl = val.xyz * 256.0;
+
+    // neighbor is full then use neighbour position or stored distance
+    // direction to seed
+    vec3 dts = val.w == 0.0 ? abs(pcsl - base_pos) : abs(pssl - base_pos);
+
+    // relevant component, smallest component of x,y,z
+    vec3 rc = vec3(lessThan(dts, min(dts.yzx, dts.zxy)));
+    // dot from distance to seed and 
+    float dist = dot(dts, rc);
 
     // get smallest value
     cur_dist = min(cur_dist, dist);
@@ -45,56 +63,74 @@ void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist
 
 void main() {
     vec2 group_pos = vec2(gl_GlobalInvocationID.xy);
-    vec2 base_texel = group_pos * float(constant.px_per_group) + vec2(constant.px_per_group);
+    vec2 base_texel = group_pos * float(constant.px_per_group) + vec2(round(float(constant.px_per_group) / 2.0) - 1.0);
 
-    float min_x = floor(base_texel.x / TEXTURE_ALIGN);
-    float min_y = floor(base_texel.y / (TEXTURE_ALIGN * TEXTURE_ALIGN));
+    float min_x = floor(base_texel.x / TEXTURE_ALIGN) * TEXTURE_ALIGN;
+    float min_y = floor(base_texel.y / (TEXTURE_ALIGN * TEXTURE_ALIGN)) * TEXTURE_ALIGN * TEXTURE_ALIGN;
 
     min_texel = vec2(min_x, min_y);
     max_texel = vec2(min_x + TEXTURE_ALIGN, min_y + TEXTURE_ALIGN * TEXTURE_ALIGN);
 
+    float depth_comp = get_depth_comp(base_texel, min_texel);
+    base_pos = px_to_pos(base_texel, min_texel, depth_comp);
+
     vec4 val = texelFetch(brick_texture, ivec2(base_texel), 0);
 
     float cur_dist = val.w * 256.0;
+    int k = int(constant.px_per_group);
+    vec3 direction_to_nearest = vec3(0);
+
+    /*
+    for (int x; x < 3; x++) {
+        for (int y; y < 3; y++) {
+            for (int z; z < 3; z++) {
+                compare_neighbor(vec3((x - 1) * k, (y - 1) * k, (z - 1) * k), base_texel, cur_dist, k, direction_to_nearest);
+            }
+        }
+    }
+    */
 
     // loop gonna be unrolled cuz more fast
-    compare_neighbor(vec3(-1, -1, -1), base_texel, cur_dist);
-    compare_neighbor(vec3(0, -1, -1), base_texel, cur_dist);
-    compare_neighbor(vec3(1, -1, -1), base_texel, cur_dist);
+    compare_neighbor(vec3(-1, -1, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(0, -1, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(1, -1, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
 
-    compare_neighbor(vec3(-1, -1, 0), base_texel, cur_dist);
-    compare_neighbor(vec3(0, -1, 0), base_texel, cur_dist);
-    compare_neighbor(vec3(1, -1, 0), base_texel, cur_dist);
+    compare_neighbor(vec3(-1, -1, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(0, -1, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(1, -1, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
 
-    compare_neighbor(vec3(-1, -1, 1), base_texel, cur_dist);
-    compare_neighbor(vec3(0, -1, 1), base_texel, cur_dist);
-    compare_neighbor(vec3(1, -1, 1), base_texel, cur_dist);
-
-
-    compare_neighbor(vec3(-1, 0, -1), base_texel, cur_dist);
-    compare_neighbor(vec3(0, 0, -1), base_texel, cur_dist);
-    compare_neighbor(vec3(1, 0, -1), base_texel, cur_dist);
-
-    compare_neighbor(vec3(-1, 0, 0), base_texel, cur_dist);
-
-    compare_neighbor(vec3(1, 0, 0), base_texel, cur_dist);
-
-    compare_neighbor(vec3(-1, 0, 1), base_texel, cur_dist);
-    compare_neighbor(vec3(0, 0, 1), base_texel, cur_dist);
-    compare_neighbor(vec3(1, 0, 1), base_texel, cur_dist);
+    compare_neighbor(vec3(-1, -1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(0, -1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(1, -1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
 
 
-    compare_neighbor(vec3(-1, 1, -1), base_texel, cur_dist);
-    compare_neighbor(vec3(0, 1, -1), base_texel, cur_dist);
-    compare_neighbor(vec3(1, 1, -1), base_texel, cur_dist);
+    compare_neighbor(vec3(-1, 0, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(0, 0, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(1, 0, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
 
-    compare_neighbor(vec3(-1, 1, 0), base_texel, cur_dist);
-    compare_neighbor(vec3(0, 1, 0), base_texel, cur_dist);
-    compare_neighbor(vec3(1, 1, 0), base_texel, cur_dist);
+    compare_neighbor(vec3(-1, 0, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
 
-    compare_neighbor(vec3(-1, 1, 1), base_texel, cur_dist);
-    compare_neighbor(vec3(0, 1, 1), base_texel, cur_dist);
-    compare_neighbor(vec3(1, 1, 1), base_texel, cur_dist);
+    compare_neighbor(vec3(1, 0, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
 
-    imageStore(out_brick_texture, ivec2(group_pos), vec4(val.xyz, cur_dist / 256.0));
+    compare_neighbor(vec3(-1, 0, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(0, 0, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(1, 0, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
+
+
+    compare_neighbor(vec3(-1, 1, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(0, 1, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(1, 1, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
+
+    compare_neighbor(vec3(-1, 1, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(0, 1, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(1, 1, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
+
+    compare_neighbor(vec3(-1, 1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(0, 1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(1, 1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
+
+    bool is_seed = val.w == 0.0;
+    cur_dist *= is_seed;
+
+    imageStore(out_brick_texture, ivec2(base_texel), vec4(val.xyz, cur_dist / 256.0));
 }
