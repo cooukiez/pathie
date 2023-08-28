@@ -42,27 +42,25 @@ vec2 get_neighbor(vec2 base_texel, vec3 neighbor_pos) {
 
 void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist, float neighbour_dist, inout vec3 dtn) {
     // potential computed seed location also known as neighbour position
-    vec3 pcsl = clamp(base_pos + check_neighbor, vec3(0), vec3(TEXTURE_ALIGN));
-    vec4 val = texelFetch(brick_texture, ivec2(pos_to_px(pcsl)), 0);
+    vec3 neighbour_pos = clamp(base_pos + check_neighbor, vec3(0), vec3(TEXTURE_ALIGN));
+    vec4 val = texelFetch(brick_texture, ivec2(pos_to_px(neighbour_pos) + min_texel), 0);
 
     // potential stored seed location
-    vec3 pssl = val.xyz * 256.0;
+    vec3 potential_stored_seed = val.xyz * 256.0;
+
+    vec3 dir_to_neighbour = abs(neighbour_pos - base_pos);
+    vec3 dir_to_pss = val.w > 15.0 ? vec3(TEXTURE_ALIGN) : abs(potential_stored_seed - base_pos);
+
 
     // neighbor is full then use neighbour position or stored distance
     // direction to seed
-    vec3 dts = val.w == 0.0 ? abs(pcsl - base_pos) : abs(pssl - base_pos);
-    dtn = val.w == 0.0 ? pcsl : pssl;
+    vec3 dts = val.w == 0.0 ? dir_to_neighbour : dir_to_pss;
+    dtn = val.w == 0.0 ? dir_to_neighbour : dir_to_pss;
 
     // relevant component, smallest component of x,y,z
     vec3 rc = vec3(lessThan(dts, min(dts.yzx, dts.zxy)));
     // dot from distance to seed and relevant component -> smallest distance
     float dist = dot(dts, rc);
-
-    // if seed, we do not care because we reset late no matter the outcome
-    // but if the xyz of val is 0 there might be an error cause where this could cause some wrong data :)
-    // just be sure there is nothing wrong here
-    dtn = dist > 0.0 ? dtn : vec3(16.0);
-    dist = dist > 0.0 ? dist : float(TEXTURE_ALIGN);
 
     // get smallest value
     cur_dist = min(cur_dist, dist);
@@ -74,7 +72,7 @@ void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist
 
 void main() {
     vec2 group_pos = vec2(gl_GlobalInvocationID.xy);
-    vec2 base_texel = group_pos * float(constant.px_per_group) + vec2(round(float(constant.px_per_group) / 2.0) - 1.0);
+    vec2 base_texel = group_pos * float(constant.px_per_group) + vec2(floor(float(constant.px_per_group) / 2.0 + 1.0) - 1.0);
 
     float min_x = floor(base_texel.x / TEXTURE_ALIGN) * TEXTURE_ALIGN;
     float min_y = floor(base_texel.y / (TEXTURE_ALIGN * TEXTURE_ALIGN)) * TEXTURE_ALIGN * TEXTURE_ALIGN;
