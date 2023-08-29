@@ -27,34 +27,31 @@ vec2 max_texel;
 
 vec3 base_pos;
 
-void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist, float neighbour_dist, inout vec3 dtn) {
-    // potential computed seed location also known as neighbour position
+void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist, inout vec3 position_of_seed) {
     vec3 neighbour_pos = clamp(base_pos + check_neighbor, vec3(0), vec3(TEXTURE_ALIGN));
-    vec4 val = texelFetch(brick_texture, ivec2(pos_to_px(neighbour_pos) + min_texel), 0);
+    vec4 val = texelFetch(brick_texture, ivec2(pos_to_px(neighbour_pos)), 0);
 
-    // potential stored seed location
+    bool is_seed = val.w == 0.0;
+    bool store_pos_to_seed = val.w < float(TEXTURE_ALIGN);
+
     vec3 potential_stored_seed = val.xyz * 256.0;
 
-    vec3 dir_to_neighbour = abs(neighbour_pos - base_pos);
+    vec3 dir_to_neighbour = abs(check_neighbor);
+    vec3 dir_to_stored = abs(potential_stored_seed - base_pos);
 
-    vec3 dir_to_pss = (val.w * 256.0) > 15.0 ? vec3(TEXTURE_ALIGN) : abs(potential_stored_seed - base_pos);
+    vec3 direction_to_seed = is_seed ? dir_to_neighbour : dir_to_stored;
 
-    // neighbor is full then use neighbour position or stored distance
-    // direction to seed
-    vec3 dts = val.w == 0.0 ? dir_to_neighbour : dir_to_pss;
-    dtn = val.w == 0.0 ? dir_to_neighbour : dir_to_pss;
+    vec3 relevant_comp = vec3(lessThan(direction_to_seed, min(direction_to_seed.yzx, direction_to_seed.zxy)));
 
-    // relevant component, smallest component of x,y,z
-    vec3 rc = vec3(lessThan(dts, min(dts.yzx, dts.zxy)));
-    // dot from distance to seed and relevant component -> smallest distance
-    float dist = dot(dts, rc);
+    float dist = dot(direction_to_seed, relevant_comp);
 
-    // get smallest value
-    cur_dist = min(cur_dist, dist);
-
-    // for future developers who get to work on this, please
-    // rework the arguments / params of function and try to minimize complex code
-    // so tl;dr just make it simple :)
+    if (is_seed) {
+        cur_dist = min(cur_dist, dist);
+        position_of_seed = neighbour_pos;
+    } else if (store_pos_to_seed) {
+        cur_dist = min(cur_dist, dist);
+        position_of_seed = potential_stored_seed;
+    }
 }
 
 void main() {
@@ -71,63 +68,67 @@ void main() {
     base_pos = px_to_pos(base_texel, min_texel, depth_comp);
 
     vec4 val = texelFetch(brick_texture, ivec2(base_texel), 0);
+    bool is_seed = val.w == 0.0;
 
     float cur_dist = val.w * 256.0;
-    int k = int(floor(float(constant.px_per_group) / 2.0 + 1.0));
-    vec3 direction_to_nearest = vec3(TEXTURE_ALIGN);
+
+
+    int step_len = int(floor(float(constant.px_per_group) / 2.0 + 1.0));
+    vec3 position_of_seed = vec3(TEXTURE_ALIGN);
 
     /*
     for (int x; x < 3; x++) {
         for (int y; y < 3; y++) {
             for (int z; z < 3; z++) {
-                compare_neighbor(vec3((x - 1) * k, (y - 1) * k, (z - 1) * k), base_texel, cur_dist, k, direction_to_nearest);
+                compare_neighbor(vec3((x - 1) * step_len, (y - 1) * step_len, (z - 1) * k), base_texel, cur_dist, position_of_seed);
             }
         }
     }
     */
 
     // loop gonna be unrolled cuz more fast
-    compare_neighbor(vec3(-1, -1, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(0, -1, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(1, -1, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(-1, -1, -1) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(0, -1, -1) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(1, -1, -1) * step_len, base_texel, cur_dist, position_of_seed);
 
-    compare_neighbor(vec3(-1, -1, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(0, -1, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(1, -1, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(-1, -1, 0) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(0, -1, 0) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(1, -1, 0) * step_len, base_texel, cur_dist, position_of_seed);
 
-    compare_neighbor(vec3(-1, -1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(0, -1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(1, -1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
-
-
-    compare_neighbor(vec3(-1, 0, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(0, 0, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(1, 0, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
-
-    compare_neighbor(vec3(-1, 0, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
-
-    compare_neighbor(vec3(1, 0, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
-
-    compare_neighbor(vec3(-1, 0, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(0, 0, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(1, 0, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(-1, -1, 1) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(0, -1, 1) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(1, -1, 1) * step_len, base_texel, cur_dist, position_of_seed);
 
 
-    compare_neighbor(vec3(-1, 1, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(0, 1, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(1, 1, -1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(-1, 0, -1) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(0, 0, -1) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(1, 0, -1) * step_len, base_texel, cur_dist, position_of_seed);
 
-    compare_neighbor(vec3(-1, 1, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(0, 1, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(1, 1, 0) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(-1, 0, 0) * step_len, base_texel, cur_dist, position_of_seed);
 
-    compare_neighbor(vec3(-1, 1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(0, 1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
-    compare_neighbor(vec3(1, 1, 1) * k, base_texel, cur_dist, k, direction_to_nearest);
+    compare_neighbor(vec3(1, 0, 0) * step_len, base_texel, cur_dist, position_of_seed);
 
-    bool not_seed = val.w != 0.0;
-    cur_dist *= float(not_seed);
-    direction_to_nearest = not_seed ? direction_to_nearest : val.xyz * 256.0;
+    compare_neighbor(vec3(-1, 0, 1) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(0, 0, 1) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(1, 0, 1) * step_len, base_texel, cur_dist, position_of_seed);
 
-    imageStore(out_brick_texture, ivec2(base_texel), vec4(direction_to_nearest / 256.0, cur_dist / 256.0));
+
+    compare_neighbor(vec3(-1, 1, -1) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(0, 1, -1) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(1, 1, -1) * step_len, base_texel, cur_dist, position_of_seed);
+
+    compare_neighbor(vec3(-1, 1, 0) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(0, 1, 0) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(1, 1, 0) * step_len, base_texel, cur_dist, position_of_seed);
+
+    compare_neighbor(vec3(-1, 1, 1) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(0, 1, 1) * step_len, base_texel, cur_dist, position_of_seed);
+    compare_neighbor(vec3(1, 1, 1) * step_len, base_texel, cur_dist, position_of_seed);
+
+    if (is_seed) {
+        cur_dist = 0.0;
+        position_of_seed = val.xyz / 256.0;
+    }
+
+    imageStore(out_brick_texture, ivec2(base_texel), vec4(position_of_seed / 256.0, cur_dist / 256.0));
 }
