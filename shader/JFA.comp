@@ -29,10 +29,10 @@ vec3 base_pos;
 
 void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist, inout vec3 position_of_seed) {
     vec3 neighbour_pos = clamp(base_pos + check_neighbor, vec3(0), vec3(TEXTURE_ALIGN));
-    vec4 val = texelFetch(brick_texture, ivec2(pos_to_px(neighbour_pos)), 0);
+    vec4 val = texelFetch(brick_texture, ivec2(pos_to_px(neighbour_pos) + min_texel), 0);
 
     bool is_seed = val.w == 0.0;
-    bool store_pos_to_seed = val.w == 1.0;
+    bool store_pos_to_seed = val.w != 1.0;
 
     vec3 potential_stored_seed = val.xyz * 256.0;
 
@@ -41,14 +41,15 @@ void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist
 
     vec3 direction_to_seed = is_seed ? dir_to_neighbour : dir_to_stored;
 
-    vec3 relevant_comp = vec3(lessThan(direction_to_seed, min(direction_to_seed.yzx, direction_to_seed.zxy)));
+    direction_to_seed += vec3(abs(step(vec3(1), direction_to_seed) - vec3(1)) * vec3(256));
 
-    float dist = dot(direction_to_seed, relevant_comp);
+
+    float dist = min(direction_to_seed.x, min(direction_to_seed.y, direction_to_seed.z));
 
     if (is_seed) {
         cur_dist = min(cur_dist, dist);
         position_of_seed = neighbour_pos;
-    } else if (store_pos_to_seed) {
+    } else if (store_pos_to_seed && !is_seed) {
         cur_dist = min(cur_dist, dist);
         imageStore(out_brick_texture, ivec2(base_texel), vec4(potential_stored_seed / 256.0, dist / 256.0));
         position_of_seed = potential_stored_seed;
@@ -73,7 +74,7 @@ void main() {
 
     float cur_dist = val.w * 256.0;
 
-    int step_len = int(floor(float(constant.px_per_group) / 2.0 + 1.0));
+    int step_len = int(constant.px_per_group / 2);
     vec3 position_of_seed = vec3(TEXTURE_ALIGN);
 
     /*
@@ -129,6 +130,5 @@ void main() {
         cur_dist = 0.0;
         position_of_seed = val.xyz / 256.0;
     }
-
-    //imageStore(out_brick_texture, ivec2(base_texel), vec4(position_of_seed / 256.0, cur_dist / 256.0));
+    imageStore(out_brick_texture, ivec2(base_texel), vec4(position_of_seed / 256.0, cur_dist / 256.0));
 }
