@@ -58,7 +58,7 @@ impl Uniform {
         self.mouse_delta = mouse_delta;
 
         self.mouse_rot += self.mouse_delta * 0.05;
-        self.mouse_rot.y = self.mouse_rot.y.boundary(-89.0, 89.0);
+        self.mouse_rot.y = self.mouse_rot.y.clamp(-89.0, 89.0);
 
         // Update cam
         let yaw = self.mouse_rot.x.to_radians();

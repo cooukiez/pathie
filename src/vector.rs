@@ -17,11 +17,11 @@ use nalgebra_glm::{Vec2, Vec3, Vec4};
 
 pub trait Num {
     // Move Number back into boundary
-    fn boundary(&self, min: Self, max: Self) -> Self;
+    fn clamp(&self, min: Self, max: Self) -> Self;
 }
 
 impl Num for f32 {
-    fn boundary(&self, min: Self, max: Self) -> Self {
+    fn clamp(&self, min: Self, max: Self) -> Self {
         let mut corrected = self.clone();
         if self < &min {
             corrected = min
@@ -40,7 +40,7 @@ pub trait Vector {
     fn sign(&self) -> Self;
 
     // Move Vector back into boundary
-    fn boundary(&self, min: Self, max: Self) -> Self;
+    fn clamp(&self, min: Self, max: Self) -> Self;
 
     fn any(&self, condition: fn(f32) -> bool) -> bool;
 
@@ -76,12 +76,12 @@ impl Vector for Vec4 {
         )
     }
 
-    fn boundary(&self, min: Self, max: Self) -> Self {
+    fn clamp(&self, min: Self, max: Self) -> Self {
         Self::new(
-            self.x.boundary(min.x, max.x),
-            self.y.boundary(min.y, max.y),
-            self.z.boundary(min.z, max.z),
-            self.w.boundary(min.w, max.w),
+            self.x.clamp(min.x, max.x),
+            self.y.clamp(min.y, max.y),
+            self.z.clamp(min.z, max.z),
+            self.w.clamp(min.w, max.w),
         )
     }
 
@@ -111,11 +111,11 @@ impl Vector for Vec3 {
         Self::new(self.x.signum(), self.y.signum(), self.z.signum())
     }
 
-    fn boundary(&self, min: Self, max: Self) -> Self {
+    fn clamp(&self, min: Self, max: Self) -> Self {
         Self::new(
-            self.x.boundary(min.x, max.x),
-            self.y.boundary(min.y, max.y),
-            self.z.boundary(min.z, max.z),
+            self.x.clamp(min.x, max.x),
+            self.y.clamp(min.y, max.y),
+            self.z.clamp(min.z, max.z),
         )
     }
 
@@ -141,8 +141,8 @@ impl Vector for Vec2 {
         Self::new(self.x.signum(), self.y.signum())
     }
 
-    fn boundary(&self, min: Self, max: Self) -> Self {
-        Self::new(self.x.boundary(min.x, max.x), self.y.boundary(min.y, max.y))
+    fn clamp(&self, min: Self, max: Self) -> Self {
+        Self::new(self.x.clamp(min.x, max.x), self.y.clamp(min.y, max.y))
     }
 
     fn any(&self, condition: fn(f32) -> bool) -> bool {
