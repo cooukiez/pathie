@@ -14,6 +14,8 @@
 // tex = texel, cs = cube_start or min_texel, dc = depth_component
 #define px_to_pos(tex, cs, dc) (vec3(tex - cs - vec2(0, dc * TEXTURE_ALIGN), dc))
 
+#define sum(vec) (vec.x + vec.y + vec.z)
+
 layout (local_size_x = 1, local_size_y = 1) in;
 layout (set = 0, binding = 0) uniform sampler2D brick_texture;
 layout (set = 1, binding = 0, rgba8) uniform image2D out_brick_texture;
@@ -32,30 +34,31 @@ void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist
     vec4 val = texelFetch(brick_texture, ivec2(pos_to_px(neighbour_pos) + min_texel), 0);
 
     bool is_seed = val.w == 0.0;
-    bool store_pos_to_seed = val.w != 1.0;
+    bool not_undefined = val.w != 1.0;
 
-    vec3 potential_stored_seed = val.xyz * 256.0;
+    vec3 stored_position = val.xyz * 256.0;
 
-    vec3 dir_to_neighbour = abs(check_neighbor);
-    vec3 dir_to_stored = abs(potential_stored_seed - base_pos);
+    vec3 position = is_seed ? neighbour_pos : stored_position;
 
-    vec3 direction_to_seed = is_seed ? dir_to_neighbour : dir_to_stored;
-
-    float dist = max(direction_to_seed.x, max(direction_to_seed.y, direction_to_seed.z));
+    // float dist = max(direction_to_seed.x, max(direction_to_seed.y, direction_to_seed.z));
+    float dist = distance(position, base_pos);
 
     if (is_seed) {
-        cur_dist = min(cur_dist, dist);
-        position_of_seed = neighbour_pos;
-    } else if (store_pos_to_seed && !is_seed) {
-        cur_dist = min(cur_dist, dist);
-        imageStore(out_brick_texture, ivec2(base_texel), vec4(potential_stored_seed / 256.0, dist / 256.0));
-        position_of_seed = potential_stored_seed;
+        if (dist < cur_dist) {
+            cur_dist = dist;
+            position_of_seed = neighbour_pos;
+        }
+    } else if (not_undefined) {
+        if (dist < cur_dist) {
+            cur_dist = dist;
+            position_of_seed = stored_position;
+        }
     }
 }
 
 void main() {
     vec2 group_pos = vec2(gl_GlobalInvocationID.xy);
-    vec2 base_texel = group_pos * float(constant.px_per_group) + vec2(floor(float(constant.px_per_group) / 2.0 + 1.0) - 1.0);
+    vec2 base_texel = group_pos * float(constant.px_per_group);
 
     float min_x = floor(base_texel.x / TEXTURE_ALIGN) * TEXTURE_ALIGN;
     float min_y = floor(base_texel.y / (TEXTURE_ALIGN * TEXTURE_ALIGN)) * TEXTURE_ALIGN * TEXTURE_ALIGN;
@@ -71,7 +74,7 @@ void main() {
 
     float cur_dist = val.w * 256.0;
 
-    int step_len = int(floor(float(constant.px_per_group) / 2.0 + 0.5));
+    int step_len = int(constant.px_per_group); //int(floor(float(constant.px_per_group) / 2.0 + 0.5));
     vec3 position_of_seed = vec3(TEXTURE_ALIGN);
 
     /*

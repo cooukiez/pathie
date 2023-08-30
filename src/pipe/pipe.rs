@@ -127,7 +127,7 @@ impl Pipe {
 
         let (branch_data, pos_info) = octree.get_new_root_info(Vec4::default());
         let mut leaf_data = vec![];
-        octree.collect_branch(&branch_data, &pos_info, &mut leaf_data, 5);
+        octree.collect_branch(&branch_data, &pos_info, &mut leaf_data, 6);
 
         // log::info!("{:#034b}", leaf_data[0].1.node.get_child_bitmask());
 

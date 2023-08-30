@@ -7,7 +7,7 @@ use super::{
     trace::{BranchInfo, PosInfo},
 };
 
-pub const MAX_DEPTH: usize = 6;
+pub const MAX_DEPTH: usize = 8;
 pub const MAX_DEPTH_LIMIT: usize = 16;
 pub const TEXTURE_ALIGN: f32 = 16.0;
 
@@ -193,11 +193,11 @@ impl Octree {
 
         self.insert_node(Vec4::ftv(0.0));
 
-        self.insert_node(Vec4::ftv(2.0));
+        self.insert_node(Vec4::ftv(8.0));
 
-        self.insert_node(Vec4::ftv(4.0));
+        //self.insert_node(Vec4::ftv(4.0));
 
-        self.insert_node(Vec4::ftv(32.0));
+        //self.insert_node(Vec4::ftv(32.0));
 
         for nude in self.octant_data.clone() {
             log::info!(
