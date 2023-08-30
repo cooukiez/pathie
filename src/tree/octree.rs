@@ -197,7 +197,7 @@ impl Octree {
 
         //self.insert_node(Vec4::ftv(4.0));
 
-        //self.insert_node(Vec4::ftv(32.0));
+        self.insert_node(Vec4::ftv(17.0));
 
         for nude in self.octant_data.clone() {
             log::info!(
