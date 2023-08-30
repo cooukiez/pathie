@@ -41,10 +41,7 @@ void compare_neighbor(vec3 check_neighbor, vec2 base_texel, inout float cur_dist
 
     vec3 direction_to_seed = is_seed ? dir_to_neighbour : dir_to_stored;
 
-    direction_to_seed += vec3(abs(step(vec3(1), direction_to_seed) - vec3(1)) * vec3(256));
-
-
-    float dist = min(direction_to_seed.x, min(direction_to_seed.y, direction_to_seed.z));
+    float dist = max(direction_to_seed.x, max(direction_to_seed.y, direction_to_seed.z));
 
     if (is_seed) {
         cur_dist = min(cur_dist, dist);
@@ -74,7 +71,7 @@ void main() {
 
     float cur_dist = val.w * 256.0;
 
-    int step_len = int(constant.px_per_group / 2);
+    int step_len = int(floor(float(constant.px_per_group) / 2.0 + 0.5));
     vec3 position_of_seed = vec3(TEXTURE_ALIGN);
 
     /*
