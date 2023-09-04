@@ -151,6 +151,16 @@ impl Render {
             .create_jfa_comp(&interface, &uniform, &octree)
             .create_graphic(&interface, &uniform, &octree);
 
+        graphic_pipe.run_jfa_iteration(
+            &interface,
+            vk::Extent3D {
+                width: 4096,
+                height: 4096,
+                depth: 1,
+            },
+            1,
+        );
+
         for idx in 0..4 {
             graphic_pipe.run_jfa_iteration(
                 &interface,
@@ -162,6 +172,16 @@ impl Render {
                 (8.0 * 0.5.pow(idx)) as u32,
             );
         }
+
+        graphic_pipe.run_jfa_iteration(
+            &interface,
+            vk::Extent3D {
+                width: 4096,
+                height: 4096,
+                depth: 1,
+            },
+            1,
+        );
         
         Render {
             state,

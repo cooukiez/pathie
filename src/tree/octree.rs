@@ -197,6 +197,8 @@ impl Octree {
 
         self.insert_node(Vec4::ftv(17.0));
 
+        self.insert_node(Vec4::ftv(78.0));
+
         for nude in self.octant_data.clone() {
             log::info!(
                 "leaf {} subdiv {} bitmask {:#09b} offset {}",

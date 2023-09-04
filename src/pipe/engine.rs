@@ -94,6 +94,17 @@ impl Engine {
             let (vertex_data, index_data, loc_info) =
                 Pipe::get_octree_vert_data(octree, &mut result.img_buffer);
 
+            result.img_buffer = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_pixel(
+                4096,
+                4096,
+                image::Rgba([0, 0, 0, 255]),
+            );
+
+            result.img_buffer.put_pixel(0, 0, image::Rgba([255, 255, 255, 0]));
+            result.img_buffer.put_pixel(7, 123, image::Rgba([255, 255, 255, 0]));
+            result.img_buffer.put_pixel(5, 453, image::Rgba([255, 255, 255, 0]));
+            result.img_buffer.put_pixel(12, 367, image::Rgba([255, 255, 255, 0]));
+
             let mut img_data = result.img_buffer.clone().into_raw();
 
             // result.img_buffer.save("out.png").unwrap();
