@@ -1,6 +1,6 @@
 ## Disclaimer: This is just me learning computer graphics.
 # Pathie
-This is some kind of tracing project with voxels, I'm not sure what the current status is and I can't guarantee it'll run.
+This is some kind of tracing project with voxels, I'm not sure what the current status is and I can't guarantee it'll run. Some versions work with tracing from every pixels (old v's) and new ones will have some kind of empty space skipping with standard graphics pipeline. This means i approximate octree to a certain depth with vertices and the render polygons, from which I start tracing. Look into douglas's Parallax marching, it's a really intersting technique.
 # Implemented
 * vulkan interface
 * render pipeline
