@@ -1,3 +1,4 @@
+## Disclaimer: This is just me learning computer graphics.
 # Pathie
 This is some kind of tracing project with voxels, I'm not sure what the current status is and I can't guarantee it'll run.
 # Implemented
